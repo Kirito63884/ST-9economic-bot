@@ -173,7 +173,11 @@ def _preview(db, week):
     try:
         control.status = "approved"
         db.flush()
-        evaluate(db, utcnow())
+        db.info["distinction_preview"] = True
+        try:
+            evaluate(db, utcnow())
+        finally:
+            db.info.pop("distinction_preview", None)
         db.flush()
         candidates = [
             a
@@ -264,8 +268,19 @@ def make_router(get_user, get_db, is_super_admin):
             db.query(AssemblyAssessment).filter_by(outcome="pending_penalty").count()
         )
         reviews = db.query(AwardWeekControl).filter_by(status="review").count()
+        from distinction_reviews import DistinctionReview
+
+        distinction_pending = (
+            db.query(DistinctionReview).filter_by(status="pending").count()
+        )
         roles = role_status(db)
         items = [
+            {
+                "key": "distinctions",
+                "label": "Знаки ждут подтверждения (24 часа)",
+                "count": distinction_pending,
+                "section": "hub",
+            },
             {
                 "key": "alerts",
                 "label": "Сбои автоматизации",
@@ -450,10 +465,35 @@ def make_router(get_user, get_db, is_super_admin):
 
         if not target or target.deleted_at is not None:
             raise HTTPException(404, "Игрок не найден.")
+        from distinction_reviews import can_review
+
+        if medal in D_MANUAL and not can_review(user):
+            raise HTTPException(
+                403, "Ручные знаки могут предлагать главные и старшие администраторы."
+            )
         if medal not in {**MANUAL_CATALOG, **D_MANUAL}:
             raise HTTPException(400, "Эта награда не выдаётся вручную.")
         if not comment or len(comment) > 2000:
             raise HTTPException(400, "Укажите обоснование до 2000 символов.")
+        if medal in D_MANUAL:
+            from distinction_reviews import DistinctionReview
+            from medals import MedalAward
+
+            review = (
+                db.query(DistinctionReview)
+                .filter_by(discord_id=target.discord_id, medal=medal)
+                .first()
+            )
+            existing = (
+                db.query(MedalAward.id)
+                .filter_by(discord_id=target.discord_id, medal=medal)
+                .first()
+            )
+            if existing or (review and review.status != "cancelled"):
+                raise HTTPException(
+                    409,
+                    "Для этого игрока знак уже выдан, ожидает решения или отклонён.",
+                )
         row = ManualAwardRequest(
             user_id=target.id,
             medal=medal,
@@ -472,6 +512,10 @@ def make_router(get_user, get_db, is_super_admin):
             f"{_award_name(db, medal)}: {comment}",
             target.id,
         )
+        if medal in D_MANUAL:
+            from distinction_reviews import enqueue_legacy_manual_requests
+
+            enqueue_legacy_manual_requests(db, utcnow())
         return {"ok": True, "id": row.id}
 
     @router.post("/api/admin/manual-awards/{request_id}/decision")
@@ -481,8 +525,33 @@ def make_router(get_user, get_db, is_super_admin):
         user=Depends(get_user),
         db=Depends(get_db),
     ):
-        chief(user)
+        admin(user)
         row = db.get(ManualAwardRequest, request_id)
+        from distinction_reviews import (
+            DistinctionReview,
+            can_review,
+            decide,
+            enqueue_legacy_manual_requests,
+        )
+        from distinctions_catalog import ROLE_IDS as distinction_codes
+
+        if row and row.medal in distinction_codes:
+            if row.status != "pending":
+                raise HTTPException(409, "Заявка уже обработана.")
+            if not can_review(user):
+                raise HTTPException(403)
+            enqueue_legacy_manual_requests(db, utcnow())
+            target = db.get(User, row.user_id)
+            review = (
+                db.query(DistinctionReview)
+                .filter_by(discord_id=target.discord_id, medal=row.medal)
+                .first()
+                if target
+                else None
+            )
+            decide(db, review, user, body.get("decision"), body.get("comment", ""))
+            return {"ok": True, "status": row.status, "award_id": row.award_id}
+        chief(user)
         if not row or row.status != "pending":
             raise HTTPException(409, "Заявка уже обработана или не найдена.")
         decision = str(body.get("decision") or "")

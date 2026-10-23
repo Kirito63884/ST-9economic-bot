@@ -10,6 +10,7 @@ from admin_hub import AwardCandidateExclusion, AwardWeekControl, _preview
 from automation_control import AutomationSetting
 from database import SessionLocal, User
 from medals import MedalAward, evaluate, progress
+from distinction_reviews import DistinctionReview, process_due
 from protocol_award_exports import (
     KIT_AWARDS,
     ClanUnavailable,
@@ -151,7 +152,9 @@ def test_collection_failure_preserves_previous_snapshots():
 
 
 @pytest.mark.parametrize("kind,code", list(KIT_AWARDS.items()))
-def test_exact_kit_award_needs_closed_week_and_chief_review(make_user, kind, code):
+def test_exact_kit_award_needs_closed_week_then_review_or_24_hours(
+    make_user, kind, code
+):
     data = documents(AFTER)
     doc = data["2026-10-12:" + kind]
     uid = make_user(steam_id=doc["rows"][0]["steam_id"])
@@ -160,11 +163,9 @@ def test_exact_kit_award_needs_closed_week_and_chief_review(make_user, kind, cod
         user = db.get(User, uid)
         award_exports(db, [user], AFTER)
         assert not db.query(MedalAward).filter_by(medal=code).first()
-        control = db.get(AwardWeekControl, "2026-10-12")
-        assert control.status == "review"
-        control.status = "approved"
-        db.flush()
-        award_exports(db, [user], AFTER)
+        review = db.query(DistinctionReview).filter_by(medal=code).one()
+        assert review.status == "pending"
+        assert process_due(db, AFTER + timedelta(hours=24)) >= 1
         award = db.query(MedalAward).filter_by(medal=code).one()
         assert json.loads(award.evidence)["file_verified"]
         assert award.sent_at is None  # Existing bot notification queue handles it.
@@ -222,6 +223,9 @@ def test_other_weekly_criteria_from_exports(make_user, kind, code):
         db.add(AwardWeekControl(week="2026-10-05", status="approved", created_at=NOW))
         db.flush()
         award_exports(db, [db.get(User, uid)], NOW)
+        if code == "medical_aid":
+            assert db.query(MedalAward).filter_by(medal=code).count() == 0
+            process_due(db, NOW + timedelta(hours=24))
         assert db.query(MedalAward).filter_by(medal=code).count() == 1
 
 
@@ -237,6 +241,8 @@ def test_fob_threshold_uses_counts_not_list_position(make_user):
     store({"all:fob": doc})
     with SessionLocal.begin() as db:
         award_exports(db, [db.get(User, uid)], NOW)
+        assert db.query(MedalAward).filter_by(medal="best_demolition").count() == 0
+        process_due(db, NOW + timedelta(hours=24))
         assert db.query(MedalAward).filter_by(medal="best_demolition").count() == 1
 
 

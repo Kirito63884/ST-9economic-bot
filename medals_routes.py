@@ -35,6 +35,19 @@ logger = logging.getLogger("strike_team9.medals")
 
 async def medal_checker():
     while True:
+        # Persist elapsed review decisions independently of source evaluation.
+        # A broken statistics snapshot must not roll back a due award/payment.
+        try:
+            from distinction_reviews import process_due
+            from award_rewards import pay
+
+            async with metadata_transaction() as db:
+                process_due(db)
+                pay(db)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Distinction review processing will retry")
         try:
             async with metadata_transaction() as db:
                 evaluate(db)

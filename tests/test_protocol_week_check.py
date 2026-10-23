@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pytest
 from admin_hub import AwardCandidateExclusion, AwardWeekControl
+from distinction_reviews import DistinctionReview, process_due
+from award_rewards import pay
 from automation_control import AutomationSetting
 from award_rewards import AwardRewardPayment, AwardRewardPolicy
 from database import SessionLocal, User
@@ -78,19 +80,19 @@ def test_manual_recheck_grants_only_previous_week_and_is_idempotent(make_user):
             )
         )
     assert process_requested(NOW, fetch=lambda _: (data, []), public_fetch=fail_public)
-    with SessionLocal() as db:
+    with SessionLocal.begin() as db:
+        assert not db.query(MedalAward).filter_by(medal="best_machine_gunner").count()
+        assert db.get(User, uid).balance == 1000
+        assert status(db)["queued_distinctions"] >= 1
+        assert process_due(db, NOW + timedelta(hours=24)) >= 1
+        pay(db, NOW + timedelta(hours=24))
         awards = db.query(MedalAward).all()
-        assert awards and all(
-            json.loads(a.evidence).get("week") == "2026-10-12" for a in awards
-        )
         mg = (
             db.query(MedalAward)
             .filter_by(discord_id="101", medal="best_machine_gunner")
             .one()
         )
-        assert mg.sent_at is None
-        assert db.get(User, uid).balance == 3000
-        assert status(db)["added"] == len(awards)
+        assert mg.sent_at is None and db.get(User, uid).balance == 3000
         original = len(awards)
     with SessionLocal.begin() as db:
         request_check(db, db.get(User, 999), NOW + timedelta(minutes=1))
@@ -265,7 +267,14 @@ def test_manual_check_bypasses_recent_cache_and_reads_new_recipients(make_user):
     assert process_requested(
         NOW + timedelta(minutes=1), fetch=lambda _: (data, []), public_fetch=fail_public
     )
-    with SessionLocal() as db:
+    with SessionLocal.begin() as db:
+        assert (
+            db.query(DistinctionReview)
+            .filter_by(discord_id="101", status="pending")
+            .count()
+            >= 1
+        )
+        process_due(db, NOW + timedelta(days=2))
         assert (
             db.query(MedalAward)
             .filter_by(discord_id="101", medal="best_machine_gunner")
@@ -296,7 +305,14 @@ def test_successful_public_table_complements_exports(make_user):
     assert process_requested(
         NOW, fetch=lambda _: (docs(), []), public_fetch=lambda _: public
     )
-    with SessionLocal() as db:
+    with SessionLocal.begin() as db:
+        assert (
+            db.query(DistinctionReview)
+            .filter_by(discord_id="101", status="pending")
+            .count()
+            >= 1
+        )
+        process_due(db, NOW + timedelta(days=2))
         assert status(db)["status"] == "ready"
         assert (
             db.query(MedalAward)

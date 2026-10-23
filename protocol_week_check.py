@@ -221,6 +221,9 @@ def process_requested(now=None, fetch=None, public_fetch=None):
             control.approved_at = now
             control.approved_by = actor.discord_id
             db.flush()
+            from distinction_reviews import DistinctionReview
+
+            existing_reviews = {i for (i,) in db.query(DistinctionReview.id)}
             existing = {i for (i,) in db.query(MedalAward.id)}
             users = db.query(User).filter(User.deleted_at.is_(None)).all()
             try:
@@ -249,17 +252,23 @@ def process_requested(now=None, fetch=None, public_fetch=None):
                 else db.query(MedalAward).all()
             )
             pay(db, now, award_ids={a.id for a in added})
+            new_reviews = (
+                db.query(DistinctionReview)
+                .filter(DistinctionReview.id.notin_(existing_reviews))
+                .count()
+            )
             current.update(
                 status="partial" if warnings else "ready",
                 finished_at=now.isoformat(),
                 added=len(added),
+                queued_distinctions=new_reviews,
                 players=len({a.discord_id for a in added}),
                 verified=len(valid_keys),
                 warnings=warnings,
                 sqstat_added=sum(
                     json.loads(a.evidence).get("source") == "SQSTAT" for a in added
                 ),
-                message=f"Неделя {job['week']}: добавлено наград — {len(added)}, игроков — {len({a.discord_id for a in added})}. Роли и объявления переданы Discord-боту.",
+                message=f"Неделя {job['week']}: добавлено наград — {len(added)}, игроков — {len({a.discord_id for a in added})}. Знаков поставлено на подтверждение (24 часа) — {new_reviews}. Выданные роли и объявления переданы Discord-боту.",
             )
             store(db, current)
             log_action(db, actor, "protocol_week_completed", current["message"])

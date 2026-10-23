@@ -8,6 +8,8 @@ import pytest
 from admin_hub import AwardWeekControl
 from database import SessionLocal, User
 from medals import MedalAward, progress
+from distinction_reviews import DistinctionReview, process_due
+from datetime import timedelta
 from protocol_award_exports import (
     ClanUnavailable,
     ProtocolAwardExport,
@@ -125,6 +127,9 @@ def test_publisher_top3_is_parsed_but_only_first_place_is_awarded(
     with SessionLocal.begin() as db:
         users = db.query(User).all()
         award_exports(db, users, NOW)
+        assert db.query(MedalAward).count() == 0
+        assert db.query(DistinctionReview).count() == 1
+        assert process_due(db, NOW + timedelta(hours=24)) == 1
         awards = db.query(MedalAward).all()
         assert [(a.discord_id, a.medal) for a in awards] == [("101", code)]
         proof = json.loads(awards[0].evidence)

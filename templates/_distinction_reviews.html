@@ -1,0 +1,112 @@
+{% if is_senior_or_super %}
+<div class="section-card hub-wide" id="distinctionReviewPanel">
+    <div class="section-heading">
+        <div>
+            <h2>Знаки отличия · подтверждение</h2>
+            <p>Каждый новый знак ждёт решения до 24 часов с момента обнаружения основания. Подтвердить или отклонить могут старшие и главные администраторы и владелец. Без решения знак выдаётся автоматически. Явно отклонённые заявки автоматически не выдаются.</p>
+        </div>
+        <button type="button" class="btn" onclick="loadDistinctionReviews()">Обновить очередь</button>
+    </div>
+    <p id="distinctionReviewStatus" class="medal-panel-note" role="status"></p>
+    <div id="distinctionReviewList" class="hub-list"></div>
+</div>
+<script>
+async function loadDistinctionReviews() {
+    const list = document.getElementById("distinctionReviewList");
+    const status = document.getElementById("distinctionReviewStatus");
+    if (!list) return;
+    const dates = new Intl.DateTimeFormat("ru-RU", {
+        timeZone: "Europe/Moscow",
+        dateStyle: "short",
+        timeStyle: "short",
+    });
+    const labels = {
+        pending: "Ждёт решения",
+        issued: "Выдано",
+        rejected: "Отклонено",
+        cancelled: "Отменено",
+    };
+    try {
+        const data = await hubJson("/api/admin/distinction-reviews");
+        status.textContent = `Ожидают решения: ${data.pending}. Срок — 24 часа; проверка автовыдачи выполняется примерно раз в минуту при работающем сайте.`;
+        const fragment = document.createDocumentFragment();
+        for (const item of data.items) {
+            const row = document.createElement("div");
+            row.className = "hub-row";
+            const info = document.createElement("div");
+            const title = document.createElement("b");
+            title.textContent = `${item.name} · ${item.award_name}`;
+            const reason = document.createElement("p");
+            reason.textContent = item.reason;
+            const state = document.createElement("p");
+            state.className = "user-id";
+            state.textContent = `${labels[item.status] || item.status} · обнаружено ${dates.format(new Date(item.created_at))} МСК · автовыдача после ${dates.format(new Date(item.deadline))} МСК${item.decided_by === "automatic" ? " · выдано автоматически" : ""}`;
+            info.append(title, reason, state);
+            if (item.blocked_reason || item.decision_comment) {
+                const note = document.createElement("p");
+                note.textContent = item.blocked_reason || item.decision_comment;
+                info.append(note);
+            }
+            const details = document.createElement("details");
+            const summary = document.createElement("summary");
+            summary.textContent = "Основание и доказательства";
+            const proof = document.createElement("pre");
+            proof.style.whiteSpace = "pre-wrap";
+            proof.textContent = JSON.stringify(item.evidence, null, 2);
+            details.append(summary, proof);
+            info.append(details);
+            row.append(info);
+            if (item.status === "pending") {
+                const actions = document.createElement("div");
+                actions.className = "hub-tools";
+                for (const [choice, label] of [
+                    ["approved", "Подтвердить"],
+                    ["rejected", "Отклонить"],
+                ]) {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = "btn btn-sm";
+                    button.textContent = label;
+                    button.onclick = async () => {
+                        const comment = prompt(
+                            `${label}: ${item.name} — ${item.award_name}. Комментарий:`,
+                            "",
+                        );
+                        if (comment === null) return;
+                        actions.querySelectorAll("button").forEach((b) => (b.disabled = true));
+                        try {
+                            await hubJson(`/api/admin/distinction-reviews/${item.id}/decision`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ decision: choice, comment }),
+                            });
+                            await loadDistinctionReviews();
+                        } catch (error) {
+                            showToast(error.message, "error");
+                            actions.querySelectorAll("button").forEach((b) => (b.disabled = false));
+                        }
+                    };
+                    actions.append(button);
+                }
+                row.append(actions);
+            }
+            fragment.append(row);
+        }
+        if (!data.items.length) {
+            const empty = document.createElement("p");
+            empty.textContent =
+                "Новых кандидатов пока нет. После подтверждённого достижения знак появится здесь.";
+            fragment.append(empty);
+        }
+        list.replaceChildren(fragment);
+    } catch (error) {
+        status.textContent = error.message;
+    }
+}
+setInterval(() => {
+    const panel = document.getElementById("panel-hub");
+    if (panel && !panel.hidden && !document.hidden) loadDistinctionReviews();
+}, 60000);
+
+</script>
+{% endif %}

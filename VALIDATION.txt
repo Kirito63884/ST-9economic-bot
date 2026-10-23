@@ -39,3 +39,17 @@ Page and API deny players/junior admins, allow senior/chief admins and the
 administrator owner, and hide links/widgets for denied roles. Demotion takes
 effect with the existing session. Source status is not read for denied requests.
 Ruff checks pass.
+
+Distinction review/24-hour fallback update:
+Full suite: 380 passed, 0 failed, 0 skipped (same two dependency warnings).
+All 16 distinction codes wait for individual review or exactly 24 hours.
+Tests cover immutable/persisted deadlines, senior/chief/owner access, rejection,
+late decisions, repeat/parallel approvals, payment idempotency, inactive users,
+Steam ID changes, exclusions, legacy manual requests and source failures.
+Ruff lint and formatting checks pass.
+Chromium: manual request created, queue shown, senior/chief approval applied,
+award shown in player profile; HTML-like names remain text; zero page errors.
+Migration from a copied SQLite schema without distinction_reviews creates the
+new table and preserves users, balances and already issued awards.
+Live Protocol authentication and real Discord role delivery remain unverified
+from this cloud environment; their existing integrations are retained.

@@ -222,15 +222,19 @@
                     const a = d.awards.find((x) => x.code === c.code),
                         state = c.owned
                             ? (a.manual ? "Назначена вручную " : "Получена ") + a.date
-                            : c.revoked
-                              ? "Снята администратором"
-                              : c.manual
-                                ? "Назначается вручную"
-                                : c.blocked
-                                  ? "Нет нужных данных"
-                                  : c.higher_owned
-                                    ? "Уже получена высшая степень"
-                                    : "В процессе";
+                            : c.review?.status === "pending"
+                              ? "Ожидает подтверждения до " + stamp(c.review.deadline)
+                              : c.review?.status === "rejected"
+                                ? "Выдача отклонена"
+                                : c.revoked
+                                  ? "Снята администратором"
+                                  : c.manual
+                                    ? "Назначается вручную"
+                                    : c.blocked
+                                      ? "Нет нужных данных"
+                                      : c.higher_owned
+                                        ? "Уже получена высшая степень"
+                                        : "В процессе";
                     const values = c.values
                         .map((v) => {
                             const ranked = "target_rank" in v,

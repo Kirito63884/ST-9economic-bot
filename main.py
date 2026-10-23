@@ -4988,3 +4988,7 @@ app.add_middleware(
 from http_security import SecurityHeadersMiddleware
 
 app.add_middleware(SecurityHeadersMiddleware)
+
+from distinction_reviews import make_router as make_distinction_review_router
+
+app.include_router(make_distinction_review_router(get_user, get_db))

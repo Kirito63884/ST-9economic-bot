@@ -28,6 +28,7 @@ import asyncio
 import main
 import runtime
 from database import AppRuntime, GameHistory, LoginLink, SessionLocal, User
+from distinction_reviews import DistinctionReview
 from fastapi.testclient import TestClient
 from itsdangerous import TimestampSigner
 
@@ -38,6 +39,7 @@ def clean_database(monkeypatch):
     runtime.transaction_lock = asyncio.Lock()
     main.role_check_lock = asyncio.Lock()
     with SessionLocal() as db:
+        db.query(DistinctionReview).delete()
         db.query(LoginLink).delete()
         db.query(GameHistory).delete()
         db.query(User).delete()

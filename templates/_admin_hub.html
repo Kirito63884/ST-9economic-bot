@@ -113,11 +113,12 @@
         </div>
     </div>
     <div class="hub-grid">
+        {% include "_distinction_reviews.html" %}
         <div class="section-card hub-wide">
             <div class="section-heading">
                 <div>
                     <h2>Предпросмотр недельных наград</h2>
-                    <p>Начиная с недели 12.10.2026 новые недельные награды ждут подтверждения главного администратора. Один игрок может получить все подходящие разные награды за неделю без общего лимита. Каждая награда показывается отдельно. Исключённый кандидат не получит роль, выплату и объявление.</p>
+                    <p>Недельные медали ждут подтверждения главного администратора. Для знаков отличия действует отдельная очередь выше: решение старшего или главного администратора либо автовыдача через 24 часа. Один игрок может получить все подходящие разные награды за неделю без общего лимита. Каждая награда показывается отдельно. Исключённый кандидат не получит роль, выплату и объявление.</p>
                 </div>
                 <div class="hub-tools">
                     <input id="hubAwardWeek"
@@ -134,7 +135,7 @@
                 <button class="btn btn-primary"
                         id="hubApproveWeek"
                         onclick="approveAwardWeek()"
-                        disabled>Подтвердить выдачу</button>
+                        disabled>Подтвердить недельные медали</button>
             </div>
             {% endif %}
         </div>
@@ -142,7 +143,7 @@
             <div class="section-heading">
                 <div>
                     <h2>Ручные награды</h2>
-                    <p>Заявка содержит ссылку на откат и комментарий. Выдача выполняется только после решения главного администратора.</p>
+                    <p>Заявка содержит ссылку на откат и комментарий. Ручные знаки проходят очередь с лимитом 24 часа; медали — прежнее подтверждение главного администратора.</p>
                 </div>
             </div>
             <div class="stack">
@@ -252,6 +253,9 @@ async function loadAdminHub(force = false) {
         renderManual(manual.items);
         renderAppeals(appeals.items);
         renderActions(actions.items);
+        {% if is_senior_or_super %}
+        await loadDistinctionReviews();
+        {% endif %}
         await loadWeeklyReport();
         hubLoaded = true;
     } catch (e) {

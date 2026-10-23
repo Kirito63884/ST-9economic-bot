@@ -273,6 +273,9 @@ def ranks(counts):
     return output
 
 
+from distinction_reviews import DistinctionReview  # noqa: F401 - Register review table before migrations.
+
+
 def grant(db, user, medal, reason, evidence, now=None):
     catalog = {**CATALOG, **MANUAL_CATALOG}
     from automation_control import exception_for
@@ -283,7 +286,6 @@ def grant(db, user, medal, reason, evidence, now=None):
         or user.deleted_at is not None
         or is_revoked(db, user.discord_id, medal)
         or exception_for(db, user.id, "award", medal)
-        or not weekly_award_allowed(db, user, medal, evidence)
     ):
         return None
     cached = db.info.get("medals_owned")
@@ -297,6 +299,14 @@ def grant(db, user, medal, reason, evidence, now=None):
         )
     )
     if already_owned:
+        return None
+    moment = now or utcnow()
+    if medal in DISTINCTION_ROLES:
+        from distinction_reviews import review_allowed
+
+        if not review_allowed(db, user, medal, reason, evidence, moment):
+            return None
+    elif not weekly_award_allowed(db, user, medal, evidence):
         return None
     award = MedalAward(
         discord_id=user.discord_id,
@@ -682,6 +692,9 @@ def evaluate(db, now=None):
             from distinctions import evaluate as evaluate_distinctions
 
             evaluate_distinctions(db, active, documents, now)
+        from distinction_reviews import process_due
+
+        process_due(db, now)
         from award_rewards import pay
 
         pay(db, now)
@@ -878,6 +891,10 @@ def progress(db, user, now=None):
         exported = exports.get(week + ":" + kind)
         if exported:
             metrics[metric] = exported["player"] or {"rank": None, "value": None}
+    reviews = {
+        row.medal: {"status": row.status, "deadline": row.deadline.isoformat() + "Z"}
+        for row in db.query(DistinctionReview).filter_by(discord_id=user.discord_id)
+    }
     cards = []
     from automation_control import setting
 
@@ -1105,6 +1122,7 @@ def progress(db, user, now=None):
                 "higher_owned": False,
                 "values": values,
                 "revoked": revoked.get(code),
+                "review": reviews.get(code),
                 "image": image_path(code, db),
                 "category": "distinction" if code in DISTINCTION_ROLES else "medal",
                 "manual": code in MANUAL_CATALOG,
