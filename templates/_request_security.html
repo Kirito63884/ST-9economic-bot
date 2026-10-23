@@ -1,0 +1,43 @@
+<script>
+// Session-bound CSRF token: attach to same-origin writes and ordinary HTML forms.
+(() => {
+    const token = {{ request.session.get('csrf_token', '')|tojson }};
+    if (!token) return;
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (input, options = {}) => {
+        const url = new URL(input instanceof Request ? input.url : input, location.href);
+        const method = (
+            options.method || (input instanceof Request ? input.method : "GET")
+        ).toUpperCase();
+        if (url.origin === location.origin && !["GET", "HEAD", "OPTIONS"].includes(method)) {
+            const headers = new Headers(
+                options.headers || (input instanceof Request ? input.headers : undefined),
+            );
+            headers.set("X-ST9-CSRF", token);
+            options = {
+                ...options,
+                headers,
+            };
+        }
+        return nativeFetch(input, options);
+    };
+    document.addEventListener(
+        "submit",
+        (event) => {
+            const form = event.target;
+            if (!(form instanceof HTMLFormElement) || form.method.toUpperCase() !== "POST") return;
+            if (new URL(form.action, location.href).origin !== location.origin) return;
+            let field = form.querySelector('input[name="csrf_token"]');
+            if (!field) {
+                field = document.createElement("input");
+                field.type = "hidden";
+                field.name = "csrf_token";
+                form.append(field);
+            }
+            field.value = token;
+        },
+        true,
+    );
+})();
+
+</script>

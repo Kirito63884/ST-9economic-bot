@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>История покера — Strike Team 9</title>
+        <style>
+            * {
+                box-sizing: border-box
+            }
+
+            body {
+                margin: 0;
+                background: #13172a;
+                color: #edf1fa;
+                font: 16px system-ui, sans-serif
+            }
+
+            a {
+                color: #91bcff
+            }
+
+            nav,
+            main {
+                max-width: 1100px;
+                margin: auto;
+                padding: 20px
+            }
+
+            nav {
+                display: flex;
+                gap: 20px;
+                flex-wrap: wrap;
+                border-bottom: 1px solid #303750
+            }
+
+            .hand {
+                background: #20263c;
+                border: 1px solid #39425e;
+                border-radius: 16px;
+                padding: 20px;
+                margin: 20px 0
+            }
+
+            .hand h2 {
+                margin-top: 0
+            }
+
+            .meta {
+                color: #b2bdd6;
+                font-size: .9rem
+            }
+
+            .cards {
+                display: flex;
+                gap: 6px;
+                flex-wrap: wrap;
+                margin: 12px 0
+            }
+
+            .card {
+                background: #f7f8fc;
+                color: #172033;
+                border-radius: 6px;
+                padding: 8px;
+                min-width: 42px;
+                text-align: center;
+                font-weight: 700
+            }
+
+            .card.red {
+                color: #bf2340
+            }
+
+            .card.hidden {
+                background: #39445d;
+                color: #c1cbe3
+            }
+
+            .players {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+                gap: 10px
+            }
+
+            .player {
+                background: #151b2f;
+                padding: 12px;
+                border-radius: 10px
+            }
+
+            .positive {
+                color: #96e2b2
+            }
+
+            .negative {
+                color: #ffadad
+            }
+
+            .timeline {
+                padding-left: 24px
+            }
+
+            .timeline li {
+                padding: 8px 0;
+                border-bottom: 1px solid #39425e
+            }
+
+            .empty {
+                padding: 40px;
+                text-align: center
+            }
+
+            summary {
+                cursor: pointer;
+                padding: 14px 0;
+                font-weight: 600
+            }
+
+            .notice {
+                background: #333047;
+                padding: 12px;
+                border-radius: 10px
+            }
+
+            button,
+            a.button {
+                display: inline-block;
+                background: #35476e;
+                color: white;
+                border: 0;
+                border-radius: 8px;
+                padding: 10px 14px;
+                text-decoration: none
+            }
+
+            .pager {
+                display: flex;
+                gap: 12px;
+                flex-wrap: wrap
+            }
+
+            small {
+                color: #b2bdd6
+            }
+
+            @media(max-width:480px) {
+
+                nav,
+                main {
+                    padding: 12px
+                }
+
+                .hand {
+                    padding: 14px
+                }
+
+                .players {
+                    grid-template-columns: 1fr 1fr
+                }
+
+                .player {
+                    padding: 9px;
+                    font-size: .85rem
+                }
+            }
+        </style>
+        {% include "_site_ui.html" %}
+    </head>
+    <body class="st-history-page">
+        {% include "_site_nav.html" %}
+        <main id="st-content">
+            <div class="st-actions mb-3"><a href="/games/poker/lobby" class="btn btn-outline-light">← К столам</a><a href="/profile#history" class="btn btn-outline-light">Все операции</a></div>
+            <h1>{% if detail %}Разбор раздачи{% elif user.is_admin and player_id is none %}Все раздачи{% else %}История раздач{% endif %}</h1>
+            <p class="meta">Сохраняются завершённые раздачи после установки обновления. Время указано по серверу.</p>
+            {% if user.is_admin %}
+            <p class="notice">Просмотр администратора: доступны карты всех участников для разбора раздачи.</p>
+            <div class="pager"><a class="button"
+   href="/games/poker/history?player_id={{ user.id }}">Мои раздачи</a><a class="button" href="/games/poker/history">Все раздачи</a></div>
+            {% endif %}
+            {% set phases = {"preflop": "Префлоп", "flop": "Флоп", "turn": "Тёрн", "river": "Ривер", "showdown": "Вскрытие"} %}
+            {% set labels = {
+                "small_blind": "Малый блайнд",
+                "big_blind": "Большой блайнд",
+                "fold": "Фолд",
+                "check": "Чек",
+                "call": "Колл",
+                "raise": "Рейз",
+                "all_in": "All-in",
+                "timeout": "Автофолд по таймеру",
+                "leave": "Выход со стола"
+            } %}
+            {% macro cards(items) %}
+            <div class="cards">{% for c in items %}<span class="card {% if c.value == '?' %}hidden{% elif c.suit in ['♥','♦'] %}red{% endif %}">{{ c.value }}{{ c.suit if c.value != '?' else '' }}</span>{% endfor %}</div>
+            {% endmacro %}
+            {% for h in hands %}<article class="hand">
+            <h2><a href="/games/poker/history/{{ h.id }}">Раздача №{{ h.hand_number }}</a> <small>· стол {{ h.table_id }}</small></h2>
+            <p class="meta">{{ h.created_at.strftime("%d.%m.%Y %H:%M:%S") }} · Банк, БК: {{ '%.2f'|format(h.pot) }}</p>
+            {% if h.partial %}
+            <p class="notice">Раздача началась до обновления: часть действий и сброшенных карт недоступна.</p>
+            {% endif %}
+            {{ cards(h.community) }}
+            <div class="players">
+                {% for p in h.players %}
+                <div class="player">
+                    <strong>{{ p.display_name }}{% if p.user_id == user.id %} · Вы{% endif %}</strong>{{ cards(p.cards) }}{% if p.won_pot %}
+                    <div class="positive">🏆 Победитель{% if p.hand %} · {{ p.hand }}{% endif %}</div>
+                    {% endif %}
+                    <div>Вложено, БК: {{ '%.2f'|format(p.invested) }}</div>
+                    <div>Получено, БК: {{ '%.2f'|format(p.returned) }}</div>
+                    <div class="{% if p.net > 0 %}positive{% elif p.net < 0 %}negative{% endif %}">Итог, БК: {{ '%+.2f'|format(p.net) }}</div>
+                    {% if p.folded %}<small>Сбросил карты</small>{% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            <details {% if detail %}open{% endif %}>
+                <summary>Действия игроков · {{ h.actions|length }}</summary>
+                <ol class="timeline">
+                    {% for a in h.actions %}{% set actor = h.players|selectattr('user_id','equalto',a.user_id)|first %}
+                    <li>
+                        <small>{{ phases.get(a.phase,a.phase) }} · {{ a.timestamp[11:19] }}</small>
+                        <br>
+                        {{ actor.display_name if actor else 'Удалённый игрок' }} — {{ labels.get(a.kind,a.kind) }}{% if a.kind == "raise" %} до {{ '%.2f'|format(a.target) }} (списано {{ '%.2f'|format(a.amount) }}){% elif a.amount > 0 %} {{ '%.2f'|format(a.amount) }}{% endif %}
+                    </li>
+                    {% else %}
+                    <li>Подробные действия отсутствуют.</li>
+                    {% endfor %}
+                </ol>
+            </details>
+            </article>
+            {% else %}
+            <div class="empty">Пока нет завершённых раздач.</div>
+            {% endfor %}
+            <div class="pager">{% if next_url %}<a class="button" href="{{ next_url }}">Более ранние раздачи →</a>{% endif %}{% if request.query_params.get("before") %}<a class="button"
+   href="/games/poker/history{% if player_id is not none %}?player_id={{ player_id }}{% endif %}">К последним</a>{% endif %}</div>
+        </main>
+    </body>
+</html>

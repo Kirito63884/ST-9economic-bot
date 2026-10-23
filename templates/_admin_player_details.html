@@ -1,0 +1,89 @@
+<script>
+(() => {
+    const dates = new Intl.DateTimeFormat("ru-RU", {
+        timeZone: "Europe/Moscow",
+        dateStyle: "short",
+        timeStyle: "short",
+    });
+    let controller = null,
+        generation = 0;
+    const format = (stamp) => dates.format(new Date(stamp)) + " МСК";
+
+    function render(users) {
+        let changed = false;
+        for (const user of users) {
+            const row = document.getElementById("player-row-" + user.id);
+            if (!row || (row.dataset.steamId || "") !== (user.steam_id || "")) continue;
+            const nick = user.squad;
+            const text =
+                "Squad: " +
+                (nick.name ||
+                    (nick.status === "no_steam" ? "Steam ID не привязан" : "ник пока не замечен")) +
+                (nick.name && nick.status === "last_seen" ? " · последний замеченный" : "");
+            const hint = nick.name
+                ? (nick.status === "online" ? "На сервере: " : "Последний сервер: ") +
+                  nick.server_name +
+                  " · " +
+                  format(nick.seen_at * 1000)
+                : "";
+            document.querySelectorAll('[data-squad-name="' + user.id + '"]').forEach((node) => {
+                node.textContent = text;
+                node.title = hint;
+            });
+            if (row.dataset.gameName !== (nick.name || "")) {
+                row.dataset.gameName = nick.name || "";
+                changed = true;
+            }
+            row.dataset.registered = user.registered_at || "";
+            document
+                .querySelectorAll('[data-registration-date="' + user.id + '"]')
+                .forEach((node) => {
+                    node.dateTime = user.registered_at || "";
+                    node.textContent = user.registered_at
+                        ? format(user.registered_at)
+                        : "Дата неизвестна";
+                });
+        }
+        if (changed && document.getElementById("user-search-input").value.trim()) filterUsers();
+    }
+    async function refresh() {
+        controller?.abort();
+        controller = new AbortController();
+        const current = ++generation;
+        try {
+            const response = await fetch("/api/admin/player-details", {
+                cache: "no-store",
+                signal: controller.signal,
+            });
+            if (!response.ok) return;
+            const data = await response.json();
+            if (current === generation) render(data.users);
+        } catch (error) {
+            if (error.name !== "AbortError") console.debug("Player details update deferred");
+        }
+    }
+    document.querySelectorAll("[data-registration-date]").forEach((node) => {
+        if (node.dateTime) node.textContent = format(node.dateTime);
+    });
+    window.refreshPlayerDetails = refresh;
+    refresh();
+    setInterval(() => {
+        if (!document.hidden) refresh();
+    }, 30000);
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) refresh();
+        else {
+            generation++;
+            controller?.abort();
+        }
+    });
+    window.addEventListener("pagehide", () => {
+        generation++;
+        controller?.abort();
+    });
+    window.addEventListener("pageshow", (event) => {
+        if (event.persisted) refresh();
+    });
+})();
+
+</script>

@@ -1,0 +1,826 @@
+<style nonce="{{ request.state.csp_nonce }}">
+    .dk-layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 330px;
+        gap: 20px;
+        align-items: start
+    }
+
+    .dk-main {
+        min-width: 0
+    }
+
+    .dk-aside {
+        display: grid;
+        gap: 16px
+    }
+
+    .dk-form {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px
+    }
+
+    .dk-form label {
+        display: block;
+        font-size: 13px;
+        color: var(--st-muted, #a7b5ce);
+        margin-bottom: 6px
+    }
+
+    .dk-form .dk-check {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin: 0;
+        min-height: 34px
+    }
+
+    .dk-check input {
+        width: 18px;
+        height: 18px;
+        accent-color: #85c5b4
+    }
+
+    .dk-full {
+        grid-column: 1/-1
+    }
+
+    .dk-payout {
+        font-size: 13px;
+        color: #b4c3d8;
+        line-height: 1.7
+    }
+
+    .dk-payout strong {
+        color: #e7eefb
+    }
+
+    .dk-list {
+        display: grid;
+        gap: 12px
+    }
+
+    .dk-list-card {
+        padding: 18px;
+        border: 1px solid #344057;
+        border-radius: 16px;
+        background: #182232;
+        display: flex;
+        gap: 16px;
+        justify-content: space-between;
+        align-items: center
+    }
+
+    .dk-list-card h3 {
+        font-size: 18px;
+        margin: 0 0 8px
+    }
+
+    .dk-list-card p {
+        font-size: 13px;
+        color: #aab8ce;
+        margin: 0
+    }
+
+    .dk-tags {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-bottom: 12px
+    }
+
+    .dk-tags span {
+        font-size: 12px;
+        border: 1px solid #3b4a61;
+        background: #202c3e;
+        border-radius: 8px;
+        padding: 5px 9px;
+        color: #c4d3e8
+    }
+
+    .dk-seat-row {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 10px;
+        margin-bottom: 16px
+    }
+
+    .dk-seat {
+        border: 1px solid #39475a;
+        border-radius: 12px;
+        padding: 12px;
+        background: #1b2739;
+        min-width: 0;
+        overflow-wrap: anywhere
+    }
+
+    .dk-seat strong {
+        display: block;
+        font-size: 14px
+    }
+
+    .dk-seat small {
+        display: block;
+        color: #b3c5d8;
+        margin-top: 5px
+    }
+
+    .dk-seat.dk-current {
+        border-color: #90d7be;
+        background: #263d41;
+        box-shadow: inset 0 0 0 1px #90d7be
+    }
+
+    .dk-seat.dk-out {
+        opacity: .65
+    }
+
+    .dk-status {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: center;
+        padding: 14px 16px;
+        border: 1px solid #38524c;
+        border-radius: 12px;
+        background: #1b332f;
+        margin-bottom: 16px
+    }
+
+    .dk-status strong {
+        display: block;
+        font-size: 17px
+    }
+
+    .dk-status small {
+        color: #afc4c0
+    }
+
+    .dk-clock {
+        font-size: 24px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap
+    }
+
+    .dk-table {
+        border: 1px solid #3b635b;
+        border-radius: 24px;
+        min-height: 255px;
+        padding: 22px;
+        background: radial-gradient(ellipse at center, #254c44, #19352f);
+        box-shadow: inset 0 0 50px #0e2825;
+        display: flex;
+        flex-direction: column;
+        justify-content: center
+    }
+
+    .dk-board {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        justify-content: center
+    }
+
+    .dk-pair {
+        position: relative;
+        width: 105px;
+        min-height: 129px;
+        border-radius: 12px;
+        border: 2px solid transparent;
+        padding: 3px
+    }
+
+    .dk-pair.dk-target {
+        border-color: #b3efd2;
+        background: #446e60;
+        cursor: pointer
+    }
+
+    .dk-pair .dk-cover {
+        position: absolute;
+        left: 24px;
+        top: 18px;
+        transform: rotate(12deg)
+    }
+
+    .dk-card {
+        position: relative;
+        display: inline-flex;
+        flex-direction: column;
+        align-items: flex-start;
+        justify-content: space-between;
+        flex-shrink: 0;
+        width: 72px;
+        height: 104px;
+        background: #f0f4fa;
+        color: #1e2c44;
+        border: 2px solid #d3dce9;
+        border-radius: 10px;
+        padding: 6px;
+        font-weight: 700;
+        font-size: 21px;
+        line-height: 1;
+        box-shadow: 0 4px 10px #07171355
+    }
+
+    .dk-card .dk-suit {
+        font-size: 37px;
+        align-self: center
+    }
+
+    .dk-card.dk-red {
+        color: #a93c55
+    }
+
+    .dk-card.dk-selected {
+        border-color: #87d7be;
+        outline: 3px solid #87d7be;
+        transform: translateY(-8px)
+    }
+
+    button.dk-card:disabled {
+        opacity: .8 !important;
+        cursor: default
+    }
+
+    button.dk-card:not(:disabled):hover {
+        border-color: #7ed6b8;
+        transform: translateY(-5px)
+    }
+
+    button.dk-card:focus-visible {
+        outline: 3px solid #a7d1ff
+    }
+
+    .dk-hand {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        padding: 14px 4px 8px
+    }
+
+    .dk-hand-box {
+        margin-top: 20px;
+        padding: 18px;
+        border: 1px solid #344359;
+        border-radius: 16px;
+        background: #182333
+    }
+
+    .dk-hand-box h2 {
+        font-size: 18px;
+        margin: 0
+    }
+
+    .dk-help {
+        font-size: 13px;
+        color: #b3c4db;
+        margin: 12px 0
+    }
+
+    .dk-controls {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap
+    }
+
+    .dk-empty {
+        color: #a6c5bb;
+        text-align: center;
+        padding: 20px
+    }
+
+    .dk-log {
+        padding-left: 18px;
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.7;
+        color: #b4c4d9
+    }
+
+    .dk-result-row {
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+        border-bottom: 1px solid #344359;
+        padding: 12px 0;
+        font-size: 14px
+    }
+
+    .dk-result-row span:first-child {
+        overflow-wrap: anywhere
+    }
+
+    .dk-invite {
+        width: 100%;
+        font-size: 12px;
+        margin: 10px 0
+    }
+
+    .dk-rule-summary {
+        font-size: 13px;
+        line-height: 1.8;
+        color: #bacadd
+    }
+
+    .dk-dialog {
+        max-width: 480px;
+        width: calc(100% - 30px);
+        background: #1a2638;
+        border: 1px solid #485a73;
+        color: #edf3fb;
+        border-radius: 18px;
+        padding: 24px
+    }
+
+    .dk-dialog::backdrop {
+        background: #07101bcc
+    }
+
+    .dk-dialog h2 {
+        font-size: 21px
+    }
+
+    .dk-dialog p {
+        color: #bdcce0;
+        line-height: 1.6
+    }
+
+    [hidden] {
+        display: none !important
+    }
+
+    @media(max-width:1050px) {
+        .dk-layout {
+            grid-template-columns: 1fr
+        }
+
+        .dk-aside {
+            grid-template-columns: repeat(2, minmax(0, 1fr))
+        }
+    }
+
+    @media(max-width:600px) {
+        .dk-aside {
+            grid-template-columns: 1fr
+        }
+
+        .dk-form {
+            gap: 12px
+        }
+
+        .dk-table {
+            padding: 14px 10px;
+            border-radius: 18px;
+            min-height: 220px
+        }
+
+        .dk-board {
+            gap: 8px
+        }
+
+        .dk-pair {
+            width: 91px;
+            min-height: 119px
+        }
+
+        .dk-card {
+            width: 64px;
+            height: 94px;
+            font-size: 18px
+        }
+
+        .dk-card .dk-suit {
+            font-size: 31px
+        }
+
+        .dk-pair .dk-cover {
+            left: 19px;
+            top: 17px
+        }
+
+        .dk-hand {
+            gap: 8px
+        }
+
+        .dk-hand-box {
+            padding: 14px
+        }
+
+        .dk-seat-row {
+            grid-template-columns: repeat(2, minmax(0, 1fr))
+        }
+
+        .dk-list-card {
+            flex-direction: column;
+            align-items: stretch
+        }
+
+        .dk-list-card .btn {
+            align-self: flex-start
+        }
+
+        .dk-status {
+            padding: 12px
+        }
+
+        .dk-status strong {
+            font-size: 15px
+        }
+    }
+
+    .dk-game-page .container.mt-4 {
+        margin-top: 20px !important
+    }
+
+    .dk-game-page .st-page-heading {
+        margin-bottom: 16px
+    }
+
+    .dk-game-page .dk-table {
+        min-height: 200px;
+        padding: 16px
+    }
+
+    .dk-game-page .dk-seat {
+        padding: 10px
+    }
+
+    .dk-game-page .dk-status {
+        padding: 10px 14px
+    }
+
+    .dk-game-page .dk-hand-box {
+        margin-top: 14px
+    }
+
+    .dk-aside>:only-child {
+        grid-column: 1/-1
+    }
+
+    @media(min-width:1051px) {
+        .dk-lobby-page .dk-layout {
+            grid-template-columns: minmax(0, 1fr) 440px
+        }
+    }
+
+    .dk-card {
+        transition: border-color .18s, box-shadow .18s;
+        will-change: auto
+    }
+
+    .dk-seat {
+        transition: border-color .2s, background-color .2s
+    }
+
+    .dk-flight {
+        position: fixed !important;
+        z-index: 1100;
+        pointer-events: none !important;
+        margin: 0 !important;
+        transform-origin: top left;
+        opacity: .9
+    }
+
+    .dk-back {
+        background: repeating-linear-gradient(45deg, #253e57, #253e57 7px, #345875 7px, #345875 10px);
+        border: 3px solid #9cbbcf;
+        color: transparent;
+        align-items: center;
+        justify-content: center
+    }
+
+    .dk-back::after {
+        content: 'ST9';
+        font-size: 15px;
+        letter-spacing: 2px;
+        color: #d5e6ef
+    }
+
+    .dk-rule-warning {
+        padding: 9px 12px;
+        border: 1px solid #766041;
+        border-radius: 10px;
+        background: #433722;
+        color: #f0d8ac;
+        font-size: 13px;
+        margin-bottom: 14px
+    }
+
+    .dk-empty-hand {
+        padding: 14px;
+        color: #b3c4db;
+        font-size: 14px
+    }
+
+    .dk-form input:disabled,
+    .dk-form select:disabled {
+        opacity: .55
+    }
+
+    @media(prefers-reduced-motion:reduce) {
+
+        .dk-card,
+        .dk-seat {
+            transition: none
+        }
+    }
+
+    .dk-hand-slot {
+        display: inline-flex;
+        flex-shrink: 0;
+        position: relative;
+        transform-origin: top left
+    }
+
+    .dk-seat-backs {
+        display: flex;
+        justify-content: center;
+        min-height: 0;
+        margin-top: 7px
+    }
+
+    .dk-seat-backs .dk-card {
+        width: 25px;
+        height: 36px;
+        margin-left: -8px;
+        border-width: 1px;
+        border-radius: 4px
+    }
+
+    .dk-seat-backs .dk-card:first-child {
+        margin-left: 0
+    }
+
+    .dk-seat-backs .dk-back::after {
+        font-size: 7px;
+        letter-spacing: 0
+    }
+
+    .dk-table {
+        position: relative
+    }
+
+    #durakDeck {
+        position: absolute;
+        right: 14px;
+        top: 14px;
+        width: 42px;
+        height: 60px;
+        box-shadow: 3px 3px 0 #152c43;
+        pointer-events: none
+    }
+
+    #deckInfo {
+        padding-right: 50px
+    }
+</style>
+<script nonce="{{ request.state.csp_nonce }}">
+window.DK = (() => {
+    const esc = STUI.escape;
+    const money = (value) =>
+        (Number(value) / 100).toLocaleString("ru-RU", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        }) + " БК";
+    const defaults = {
+        deck_size: 36,
+        hand_size: 6,
+        max_players: 6,
+        variant: "throw",
+        throwers: "all",
+        attack_limit: 6,
+        unlimited_attack: false,
+        cheating: false,
+        first_five: false,
+        exchange_trump: false,
+        throw_after_take: true,
+        turn_seconds: 60,
+        private: false,
+        entry_cents: 1000,
+    };
+    async function api(url, data) {
+        const response = await fetch(url, {
+            credentials: "same-origin",
+            headers:
+                data === undefined
+                    ? {}
+                    : {
+                          "Content-Type": "application/json",
+                      },
+            method: data === undefined ? "GET" : "POST",
+            body: data === undefined ? undefined : JSON.stringify(data),
+        });
+        let payload;
+        try {
+            payload = await response.json();
+        } catch {
+            throw Error("Сервер временно недоступен. Повторите попытку");
+        }
+        if (!response.ok) {
+            const error = Error(
+                typeof payload.detail === "string"
+                    ? payload.detail
+                    : "Не удалось выполнить действие",
+            );
+            error.status = response.status;
+            throw error;
+        }
+        return payload;
+    }
+
+    function form(el, rules = defaults) {
+        const r = {
+                ...defaults,
+                ...rules,
+            },
+            prefix = el.id;
+        const select = (key, label, options) =>
+            `<div><label for="${prefix}-${key}">${label}</label><select class="form-select" name="${key}" id="${prefix}-${key}">${options.map(([value, name]) => `<option value="${value}" ${String(r[key]) === String(value) ? "selected" : ""}>${name}</option>`).join("")}</select></div>`;
+        el.innerHTML = `<div class="dk-form">${select("variant", "Вариант", [
+            ["throw", "Подкидной"],
+            ["transfer", "Переводной"],
+        ])}${select("throwers", "Кто подкидывает", [
+            ["all", "Все, кроме защитника"],
+            ["neighbors", "Соседи защитника"],
+        ])}${select(
+            "deck_size",
+            "Карт в колоде",
+            [24, 36, 52].map((x) => [x, x]),
+        )}${select(
+            "hand_size",
+            "Карт на руках",
+            [4, 5, 6, 7, 8].map((x) => [x, x]),
+        )}${select(
+            "max_players",
+            "Мест за столом",
+            [2, 3, 4, 5, 6].map((x) => [x, x]),
+        )}${select(
+            "attack_limit",
+            "Карт в нападении, максимум",
+            [1, 2, 3, 4, 5, 6, 7, 8].map((x) => [x, x]),
+        )}${select(
+            "turn_seconds",
+            "Время хода",
+            [30, 60, 90, 120].map((x) => [x, x + " секунд"]),
+        )}<div><label for="${prefix}-entry">Взнос каждого, БК</label><input class="form-control" id="${prefix}-entry" name="entry" inputmode="decimal" value="${(r.entry_cents / 100).toFixed(2)}" required><small class="st-field-hint">0 — игра без ставок</small></div>${[
+            ["unlimited_attack", "Подкидывать без лимита по числу карт"],
+            ["cheating", "Шулерство: подкидывать и отбивать любой картой"],
+            ["first_five", "В первом нападении максимум 5 карт"],
+            ["exchange_trump", "Обмен младшего козыря"],
+            ["throw_after_take", "Подкидывать после «Беру»"],
+            ["private", "Закрытый стол по ссылке"],
+        ]
+            .map(
+                ([k, l]) =>
+                    `<label class="dk-check dk-full"><input type="checkbox" name="${k}" ${r[k] ? "checked" : ""}>${l}</label>`,
+            )
+            .join(
+                "",
+            )}<div class="dk-full st-field-hint">Без лимита можно подкинуть больше карт, чем у защитника. Ограничения числа карт и первого нападения тогда не действуют. При шулерстве можно подкидывать и отбивать любой картой. Другие участники могут проверить последнюю карту до следующей выкладки или конца нападения: нарушитель забирает её и повторяет ход. Перевод — по обычным правилам. «Крайние» — два его соседа среди оставшихся игроков.</div></div>`;
+        const limit = () => {
+            const max = Math.min(
+                6,
+                Math.floor(
+                    Number(el.elements.deck_size.value) / Number(el.elements.hand_size.value),
+                ),
+            );
+            for (const o of el.elements.max_players.options) o.disabled = Number(o.value) > max;
+            if (Number(el.elements.max_players.value) > max)
+                el.elements.max_players.value = String(max);
+        };
+        el.elements.deck_size.addEventListener("change", limit);
+        el.elements.hand_size.addEventListener("change", limit);
+        limit();
+        const toggleLimit = () => {
+            el.elements.attack_limit.disabled = el.elements.unlimited_attack.checked;
+            el.elements.first_five.disabled = el.elements.unlimited_attack.checked;
+        };
+        el.elements.unlimited_attack.addEventListener("change", toggleLimit);
+        toggleLimit();
+    }
+
+    function read(el) {
+        const r = {};
+        for (const [k, v] of Object.entries(defaults)) {
+            if (k === "entry_cents") {
+                const raw = el.elements.entry.value.trim().replace(",", ".");
+                if (!/^\d{1,7}(\.\d{1,2})?$/.test(raw))
+                    throw Error("Укажите взнос от 0 до 1 000 000 БК, до двух знаков после запятой");
+                const [whole, fraction = ""] = raw.split(".");
+                r[k] = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+                if (r[k] > 100000000) throw Error("Максимальный взнос — 1 000 000 БК");
+            } else
+                r[k] =
+                    typeof v === "boolean"
+                        ? el.elements[k].checked
+                        : typeof v === "number"
+                          ? Number(el.elements[k].value)
+                          : el.elements[k].value;
+        }
+        return r;
+    }
+
+    function summary(r) {
+        return `${r.variant === "transfer" ? "Переводной" : "Подкидной"} · ${r.deck_size} карт · по ${r.hand_size} на руках · до ${r.max_players} игроков<br>Подкидывают: ${r.throwers === "all" ? "все" : "соседи защитника"} · ${r.unlimited_attack ? "без лимита по числу карт" : "максимум " + r.attack_limit + " карт"} · ход ${r.turn_seconds} с<br><strong>Шулерство: ${r.cheating ? "включено · подкидывание и защита любой картой" : "выключено"}</strong><br>${r.first_five && !r.unlimited_attack ? "Первое нападение: до 5 карт · " : ""}Обмен козыря: ${r.exchange_trump ? "да" : "нет"}<br>После «Беру» подкидывают: ${r.throw_after_take ? "да" : "нет"} · ${r.private ? "закрытый" : "открытый"} стол`;
+    }
+
+    function payouts(n, entry) {
+        if (n < 2) return "Для партии нужны хотя бы два игрока.";
+        const count = n - 1,
+            total = (count * (count + 1)) / 2;
+        return (
+            `<strong>${n} игроков · банк ${money(n * entry)} · без комиссии</strong><br>` +
+            Array.from(
+                {
+                    length: count,
+                },
+                (_, i) =>
+                    `${i + 1}-й выход: ${(((count - i) / total) * 100).toLocaleString("ru-RU", { maximumFractionDigits: 2 })}%`,
+            ).join(" · ") +
+            `<br>Вышедшие одновременно делят доли своих мест поровну. При общей ничьей — возврат взносов. Выплата — доля банка, а не прибыль сверх взноса.`
+        );
+    }
+
+    function playingCard(c, button = false, attributes = "") {
+        return `<${button ? 'button type="button"' : "span"} class="dk-card ${c.red ? "dk-red" : ""}" ${attributes}><span>${esc(c.value)}${esc(c.suit)}</span><span class="dk-suit" aria-hidden="true">${esc(c.suit)}</span><span style="align-self:flex-end;font-size:14px">${esc(c.value)}</span></${button ? "button" : "span"}>`;
+    }
+
+    const motion = {
+        capture: (root) => CardMotion.capture(root, "[data-motion-card]", "motionCard"),
+        play(before, root, previous, current) {
+            if (!previous || previous.revision === current.revision) return Promise.resolve();
+            const boardBefore = (previous.board || [])
+                    .flatMap((p) => [p.attack, p.defense])
+                    .filter(Boolean),
+                cleared = boardBefore.length && current.board.length === 0;
+            const seatRect = (id) =>
+                CardMotion.rect(root.querySelector(`[data-seat="${id}"] .dk-seat-backs`));
+            return CardMotion.play(before, root, {
+                selector: "[data-motion-card]",
+                attribute: "motionCard",
+                source: document.getElementById("durakDeck"),
+                gap: 150,
+                duration: 560,
+                origin(key) {
+                    if (
+                        current.last_play &&
+                        previous.last_play?.card !== current.last_play.card &&
+                        current.last_play.card === key &&
+                        current.last_play.player !== current.your_id
+                    ) {
+                        return (
+                            [...before]
+                                .reverse()
+                                .find(([k]) =>
+                                    k.startsWith(
+                                        "back:" +
+                                            previous.match_number +
+                                            ":" +
+                                            current.last_play.player +
+                                            ":",
+                                    ),
+                                )?.[1].rect || seatRect(current.last_play.player)
+                        );
+                    }
+                    if (
+                        cleared &&
+                        previous.taking &&
+                        key.startsWith(
+                            "back:" + current.match_number + ":" + previous.defender + ":",
+                        )
+                    ) {
+                        const index = Number(key.split(":").at(-1)),
+                            old =
+                                previous.players.find((p) => p.id === previous.defender)?.count ||
+                                0;
+                        if (index >= old) return before.get(boardBefore[index - old]?.id)?.rect;
+                    }
+                },
+                exit(key, item) {
+                    if (key.startsWith("back:")) return null;
+                    if (cleared)
+                        return previous.taking
+                            ? seatRect(previous.defender)
+                            : CardMotion.rect(document.getElementById("durakDeck"));
+                    return null;
+                },
+            });
+        },
+    };
+    return {
+        esc,
+        money,
+        defaults,
+        api,
+        form,
+        read,
+        summary,
+        payouts,
+        playingCard,
+        motion,
+    };
+})();
+
+</script>

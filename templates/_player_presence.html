@@ -1,0 +1,130 @@
+<style>
+    .player-presence {
+        display: inline-flex;
+        gap: 5px;
+        flex-wrap: wrap;
+        margin-left: 8px;
+        vertical-align: middle;
+        font-size: 11px;
+        font-weight: 600;
+        line-height: 1.5
+    }
+
+    .player-presence span {
+        border-radius: 5px;
+        padding: 1px 6px;
+        border: 1px solid currentColor;
+        white-space: nowrap
+    }
+
+    .player-presence .on-site {
+        color: #75dfb6
+    }
+
+    .player-presence .in-squad {
+        color: #9abfff
+    }
+
+    .player-presence .presence-unknown {
+        color: var(--muted, #aaa);
+        font-weight: 400
+    }
+</style>
+<script>
+(() => {
+    let controller = null,
+        busy = false,
+        timer = null,
+        expires = null;
+
+    function boxes() {
+        return [...document.querySelectorAll("[data-player-presence]")];
+    }
+
+    function render(rows) {
+        const byId = new Map(rows.map((row) => [String(row.id), row]));
+        for (const box of boxes()) {
+            const p = byId.get(box.dataset.playerPresence);
+            box.replaceChildren();
+            if (!p) continue;
+
+            function badge(text, cls, title) {
+                const span = document.createElement("span");
+                span.className = cls;
+                span.textContent = text;
+                span.title = title;
+                box.append(span);
+            }
+            if (p.site_online)
+                badge("На сайте", "on-site", "Активность на сайте за последние 5 минут");
+            if (p.squad_online === true)
+                badge(
+                    "В Squad",
+                    "in-squad",
+                    p.server_name || "Замечен на отслеживаемом сервере Squad",
+                );
+            else if (
+                p.squad_online === null &&
+                document.getElementById("player-row-" + p.id)?.dataset.steamId
+            )
+                badge(
+                    "Squad: нет данных",
+                    "presence-unknown",
+                    "Нет свежего подтверждения игрового статуса",
+                );
+        }
+    }
+
+    function expire() {
+        for (const box of boxes()) {
+            box.replaceChildren();
+            const span = document.createElement("span");
+            span.className = "presence-unknown";
+            span.textContent = "Статус не обновлён";
+            box.append(span);
+        }
+    }
+    async function refresh() {
+        if (busy || document.hidden) return;
+        busy = true;
+        controller = new AbortController();
+        try {
+            const r = await fetch("/api/admin/player-presence", {
+                cache: "no-store",
+                signal: AbortSignal.any([controller.signal, AbortSignal.timeout(10000)]),
+            });
+            if (!r.ok) throw Error();
+            const data = await r.json();
+            render(data.players);
+            clearTimeout(expires);
+            expires = setTimeout(expire, 95000);
+        } catch (e) {
+            if (e.name !== "AbortError") expire();
+        } finally {
+            busy = false;
+        }
+    }
+
+    function start() {
+        clearInterval(timer);
+        refresh();
+        timer = setInterval(refresh, 30000);
+    }
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+            controller?.abort();
+            clearInterval(timer);
+        } else start();
+    });
+    window.addEventListener("pagehide", () => {
+        controller?.abort();
+        clearInterval(timer);
+        clearTimeout(expires);
+    });
+    window.addEventListener("pageshow", (e) => {
+        if (e.persisted) start();
+    });
+    start();
+})();
+
+</script>

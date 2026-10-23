@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <meta name="referrer" content="same-origin">
+        <title>Вход по ссылке — Strike Team 9</title>
+        <style>
+            * {
+                box-sizing: border-box;
+            }
+
+            body {
+                margin: 0;
+                padding: 24px;
+                min-height: 100vh;
+                display: grid;
+                place-items: center;
+                background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+                color: #fff;
+                font: 17px/1.6 system-ui, sans-serif;
+                color-scheme: dark;
+            }
+
+            main {
+                width: 100%;
+                max-width: 520px;
+                padding: 30px;
+                background: #202039;
+                border: 1px solid #ffffff26;
+                border-radius: 20px;
+            }
+
+            h1 {
+                margin-top: 0;
+                font-size: 26px;
+            }
+
+            p {
+                color: #d4d4e2;
+            }
+
+            button,
+            .discord {
+                display: block;
+                width: 100%;
+                padding: 14px 18px;
+                border: 0;
+                border-radius: 10px;
+                background: #5865f2;
+                color: white;
+                font: inherit;
+                font-weight: 600;
+                text-align: center;
+                text-decoration: none;
+                cursor: pointer;
+            }
+
+            button:disabled {
+                opacity: .6;
+                cursor: wait;
+            }
+
+            a {
+                color: #aeb7ff;
+            }
+
+            .error {
+                padding: 12px;
+                background: #562738;
+                border-radius: 10px;
+            }
+
+            [hidden] {
+                display: none !important;
+            }
+        </style>
+        {% include "_site_ui.html" %}
+    </head>
+    <body class="st-auth-page">
+        <main id="st-content">
+            <a href="/"
+               class="st-auth-brand"><span class="st-brand-mark"
+      aria-hidden="true">ST<span>9</span></span>Strike Team 9</a>
+            <h1>Вход в Strike Team 9</h1>
+            {% if error %}
+            <p class="error" role="alert">{{ error }}</p>
+            {% endif %}
+            <div id="instructions">
+                <p>Discord работает на телефоне, но не открывается в браузере?</p>
+                <p>В приложении Discord на нашем сервере введите <strong>/login</strong>. Бот выдаст личную ссылку. Откройте её здесь или скопируйте на компьютер.</p>
+                <p>Также ссылку может выдать главный администратор.</p>
+                <a class="discord" href="/login">Войти через Discord</a>
+            </div>
+            <form id="login-form" action="/auth/link" method="post" hidden>
+                <p>Подтвердите вход по вашей личной ссылке. Откроется ваш прежний профиль с балансом, играми и правами.</p>
+                <input type="hidden" name="csrf" value="{{ csrf }}">
+                <input type="hidden"
+                       id="login-token"
+                       name="token"
+                       value="{{ retry_token }}"
+                       autocomplete="off">
+                <button id="login-button" type="submit">Войти в мой профиль</button>
+                <p>Ссылка действует 10 минут и используется один раз. Не передавайте её другим людям.</p>
+            </form>
+            <noscript>
+                <p>Для входа по ссылке включите JavaScript в браузере.</p>
+            </noscript>
+            <p><a href="/">← На главную</a></p>
+        </main>
+        <script nonce="{{ nonce }}">
+const form = document.getElementById("login-form");
+const tokenInput = document.getElementById("login-token");
+
+function prepareLoginLink() {
+    const token = location.hash.slice(1) || tokenInput.value;
+    history.replaceState(null, "", "/auth/link");
+    if (/^[A-Za-z0-9_-]{43}$/.test(token)) {
+        tokenInput.value = token;
+        document.getElementById("instructions").hidden = true;
+        form.hidden = false;
+    }
+}
+prepareLoginLink();
+window.addEventListener("hashchange", prepareLoginLink);
+form.addEventListener("submit", () => {
+    document.getElementById("login-button").disabled = true;
+    document.getElementById("login-button").textContent = "Проверяем доступ…";
+});
+
+</script>
+    </body>
+</html>

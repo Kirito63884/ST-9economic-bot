@@ -1,0 +1,846 @@
+{% if is_senior_or_super %}
+<section id="panel-squad" role="tabpanel" aria-labelledby="tab-squad" hidden>
+    <div class="section-card">
+        <div class="section-heading">
+            <div>
+                <h2>Squad · начисления игрокам</h2>
+                <p>Выберите весь сервер или отдельных участников. Галочка игрока общая для всех серверов: один человек получает одну выплату.</p>
+            </div>
+            <a class="btn btn-sm" href="/squad" target="_blank" rel="noopener">Публичный список ↗</a>
+        </div>
+        <div id="sqAdminStatus" class="hint" role="status" aria-live="polite">Загружаем список…</div>
+        <div id="sqAdminServers" class="sq-admin-servers"></div>
+        <div class="sq-admin-actions">
+            <div>
+                <label class="form-label" for="sqGrantAmount">Каждому выбранному, БК</label><input id="sqGrantAmount"
+       class="form-control"
+       type="text"
+       inputmode="decimal"
+       placeholder="Например, 100.00"
+       autocomplete="off">
+            </div>
+            <button id="sqGrantPreview" class="btn btn-primary" type="button" disabled>Показать получателей</button><button id="sqAdminRefresh" class="btn" type="button">Обновить список</button>
+        </div>
+        <p id="sqSelectionCount" class="hint">Игроки не выбраны.</p>
+        <p class="hint">Начисление доступно по свежим проверенным спискам. Перед подтверждением выбранные игроки проверяются повторно.</p>
+        <div id="sqGrantResult" class="sq-admin-result" role="status" hidden></div>
+    </div>
+    <div class="section-card">
+        <div class="section-heading">
+            <div>
+                <h2>Автоначисления по расписанию</h2>
+                <p>Все участники выбранных серверов на момент выполнения. Время — московское (UTC+3). Каждая дата создаёт отдельное задание; галочки игроков выше на расписание не влияют.</p>
+            </div>
+        </div>
+        <fieldset id="sqScheduleServers" class="sq-schedule-servers">
+            <legend class="form-label">Серверы для автоначисления</legend>
+        </fieldset>
+        <div class="sq-admin-actions">
+            <div>
+                <label class="form-label" for="sqScheduleAmount">Каждому участнику, БК</label><input id="sqScheduleAmount"
+       class="form-control"
+       type="text"
+       inputmode="decimal"
+       placeholder="100.00"
+       autocomplete="off">
+            </div>
+        </div>
+        <div class="form-label mt-3">Даты и время · Москва</div>
+        <div id="sqScheduleDates" class="sq-schedule-dates"></div>
+        <div class="action-row mt-3">
+            <button id="sqScheduleAddDate" class="btn" type="button">+ Добавить дату</button><button id="sqSchedulePrepare" class="btn btn-primary" type="button">Проверить расписание</button>
+        </div>
+        <p class="hint">Если данные недоступны, задание ждёт до 10 минут. Затем оно завершается с ошибкой без начисления. Просроченные задания после длительного отключения сервера не выплачиваются задним числом.</p>
+        <div id="sqScheduleStatus" class="hint" role="status" aria-live="polite"></div>
+        <h3 class="mt-3">Задания и результаты</h3>
+        <div id="sqScheduleJobs" class="sq-schedule-jobs"></div>
+    </div>
+</section>
+<dialog id="sqGrantDialog"
+        class="sq-grant-dialog"
+        aria-labelledby="sqGrantTitle">
+    <div class="sq-grant-head">
+        <h2 id="sqGrantTitle">Подтвердить начисление</h2>
+        <button id="sqGrantClose"
+                class="close-btn"
+                type="button"
+                aria-label="Закрыть подтверждение">×</button>
+    </div>
+    <p id="sqGrantSummary"></p>
+    <div id="sqGrantRecipients" class="sq-grant-recipients"></div>
+    <p id="sqGrantHint" class="hint" role="status" aria-live="polite"></p>
+    <div class="action-row">
+        <button id="sqGrantConfirm"
+                class="btn btn-primary"
+                type="button">Начислить</button><button id="sqGrantCancel" class="btn" type="button">Отмена</button>
+    </div>
+</dialog>
+<dialog id="sqScheduleDialog"
+        class="sq-grant-dialog"
+        aria-labelledby="sqScheduleTitle">
+    <div class="sq-grant-head">
+        <h2 id="sqScheduleTitle">Создать автоначисления</h2>
+        <button id="sqScheduleClose"
+                class="close-btn"
+                type="button"
+                aria-label="Закрыть расписание">×</button>
+    </div>
+    <p id="sqScheduleSummary"></p>
+    <div id="sqScheduleReview" class="sq-grant-recipients"></div>
+    <p id="sqScheduleHint" class="hint" role="status" aria-live="polite"></p>
+    <div class="action-row">
+        <button id="sqScheduleConfirm" class="btn btn-primary" type="button">Создать задания</button><button id="sqScheduleCancel" class="btn" type="button">Отмена</button>
+    </div>
+</dialog>
+<style>
+        .sq-admin-servers {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin: 18px 0
+        }
+
+        .sq-admin-server,
+        .sq-schedule-job {
+            border: 1px solid var(--line);
+            background: #111927;
+            border-radius: 10px;
+            padding: 15px;
+            min-width: 0
+        }
+
+        .sq-admin-server label,
+        .sq-schedule-servers label {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            cursor: pointer
+        }
+
+        .sq-admin-server input {
+            flex-shrink: 0;
+            margin-top: 3px
+        }
+
+        .sq-admin-server strong,
+        .sq-schedule-job {
+            overflow-wrap: anywhere
+        }
+
+        .sq-admin-server small {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 5px
+        }
+
+        .sq-admin-members {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            margin-top: 12px;
+            border-top: 1px solid var(--line);
+            max-height: 360px;
+            overflow: auto
+        }
+
+        .sq-member {
+            padding: 11px 0;
+            border-bottom: 1px solid var(--line)
+        }
+
+        .sq-member:last-child {
+            border: 0
+        }
+
+        .sq-admin-actions {
+            display: flex;
+            gap: 12px;
+            align-items: flex-end;
+            flex-wrap: wrap
+        }
+
+        .sq-admin-actions>div {
+            width: 230px;
+            max-width: 100%
+        }
+
+        .sq-admin-actions .form-label {
+            display: block
+        }
+
+        .sq-admin-result {
+            border: 1px solid #36544b;
+            color: var(--green);
+            border-radius: 10px;
+            padding: 14px;
+            margin-top: 20px
+        }
+
+        .sq-grant-dialog {
+            width: 580px;
+            max-width: calc(100% - 30px);
+            max-height: 85dvh;
+            overflow: auto;
+            border: 1px solid var(--line);
+            background: var(--panel);
+            color: var(--text);
+            padding: 24px;
+            border-radius: 14px
+        }
+
+        .sq-grant-dialog::backdrop {
+            background: #050911bb
+        }
+
+        .sq-grant-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px
+        }
+
+        .sq-grant-recipients {
+            max-height: 290px;
+            overflow: auto;
+            border: 1px solid var(--line);
+            border-radius: 9px;
+            margin: 16px 0;
+            padding: 8px 14px
+        }
+
+        .sq-grant-recipient {
+            padding: 9px 0;
+            border-bottom: 1px solid var(--line);
+            overflow-wrap: anywhere
+        }
+
+        .sq-grant-recipient:last-child {
+            border: 0
+        }
+
+        .sq-grant-dialog .hint {
+            margin-bottom: 16px
+        }
+
+        .sq-schedule-servers {
+            border: 0;
+            padding: 0;
+            display: grid;
+            gap: 10px;
+            margin: 18px 0
+        }
+
+        .sq-schedule-dates,
+        .sq-schedule-jobs {
+            display: grid;
+            gap: 10px
+        }
+
+        .sq-date-row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            max-width: 470px
+        }
+
+        .sq-date-row input {
+            min-width: 0
+        }
+
+        .sq-schedule-job .action-row {
+            justify-content: space-between;
+            align-items: center
+        }
+
+        .sq-schedule-job small {
+            display: block;
+            color: var(--muted);
+            margin-top: 7px
+        }
+
+        .sq-job-state {
+            font-size: 12px;
+            color: var(--blue)
+        }
+
+        @media(max-width:680px) {
+            .sq-admin-servers {
+                grid-template-columns: 1fr
+            }
+
+            .sq-admin-actions {
+                align-items: stretch
+            }
+
+            .sq-admin-actions>div {
+                width: 100%
+            }
+
+            .sq-admin-actions .btn {
+                flex: 1
+            }
+
+            .sq-grant-dialog {
+                padding: 18px
+            }
+        }
+    </style>
+<script>
+(() => {
+    const $ = (id) => document.getElementById(id),
+        panel = $("panel-squad"),
+        status = $("sqAdminStatus"),
+        root = $("sqAdminServers"),
+        amount = $("sqGrantAmount"),
+        prepare = $("sqGrantPreview"),
+        refresh = $("sqAdminRefresh"),
+        dialog = $("sqGrantDialog"),
+        confirm = $("sqGrantConfirm"),
+        hint = $("sqGrantHint"),
+        result = $("sqGrantResult"),
+        scheduleDialog = $("sqScheduleDialog");
+    let data = null,
+        loading = false,
+        busy = false,
+        selected = new Set(),
+        excluded = new Set(),
+        requestId = null,
+        preview = null,
+        scheduleKey = null,
+        schedulePayload = null,
+        jobLoading = false;
+    const el = (tag, text, cls) => {
+        const n = document.createElement(tag);
+        if (text !== undefined) n.textContent = text;
+        if (cls) n.className = cls;
+        return n;
+    };
+    const normalized = (n) => n.value.trim().replace(",", ".");
+    const validAmount = (n) =>
+        /^[0-9]{1,13}(?:\.[0-9]{1,2})?$/.test(normalized(n)) &&
+        Number(normalized(n)) > 0 &&
+        Number(normalized(n)) <= 1e12;
+    const eligible = () => {
+        const users = new Map();
+        for (const s of data?.servers || [])
+            if (selected.has(s.id))
+                for (const u of s.members)
+                    if (u.can_select !== false && !excluded.has(u.user_id)) users.set(u.user_id, u);
+        return [...users.values()].sort((a, b) => a.user_id - b.user_id);
+    };
+
+    function update() {
+        const users = eligible(),
+            usable =
+                data &&
+                selected.size &&
+                data.servers.filter((s) => selected.has(s.id)).every((s) => s.can_grant);
+        prepare.disabled = busy || loading || !usable || !users.length || !validAmount(amount);
+        amount.disabled = busy;
+        refresh.disabled = busy || loading;
+        root.querySelectorAll("input").forEach((n) => {
+            n.disabled =
+                busy ||
+                !data?.servers.find((s) => s.id === n.dataset.server)?.can_grant ||
+                n.dataset.protected === "true";
+        });
+        $("sqSelectionCount").textContent = users.length
+            ? `Выбрано ${users.length} участников · всего ${validAmount(amount) ? (users.length * Number(normalized(amount))).toLocaleString("ru-RU", { maximumFractionDigits: 2 }) : "—"} БК.`
+            : "Игроки не выбраны.";
+        for (const s of data?.servers || []) {
+            const n = root.querySelector(`input[data-whole="${s.id}"]`),
+                count = s.members.filter(
+                    (u) => u.can_select !== false && users.some((p) => p.user_id === u.user_id),
+                ).length;
+            if (n) {
+                n.checked =
+                    selected.has(s.id) &&
+                    count > 0 &&
+                    count === s.members.filter((u) => u.can_select !== false).length;
+                n.indeterminate =
+                    selected.has(s.id) &&
+                    count > 0 &&
+                    count < s.members.filter((u) => u.can_select !== false).length;
+            }
+        }
+        document
+            .querySelectorAll(
+                "#sqScheduleServers input,#sqScheduleDates input,#sqScheduleDates button,#sqScheduleAmount,#sqScheduleAddDate,#sqSchedulePrepare",
+            )
+            .forEach((n) => (n.disabled = busy));
+    }
+
+    function invalidate() {
+        requestId = null;
+        preview = null;
+    }
+
+    function render() {
+        root.replaceChildren();
+        const chosen = new Set(eligible().map((u) => u.user_id));
+        for (const s of data.servers) {
+            const box = el("div", undefined, "sq-admin-server"),
+                label = el("label"),
+                check = el("input");
+            check.type = "checkbox";
+            check.dataset.server = s.id;
+            check.dataset.whole = s.id;
+            check.setAttribute("aria-label", "Выбрать всех: " + s.name);
+            const info = el("span");
+            info.append(
+                el("strong", s.name),
+                el("small", `Наших участников: ${s.members.length} · Всего: ${s.total_players}`),
+            );
+            label.append(check, info);
+            box.append(label);
+            const caption = s.can_grant
+                ? "Список проверен"
+                : s.status === "starting"
+                  ? "Ожидаем первый список"
+                  : s.pending
+                    ? `Проверяем Steam ID: осталось ${s.pending}`
+                    : s.status === "offline"
+                      ? "Сервер офлайн"
+                      : s.error || "Данные устарели";
+            info.append(el("small", caption));
+            const list = el("div", undefined, "sq-admin-members");
+            for (const u of s.members) {
+                const row = el("label", undefined, "sq-member"),
+                    tick = el("input"),
+                    text = el("span");
+                tick.type = "checkbox";
+                tick.dataset.server = s.id;
+                tick.dataset.user = String(u.user_id);
+                tick.dataset.protected = String(u.can_select === false);
+                tick.checked = chosen.has(u.user_id);
+                tick.setAttribute("aria-label", `Выбрать ${u.name} на ${s.name}`);
+                text.append(
+                    el("strong", u.name),
+                    el("small", `Discord: ${u.discord_name}`),
+                    el(
+                        "small",
+                        `Steam ID: ${u.steam_id}${u.can_select === false ? " · аккаунт владельца защищён" : ""}`,
+                    ),
+                );
+                row.append(tick, text);
+                list.append(row);
+                tick.addEventListener("change", () => {
+                    if (tick.checked) {
+                        if (!selected.has(s.id)) {
+                            selected.add(s.id);
+                            for (const p of s.members)
+                                if (p.user_id !== u.user_id && !chosen.has(p.user_id))
+                                    excluded.add(p.user_id);
+                        }
+                        excluded.delete(u.user_id);
+                    } else excluded.add(u.user_id);
+                    invalidate();
+                    render();
+                });
+            }
+            if (!s.members.length) list.append(el("small", "Участники не найдены."));
+            box.append(list);
+            check.addEventListener("change", () => {
+                if (check.checked) {
+                    selected.add(s.id);
+                    for (const u of s.members) excluded.delete(u.user_id);
+                } else {
+                    selected.delete(s.id);
+                    for (const u of s.members) excluded.add(u.user_id);
+                }
+                invalidate();
+                render();
+            });
+            root.append(box);
+        }
+        const old = new Set(
+            [...$("sqScheduleServers").querySelectorAll("input:checked")].map((n) => n.value),
+        );
+        $("sqScheduleServers")
+            .querySelectorAll("label")
+            .forEach((n) => n.remove());
+        for (const s of data.servers) {
+            const label = el("label"),
+                n = el("input");
+            n.type = "checkbox";
+            n.value = s.id;
+            n.checked = old.has(s.id);
+            label.append(n, el("span", s.name));
+            n.addEventListener("change", () => (scheduleKey = null));
+            $("sqScheduleServers").append(label);
+        }
+        update();
+    }
+    async function load() {
+        if (loading || busy || dialog.open || scheduleDialog.open) return;
+        loading = true;
+        update();
+        try {
+            const r = await fetch("/api/admin/squad/online", {
+                cache: "no-store",
+            });
+            if (!r.ok) throw new Error("Не удалось загрузить список. Проверьте доступ.");
+            const next = await r.json(),
+                old = JSON.stringify(eligible().map((u) => [u.user_id, u.steam_id]));
+            data = next;
+            if (old !== JSON.stringify(eligible().map((u) => [u.user_id, u.steam_id])))
+                invalidate();
+            render();
+            status.textContent = data.servers.some((s) => !s.can_grant)
+                ? "Выбор доступен для серверов со свежими и полностью проверенными списками."
+                : "Списки обновлены. Выберите серверы или отдельных участников.";
+        } catch (e) {
+            status.textContent = e.message;
+            data = null;
+            root.querySelectorAll("input").forEach((n) => (n.disabled = true));
+        } finally {
+            loading = false;
+            update();
+        }
+    }
+    async function post(url, body) {
+        const options = {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+        };
+        if (body) options.body = JSON.stringify(body);
+        const r = await adminFetch(url, options);
+        let d;
+        try {
+            d = await r.json();
+        } catch {
+            throw new Error("Ответ не получен. Повторите тот же запрос.");
+        }
+        if (!r.ok) {
+            const e = new Error(typeof d.detail === "string" ? d.detail : "Запрос не выполнен.");
+            e.status = r.status;
+            throw e;
+        }
+        return d;
+    }
+
+    function showResult(d) {
+        result.textContent = d.message + ` Всего ${d.total} БК.`;
+        result.hidden = false;
+        if (typeof showToast === "function") showToast(d.message, "success");
+        for (const u of d.updated || []) {
+            const row = document.querySelector(`tr[data-user-id="${u.user_id}"]`);
+            if (row) row.dataset.balance = u.new;
+            const cell = $("balance_" + u.user_id);
+            if (cell && !cell.classList.contains("changed")) cell.value = Number(u.new).toFixed(2);
+            const display = $("row-balance-" + u.user_id);
+            if (display) display.textContent = Number(u.new).toFixed(2);
+        }
+        if (typeof updateTotalBalance === "function") updateTotalBalance();
+    }
+    prepare.addEventListener("click", async () => {
+        if (prepare.disabled) return;
+        busy = true;
+        update();
+        status.textContent = "Проверяем получателей…";
+        try {
+            if (!requestId) requestId = crypto.randomUUID();
+            const p = await post("/api/admin/squad/preview", {
+                request_id: requestId,
+                server_ids: [...selected],
+                user_ids: eligible().map((u) => u.user_id),
+                amount: normalized(amount),
+            });
+            if (p.completed) {
+                showResult(p.result);
+                invalidate();
+                return;
+            }
+            preview = p;
+            $("sqGrantSummary").textContent =
+                `${p.recipients.length} участников · по ${p.amount} БК каждому · всего ${p.total} БК.`;
+            $("sqGrantRecipients").replaceChildren(
+                ...p.recipients.map((u) => {
+                    const n = el("div", undefined, "sq-grant-recipient");
+                    n.append(el("strong", u.name), el("div", "Steam ID: " + u.steam_id, "hint"));
+                    return n;
+                }),
+            );
+            hint.textContent =
+                "Выбранные игроки будут проверены повторно. Подтверждение действует 2 минуты.";
+            confirm.disabled = false;
+            dialog.showModal();
+            status.textContent = "Проверьте получателей.";
+        } catch (e) {
+            status.textContent = e.message;
+            if (e.status) invalidate();
+        } finally {
+            busy = false;
+            update();
+        }
+    });
+    confirm.addEventListener("click", async () => {
+        if (!preview || busy) return;
+        busy = true;
+        confirm.disabled = true;
+        update();
+        hint.textContent = "Начисляем…";
+        try {
+            const d = await post("/api/admin/squad/grants/" + encodeURIComponent(preview.grant_id));
+            dialog.close();
+            showResult(d);
+            invalidate();
+            status.textContent = "Операция завершена и записана в историю.";
+        } catch (e) {
+            hint.textContent = e.status
+                ? e.message
+                : "Ответ не получен. Повторите подтверждение: этот запрос не начислит деньги второй раз.";
+            if (e.status) {
+                preview = null;
+                confirm.disabled = true;
+                requestId = null;
+            }
+        } finally {
+            busy = false;
+            if (preview) confirm.disabled = false;
+            update();
+        }
+    });
+    for (const id of ["sqGrantClose", "sqGrantCancel"])
+        $(id).addEventListener("click", () => {
+            if (!busy) dialog.close();
+        });
+    dialog.addEventListener("cancel", (e) => {
+        if (busy) e.preventDefault();
+    });
+    amount.addEventListener("input", () => {
+        invalidate();
+        update();
+    });
+    refresh.addEventListener("click", () => {
+        load();
+        loadJobs();
+    });
+    const moscow = (n) =>
+        new Intl.DateTimeFormat("ru-RU", {
+            timeZone: "Europe/Moscow",
+            dateStyle: "short",
+            timeStyle: "short",
+        }).format(new Date(n * 1000));
+
+    function nextDate() {
+        return new Date(Date.now() + 4 * 3600000).toISOString().slice(0, 16);
+    }
+
+    function addDate(value = nextDate()) {
+        if ($("sqScheduleDates").children.length >= 50) return;
+        const row = el("div", undefined, "sq-date-row"),
+            input = el("input"),
+            remove = el("button", "Убрать", "btn btn-sm");
+        input.type = "datetime-local";
+        input.className = "form-control";
+        input.value = value;
+        input.setAttribute("aria-label", "Дата и время по Москве");
+        remove.type = "button";
+        remove.addEventListener("click", () => {
+            if ($("sqScheduleDates").children.length > 1) {
+                row.remove();
+                scheduleKey = null;
+            }
+        });
+        input.addEventListener("input", () => (scheduleKey = null));
+        row.append(input, remove);
+        $("sqScheduleDates").append(row);
+        scheduleKey = null;
+    }
+    addDate();
+    $("sqScheduleAddDate").addEventListener("click", () => addDate());
+    $("sqScheduleAmount").addEventListener("input", () => (scheduleKey = null));
+    $("sqSchedulePrepare").addEventListener("click", () => {
+        if (!data) {
+            $("sqScheduleStatus").textContent = "Сначала обновите список серверов.";
+            return;
+        }
+        const ids = [...$("sqScheduleServers").querySelectorAll("input:checked")].map(
+                (n) => n.value,
+            ),
+            dates = [...$("sqScheduleDates").querySelectorAll("input")].map((n) => n.value);
+        if (
+            !ids.length ||
+            !validAmount($("sqScheduleAmount")) ||
+            dates.some(
+                (d) =>
+                    !d ||
+                    !Number.isFinite(Date.parse(d + "+03:00")) ||
+                    Date.parse(d + "+03:00") < Date.now() + 30000,
+            ) ||
+            new Set(dates).size !== dates.length
+        ) {
+            $("sqScheduleStatus").textContent =
+                "Выберите серверы, положительную сумму и разные даты в будущем.";
+            return;
+        }
+        schedulePayload = {
+            request_id: scheduleKey || (scheduleKey = crypto.randomUUID()),
+            server_ids: ids,
+            amount: normalized($("sqScheduleAmount")),
+            dates: dates.map((d) => d + "+03:00"),
+        };
+        $("sqScheduleSummary").textContent =
+            `${dates.length} заданий · по ${schedulePayload.amount} БК каждому участнику. Серверы: ${data.servers
+                .filter((s) => ids.includes(s.id))
+                .map((s) => s.name)
+                .join(", ")}.`;
+        $("sqScheduleReview").replaceChildren(
+            ...dates.map((d) =>
+                el("div", moscow(Date.parse(d + "+03:00") / 1000), "sq-grant-recipient"),
+            ),
+        );
+        $("sqScheduleHint").textContent =
+            "Будут начислены деньги всем участникам на выбранных серверах в момент выполнения. При нехватке данных — ожидание до 10 минут.";
+        $("sqScheduleConfirm").disabled = false;
+        scheduleDialog.showModal();
+    });
+    $("sqScheduleConfirm").addEventListener("click", async () => {
+        if (busy || !schedulePayload) return;
+        busy = true;
+        $("sqScheduleConfirm").disabled = true;
+        update();
+        try {
+            const d = await post("/api/admin/squad/schedules", schedulePayload);
+            scheduleDialog.close();
+            $("sqScheduleStatus").textContent = `Сохранено заданий: ${d.jobs.length}.`;
+            scheduleKey = null;
+            schedulePayload = null;
+            await loadJobs();
+        } catch (e) {
+            $("sqScheduleHint").textContent = e.status
+                ? e.message
+                : "Ответ не получен. Повторите создание: эти задания не будут продублированы.";
+            if (e.status) scheduleKey = null;
+        } finally {
+            busy = false;
+            $("sqScheduleConfirm").disabled = false;
+            update();
+        }
+    });
+    for (const id of ["sqScheduleClose", "sqScheduleCancel"])
+        $(id).addEventListener("click", () => {
+            if (!busy) scheduleDialog.close();
+        });
+    scheduleDialog.addEventListener("cancel", (e) => {
+        if (busy) e.preventDefault();
+    });
+    async function loadJobs() {
+        if (jobLoading) return;
+        jobLoading = true;
+        try {
+            const r = await fetch("/api/admin/squad/schedules", {
+                cache: "no-store",
+            });
+            if (!r.ok) throw new Error("Не удалось загрузить расписание.");
+            const d = await r.json(),
+                list = $("sqScheduleJobs");
+            list.replaceChildren();
+            const states = {
+                pending: "Запланировано",
+                waiting: "Ожидаем свежие данные",
+                completed: "Выполнено",
+                failed: "Не выполнено",
+                cancelled: "Отменено",
+            };
+            for (const job of d.jobs) {
+                const card = el("div", undefined, "sq-schedule-job"),
+                    head = el("div", undefined, "action-row");
+                head.append(
+                    el("strong", moscow(job.due_at) + " · " + job.amount + " БК каждому"),
+                    el("span", states[job.state] || job.state, "sq-job-state"),
+                );
+                card.append(
+                    head,
+                    el(
+                        "small",
+                        "Серверы: " +
+                            job.server_ids
+                                .map((id) => data?.servers.find((s) => s.id === id)?.name || id)
+                                .join(", "),
+                    ),
+                    el("small", "Создал: " + job.author),
+                );
+                if (job.state === "completed")
+                    card.append(el("small", `Получателей: ${job.count} · Всего: ${job.total} БК`));
+                if (job.error) card.append(el("small", job.error));
+                if (["pending", "waiting"].includes(job.state)) {
+                    const cancel = el("button", "Отменить задание", "btn btn-sm mt-2");
+                    cancel.type = "button";
+                    cancel.addEventListener("click", () => {
+                        if (busy) return;
+                        showModal(
+                            "Отменить автоначисление?",
+                            moscow(job.due_at) + " · " + job.amount + " БК каждому",
+                            "◷",
+                            "Отменить задание",
+                            "Оставить",
+                            "warning",
+                            async (yes) => {
+                                if (!yes || busy) return;
+                                busy = true;
+                                cancel.disabled = true;
+                                update();
+                                try {
+                                    await post(
+                                        "/api/admin/squad/schedules/" +
+                                            encodeURIComponent(job.id) +
+                                            "/cancel",
+                                    );
+                                    $("sqScheduleStatus").textContent = "Задание отменено.";
+                                    await loadJobs();
+                                } catch (e) {
+                                    $("sqScheduleStatus").textContent = e.message;
+                                } finally {
+                                    busy = false;
+                                    update();
+                                }
+                            },
+                        );
+                    });
+                    card.append(cancel);
+                }
+                list.append(card);
+            }
+            if (!d.jobs.length) list.append(el("p", "Заданий пока нет.", "hint"));
+        } catch (e) {
+            $("sqScheduleStatus").textContent = e.message;
+        } finally {
+            jobLoading = false;
+        }
+    }
+    const observer = new MutationObserver(() => {
+        if (!panel.hidden) {
+            load();
+            loadJobs();
+        }
+    });
+    observer.observe(panel, {
+        attributes: true,
+        attributeFilter: ["hidden"],
+    });
+    if (!panel.hidden) {
+        load();
+        loadJobs();
+    }
+    setInterval(() => {
+        if (!panel.hidden && !document.hidden && !dialog.open && !scheduleDialog.open && !busy) {
+            load();
+            loadJobs();
+        }
+        if (preview && !busy && Date.now() / 1000 > preview.expires_at) {
+            confirm.disabled = true;
+            hint.textContent = "Предпросмотр истёк. Подготовьте новый список.";
+            preview = null;
+            requestId = null;
+        }
+    }, 30000);
+})();
+
+</script>
+{% endif %}

@@ -1,0 +1,418 @@
+<section id="panel-hub" role="tabpanel" aria-labelledby="tab-hub" hidden>
+    <style>
+        .hub-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 18px
+        }
+
+        .hub-wide {
+            grid-column: 1/-1
+        }
+
+        .hub-counts {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px
+        }
+
+        .hub-count {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 13px;
+            background: #111927
+        }
+
+        .hub-count strong {
+            font-size: 24px;
+            display: block
+        }
+
+        .hub-list {
+            max-height: 420px;
+            overflow: auto
+        }
+
+        .hub-row {
+            padding: 12px 0;
+            border-bottom: 1px solid var(--line);
+            display: flex;
+            gap: 12px;
+            align-items: flex-start
+        }
+
+        .hub-row:last-child {
+            border: 0
+        }
+
+        .hub-row>div {
+            flex: 1;
+            min-width: 0
+        }
+
+        .hub-tools {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap
+        }
+
+        .hub-bad {
+            color: #ff9aaa
+        }
+
+        .hub-good {
+            color: var(--green)
+        }
+
+        @media(max-width:850px) {
+            .hub-grid {
+                grid-template-columns: 1fr
+            }
+
+            .hub-wide {
+                grid-column: auto
+            }
+
+            .hub-counts {
+                grid-template-columns: 1fr 1fr
+            }
+        }
+
+        @media(max-width:560px) {
+            .hub-counts {
+                grid-template-columns: 1fr
+            }
+
+            .hub-tools {
+                position: sticky;
+                bottom: 0;
+                background: #181e2bf2;
+                padding: 10px 0;
+                z-index: 2
+            }
+
+            .hub-row {
+                flex-direction: column
+            }
+
+            .hub-row .btn {
+                width: 100%
+            }
+        }
+    </style>
+    <div class="section-card">
+        <div class="section-heading">
+            <div>
+                <h2>Требует внимания</h2>
+                <p>Ошибки, неподтверждённые решения и неполные профили в одном месте.</p>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="loadAdminHub(true)">Обновить</button>
+        </div>
+        <div id="hubAttention" class="hub-counts">
+            <div class="online-empty">Загрузка…</div>
+        </div>
+    </div>
+    <div class="hub-grid">
+        <div class="section-card hub-wide">
+            <div class="section-heading">
+                <div>
+                    <h2>Предпросмотр недельных наград</h2>
+                    <p>Начиная с недели 12.10.2026 новые недельные награды ждут подтверждения главного администратора. Один игрок может получить все подходящие разные награды за неделю без общего лимита. Каждая награда показывается отдельно. Исключённый кандидат не получит роль, выплату и объявление.</p>
+                </div>
+                <div class="hub-tools">
+                    <input id="hubAwardWeek"
+                           class="form-control"
+                           type="date"
+                           style="max-width:180px"><button class="btn" onclick="loadAwardPreview()">Показать</button>
+                </div>
+            </div>
+            <div id="hubAwardPreview" class="hub-list">
+                <div class="online-empty">Выберите неделю.</div>
+            </div>
+            {% if is_super %}
+            <div class="hub-tools mt-3">
+                <button class="btn btn-primary"
+                        id="hubApproveWeek"
+                        onclick="approveAwardWeek()"
+                        disabled>Подтвердить выдачу</button>
+            </div>
+            {% endif %}
+        </div>
+        <div class="section-card">
+            <div class="section-heading">
+                <div>
+                    <h2>Ручные награды</h2>
+                    <p>Заявка содержит ссылку на откат и комментарий. Выдача выполняется только после решения главного администратора.</p>
+                </div>
+            </div>
+            <div class="stack">
+                <select id="hubManualUser" class="form-select">
+                    <option value="">Игрок</option>
+                    {% for u in users %}
+                    <option value="{{ u.id }}">{{ u.display_name or u.username }}</option>
+                    {% endfor %}
+                </select><select id="hubManualMedal" class="form-select"></select><input id="hubManualUrl"
+       class="form-control"
+       placeholder="Ссылка на откат (необязательно)"><textarea id="hubManualComment"
+          class="notes-cell"
+          maxlength="2000"
+          placeholder="Почему нужно выдать награду"></textarea><button class="btn btn-primary" onclick="createManualAward()">Добавить заявку</button>
+            </div>
+            <div id="hubManualList" class="hub-list mt-3"></div>
+        </div>
+        <div class="section-card">
+            <div class="section-heading">
+                <div>
+                    <h2>Апелляции по сборам</h2>
+                    <p>Одобренная апелляция автоматически возвращает списанные коины.</p>
+                </div>
+            </div>
+            <div id="hubAppeals" class="hub-list">
+                <div class="online-empty">Загрузка…</div>
+            </div>
+        </div>
+        <div class="section-card">
+            <div class="section-heading">
+                <div>
+                    <h2>Недельный отчёт</h2>
+                    <p>Награды, посещаемость, штрафы и ожидающие решения.</p>
+                </div>
+                <button class="btn" onclick="loadWeeklyReport()">Обновить</button>
+            </div>
+            <div id="hubWeeklyReport" class="editor-info">Загрузка…</div>
+        </div>
+        <div class="section-card">
+            <div class="section-heading">
+                <div>
+                    <h2>Выгрузка данных</h2>
+                    <p>CSV открывается в Excel. Формулы из пользовательских полей обезвреживаются.</p>
+                </div>
+            </div>
+            <div class="hub-tools"><a class="btn" href="/api/admin/export/users">Игроки</a><a class="btn" href="/api/admin/export/awards">Награды</a><a class="btn" href="/api/admin/export/assembly">Сборы</a><a class="btn" href="/api/admin/export/audit">История операций</a></div>
+        </div>
+        <div class="section-card hub-wide">
+            <div class="section-heading">
+                <div>
+                    <h2>Действия администраторов</h2>
+                    <p>Решения по наградам, апелляциям и недельным проверкам. Изменения баланса, Steam ID и прав остаются в общем журнале.</p>
+                </div>
+                <a class="btn" href="/admin/logs">Открыть общий журнал</a>
+            </div>
+            <div id="hubActions" class="hub-list">
+                <div class="online-empty">Загрузка…</div>
+            </div>
+        </div>
+        <div class="section-card hub-wide">
+            <div class="section-heading">
+                <div>
+                    <h2>Быстрые проверки</h2>
+                    <p>Используются существующие безопасные инструменты админки.</p>
+                </div>
+            </div>
+            <div class="hub-tools">
+                <button class="btn" onclick="switchTab('assembly',true)">Календарь сборов</button><button class="btn"
+        onclick="switchTab('automation',true);setTimeout(previewAwardReconciliation,100)">Сверить с Discord</button>{% if is_senior_or_super %}<button class="btn" onclick="switchTab('backups',true)">Резервные копии</button>{% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+<script>
+let hubLoaded = false,
+    hubPreview = null;
+
+function hubEsc(v) {
+    return escapeHtml(v == null ? "" : String(v));
+}
+async function hubJson(url, options) {
+    const r = await adminFetch(url, options),
+        d = await r.json();
+    if (!r.ok) throw Error(d.detail || "Ошибка запроса");
+    return d;
+}
+async function loadAdminHub(force = false) {
+    if (hubLoaded && !force) return;
+    try {
+        const [attention, manual, appeals, actions] = await Promise.all([
+            hubJson("/api/admin/hub/attention"),
+            hubJson("/api/admin/manual-awards"),
+            hubJson("/api/admin/assembly/appeals"),
+            hubJson("/api/admin/actions"),
+        ]);
+        document.getElementById("hubAttention").innerHTML = attention.items
+            .map(
+                (i) =>
+                    `<button class="hub-count" onclick="switchTab('${hubEsc(i.section)}',true)"><strong class="${i.count ? "hub-bad" : "hub-good"}">${i.count}</strong><span>${hubEsc(i.label)}</span></button>`,
+            )
+            .join("");
+        document.getElementById("hubManualMedal").innerHTML =
+            '<option value="">Награда</option>' +
+            Object.entries(manual.catalog)
+                .map(([c, n]) => `<option value="${hubEsc(c)}">${hubEsc(n)}</option>`)
+                .join("");
+        renderManual(manual.items);
+        renderAppeals(appeals.items);
+        renderActions(actions.items);
+        await loadWeeklyReport();
+        hubLoaded = true;
+    } catch (e) {
+        showToast(e.message, "error");
+    }
+}
+
+function renderManual(items) {
+    document.getElementById("hubManualList").innerHTML = items.length
+        ? items
+              .map(
+                  (i) =>
+                      `<div class="hub-row"><div><b>${hubEsc(i.name)} · ${hubEsc(i.award_name)}</b><div class="user-id">${hubEsc(i.comment)} · ${hubEsc(i.status)}</div>${i.evidence_url ? `<a href="${hubEsc(i.evidence_url)}" target="_blank" rel="noopener">Открыть доказательство</a>` : ""}</div>{% if is_super %}${i.status === "pending" ? `<div class="hub-tools"><button class="btn btn-sm" onclick="decideManual(${i.id},'approved')">Выдать</button><button class="btn btn-sm btn-outline-danger" onclick="decideManual(${i.id},'rejected')">Отклонить</button></div>` : ""}{% endif %}</div>`,
+              )
+              .join("")
+        : '<div class="online-empty">Заявок нет.</div>';
+}
+async function createManualAward() {
+    try {
+        await hubJson("/api/admin/manual-awards", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                user_id: Number(document.getElementById("hubManualUser").value),
+                medal: document.getElementById("hubManualMedal").value,
+                evidence_url: document.getElementById("hubManualUrl").value,
+                comment: document.getElementById("hubManualComment").value,
+            }),
+        });
+        hubLoaded = false;
+        loadAdminHub(true);
+        showToast("Заявка добавлена", "success");
+    } catch (e) {
+        showToast(e.message, "error");
+    }
+}
+async function decideManual(id, decision) {
+    const comment = prompt("Комментарий к решению:") || "";
+    try {
+        await hubJson(`/api/admin/manual-awards/${id}/decision`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                decision,
+                comment,
+            }),
+        });
+        hubLoaded = false;
+        loadAdminHub(true);
+    } catch (e) {
+        showToast(e.message, "error");
+    }
+}
+
+function renderAppeals(items) {
+    document.getElementById("hubAppeals").innerHTML = items.length
+        ? items
+              .map(
+                  (i) =>
+                      `<div class="hub-row"><div><b>${hubEsc(i.name)} · сбор ${hubEsc(i.event_date)}</b><div class="user-id">${hubEsc(i.reason)} · ${hubEsc(i.status)}${i.refunded ? " · возвращено " + i.refunded + " БК" : ""}</div>${i.evidence_url ? `<a href="${hubEsc(i.evidence_url)}" target="_blank" rel="noopener">Доказательство</a>` : ""}</div>{% if is_super %}${i.status === "pending" ? `<div class="hub-tools"><button class="btn btn-sm" onclick="decideAppeal(${i.assessment_id},'approved')">Одобрить</button><button class="btn btn-sm btn-outline-danger" onclick="decideAppeal(${i.assessment_id},'rejected')">Отклонить</button></div>` : ""}{% endif %}</div>`,
+              )
+              .join("")
+        : '<div class="online-empty">Апелляций нет.</div>';
+}
+async function decideAppeal(id, decision) {
+    const comment = prompt("Комментарий к решению:") || "";
+    try {
+        const d = await hubJson(`/api/admin/assembly/appeals/${id}/decision`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                decision,
+                comment,
+            }),
+        });
+        showToast(d.refunded ? `Возвращено ${d.refunded} БК` : "Решение сохранено", "success");
+        hubLoaded = false;
+        loadAdminHub(true);
+    } catch (e) {
+        showToast(e.message, "error");
+    }
+}
+
+function renderActions(items) {
+    document.getElementById("hubActions").innerHTML = items.length
+        ? items
+              .map(
+                  (i) =>
+                      `<div class="hub-row"><div><b>${hubEsc(i.actor)} · ${hubEsc(i.action)}</b><div class="user-id">${hubEsc(i.details)} · ${squadMoment(i.created_at)}</div></div></div>`,
+              )
+              .join("")
+        : '<div class="online-empty">Новых действий пока нет.</div>';
+}
+async function loadAwardPreview() {
+    const week = document.getElementById("hubAwardWeek").value;
+    try {
+        hubPreview = await hubJson(
+            "/api/admin/awards/preview" + (week ? "?week=" + encodeURIComponent(week) : ""),
+        );
+        document.getElementById("hubAwardWeek").value = hubPreview.week;
+        document.getElementById("hubAwardPreview").innerHTML = hubPreview.candidates.length
+            ? hubPreview.candidates
+                  .map(
+                      (i, n) =>
+                          `<label class="hub-row"><input type="checkbox" class="hub-award-exclude" data-index="${n}" ${i.excluded ? "checked" : ""} ${i.issued ? "disabled" : ""}><div><b>${hubEsc(i.name)} · ${hubEsc(i.award_name)}</b><div class="user-id">${hubEsc(i.reason)}${i.issued ? " · уже выдано" : ""}</div>${i.exclusion_reason ? `<div class="hub-bad">${hubEsc(i.exclusion_reason)}</div>` : ""}</div></label>`,
+                  )
+                  .join("")
+            : '<div class="online-empty">Кандидатов пока нет.</div>';
+        const b = document.getElementById("hubApproveWeek");
+        if (b) b.disabled = hubPreview.status === "approved";
+    } catch (e) {
+        showToast(e.message, "error");
+    }
+}
+async function approveAwardWeek() {
+    if (!hubPreview) return;
+    const exclusions = [];
+    for (const box of document.querySelectorAll(".hub-award-exclude:checked:not(:disabled)")) {
+        const item = hubPreview.candidates[Number(box.dataset.index)],
+            reason = prompt(`Почему исключить ${item.name} — ${item.award_name}?`);
+        if (!reason) return;
+        exclusions.push({
+            user_id: item.user_id,
+            medal: item.medal,
+            reason,
+        });
+    }
+    try {
+        await hubJson(`/api/admin/awards/preview/${hubPreview.week}/approve`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                exclusions,
+            }),
+        });
+        showToast("Неделя подтверждена; награды поставлены в очереди", "success");
+        loadAwardPreview();
+        hubLoaded = false;
+    } catch (e) {
+        showToast(e.message, "error");
+    }
+}
+async function loadWeeklyReport() {
+    try {
+        const d = await hubJson("/api/admin/weekly-report");
+        document.getElementById("hubWeeklyReport").innerHTML =
+            `Неделя: <b>${hubEsc(d.week)}</b><br>Наград: <b>${d.awards}</b><br>Участников сборов: <b>${d.assembly.people}</b>, присутствовали: <b>${d.assembly.present}</b>, рапортов: <b>${d.assembly.reports}</b><br>Штрафов: <b>${d.assembly.fines}</b>, списано: <b>${d.assembly.charged} БК</b><br>Ручных заявок: <b>${d.manual_pending}</b>, апелляций: <b>${d.appeals_pending}</b>`;
+    } catch (e) {
+        document.getElementById("hubWeeklyReport").textContent = e.message;
+    }
+}
+const hubWeek = new Date();
+hubWeek.setUTCDate(hubWeek.getUTCDate() - ((hubWeek.getUTCDay() + 6) % 7) - 7);
+document.getElementById("hubAwardWeek")?.setAttribute("value", hubWeek.toISOString().slice(0, 10));
+
+</script>

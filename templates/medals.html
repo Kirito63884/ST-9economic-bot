@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Награды — Strike Team 9</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+              rel="stylesheet">
+        {% include "_site_ui.html" %}{% include "_medals_style.html" %}
+    </head>
+    <body>
+        {% include "_site_nav.html" %}
+        <main id="st-content" class="container mt-4">
+            <div class="st-page-heading">
+                <div>
+                    <span class="st-eyebrow">Награды клана</span>
+                    <h1>Награды Strike Team 9</h1>
+                    <p>Медали и знаки отличия бессрочные. Администратор может снять награду.</p>
+                </div>
+                {% if user %}<a class="btn btn-primary" href="/medals/progress/{{ user.id }}">Мой прогресс →</a>{% else %}<a class="btn btn-primary" href="/login">Войти и посмотреть прогресс</a>{% endif %}
+            </div>
+            <div class="st-panel">
+                <p>Каждую награду можно получить один раз.{% if rewards %} За любой знак отличия начисляется 2000 бишопкоинов. Суммы за медали указаны в карточках. Выплаты действуют и для ранее полученных наград; повторная проверка или возвращение роли не дают повторного начисления.{% endif %} Недельные рейтинги считаются среди всех игроков Protocol с понедельника по воскресенье по московскому времени. Награды за неделю выдаются после её завершения и проверки статистики.</p>
+                <p class="medal-source">Часы на Protocol, K/D и часы сида берутся из статистики состава STRIKE TEAM 9 на Protocol. При недоступности свежей таблицы часы и K/D дополняются доступными данными SQSTAT; BattleMetrics служит резервом только по обычным часам. Автовыдача ордена требует свежего подтверждения часов сида. Для пилота суммируются часы на Pilot и SLPilot за всё время. Для пулемётчика, снайпера, инженера и медпомощи нужен недельный топ-3 по часам на соответствующих китах. При получении I степени боевых навыков также выдаются II и III степени, при II — III; все ранее полученные награды сохраняются. Часы в Discord учитываются с момента установки системы, во всех войсах клана, кроме AFK. При равных результатах игроки разделяют место.</p>
+                <div class="st-actions"><a class="btn btn-outline-light btn-sm" href="#medalCatalog">Медали · {{ catalog|length }}</a><a class="btn btn-outline-light btn-sm" href="#distinctionCatalog">Знаки отличия · {{ distinctions|length }}</a></div>
+            </div>
+            <h2 id="medalCatalog" class="mt-4">Медали</h2>
+            <div class="medal-grid">
+                {% for code,item in catalog.items() %}<article class="medal-card">
+                <div class="medal-art">
+                    {% if not award_images.get(code) %}
+                    <div class="medal-manual-symbol">{{ item[3] }}</div>
+                    {% else %}<img src="{{ award_images[code] }}"
+     alt="{{ item[0] }}"
+     loading="lazy">{% endif %}
+                </div>
+                <div class="medal-body">
+                    <span class="medal-state">{{ "Назначается вручную" if code in manual_medals else "Автовыдача ждёт данных" if code in blocked else "Автоматическая выдача" }}</span>
+                    <h3>{{ item[0] }}</h3>
+                    <p>{{ item[1] }}</p>
+                    {% if code in blocked %}
+                    <p class="medal-panel-note">{{ blocked[code] }}</p>
+                    {% endif %}{% if rewards.get(code) %}
+                    <p class="medal-reward">{{ rewards[code] }} бишопкоинов · один раз</p>
+                    {% endif %}
+                </div>
+                </article>{% endfor %}
+            </div>
+            <h2 id="distinctionCatalog" class="mt-4">Знаки отличия</h2>
+            <div class="st-panel">
+                <p>По публичным данным доступны недельные награды за победы сквадным, урон и ножевые убийства, а также часы пилота за всё время. ПТУРист, мехвод и пистолетчик выдаются вручную через роли Discord.</p>
+                <p class="medal-source">Сквадной определяется по киту в итоговой таблице SQSTAT: SL, SLCrewman или SLPilot. Неопределённые роли и исходы учитываются при проверке рейтинга. Для пилота показывается подтверждённый минимум часов: публичные таблицы могут содержать лишь часть истории. Для антитанка требуется полный недельный рейтинг уничтожений трубами и тандемами; мины и стрельба с техники исключены.</p>
+                <p class="medal-source">Лучший подрывник проверяется по подтверждённым счётчикам в выгрузках Protocol с 07.10.2026; более ранние FOB не записаны. Лучший пулемётчик, снайпер, инженер и знак за медпомощь проверяются по выгрузкам топ-3 времени на китах за завершённую неделю с 12.10.2026. Общий топ уничтоженной техники не заменяет рейтинг уничтожений трубами и тандемами. Для остальных условий данных пока недостаточно. Итоговый кит и время матча не заменяют точный учёт смен китов. Автовыдача ждёт проверенной статистики. Если соответствующая роль назначена вручную, знак также появится на сайте.</p>
+            </div>
+            <div class="medal-grid">
+                {% for code,item in distinctions.items() %}<article class="medal-card">
+                <div class="medal-art">
+                    <img src="{{ award_images[code] }}" alt="{{ item[0] }}" loading="lazy">
+                </div>
+                <div class="medal-body">
+                    <span class="medal-state">{{ 'Назначается вручную' if code in manual_distinctions else 'Автовыдача недоступна' if code in blocked else 'Автоматическая выдача' }}</span>
+                    <h3>{{ item[0] }}</h3>
+                    <p>{{ item[1] }}</p>
+                    {% if rewards.get(code) %}
+                    <p class="medal-reward">{{ rewards[code] }} бишопкоинов · один раз</p>
+                    {% endif %}{% if code in blocked %}
+                    <p class="medal-panel-note">{{ blocked[code] }}</p>
+                    {% endif %}
+                </div>
+                </article>{% endfor %}
+            </div>
+        </main>
+    </body>
+</html>

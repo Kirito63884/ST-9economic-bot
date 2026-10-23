@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Дурак — Strike Team 9</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+              rel="stylesheet">
+        {% include "_site_ui.html" %}{% include "_card_motion.html" %}{% include "_durak_ui.html" %}{% include "_table_admin_ui.html" %}
+    </head>
+    <body class="dk-lobby-page">
+        {% include "_site_nav.html" %}
+        <main class="container mt-4" id="st-content">
+            <div class="st-page-heading">
+                <div>
+                    <span class="st-eyebrow">Играй с друзьями</span>
+                    <h1>Дурак</h1>
+                    <p>Свои правила, общий стол и бишопкоины за порядок выхода.</p>
+                </div>
+                <a class="btn btn-outline-light" href="/games">Все игры →</a>
+            </div>
+            <div class="dk-layout">
+                <section class="dk-main">
+                    <div class="st-panel">
+                        <div class="st-section-heading">
+                            <h2>Столы</h2>
+                            <button type="button"
+                                    class="btn btn-outline-light btn-sm"
+                                    id="refreshTables">Обновить</button>
+                        </div>
+                        <div class="dk-list" id="tableList" aria-live="polite">
+                            <p>Загружаем столы…</p>
+                        </div>
+                    </div>
+                    <details class="st-panel mt-3">
+                        <summary>Как играть и как делится банк</summary>
+                        <div class="dk-rule-summary mt-3">
+                            Первым ходит игрок с младшим козырем. Карта бьётся старшей той же масти или козырем. Обычно подкидывают карты достоинств, которые уже лежат на столе, включая отбитые карты. Если включено шулерство, можно подкидывать и отбивать любой картой. Другой участник может проверить последнюю карту до следующей выкладки или конца нападения. При нарушении карта возвращается шулеру, и он повторяет ход. Проверка честной карты не отменяет ход. «Без лимита» снимает ограничения числа карт и вместимости руки защитника, в том числе для перевода. В переводном можно перевести картой того же достоинства до первого отбивания, если у следующего защитника хватает карт.
+                            <br>
+                            <br>
+                            Нападение завершается после «Пас» всех подкидывающих. Даже если подходящих карт нет, нужно нажать «Пас»; по таймеру он сработает автоматически. Затем участники добирают карты, защитник — последним. Выход засчитывается после завершения нападения, когда колода пуста. Число игроков и карт на руках должно помещаться в колоду.
+                            <br>
+                            <br>
+                            Все подтверждают готовность, затем создатель начинает партию. Взносы списываются только на старте. Создатель может менять настройки до старта и между партиями. Изменение настроек или числа участников сбрасывает готовность. Выйти во время игры с картами — сдаться: оставшиеся получают банк. Уже вышедший победитель может покинуть стол и получит выплату после завершения партии.
+                            <br>
+                            <br>
+                            По таймеру: при нападении — младшая карта, при защите — «Беру», при подкидывании — «Пас». Три пропуска своего хода подряд означают сдачу. Закрытие браузера не выводит из партии. Игры сохраняются после перезапуска, таймер на время простоя приостанавливается.
+                            <br>
+                            <br>
+                            Для N−1 победителей веса равны N−1, N−2, …, 1. Ранний выход получает большую долю, одновременный — равные доли своих мест. При общей ничьей всем возвращается взнос. Округление — до 0,01 БК, весь банк распределяется без комиссии.
+                        </div>
+                    </details>
+                </section>
+                <aside class="dk-aside">
+                    <section class="st-panel">
+                        <h2>Создать стол</h2>
+                        <form id="createForm">
+                            <div id="createFields"></div>
+                            <div id="createPayout" class="dk-payout my-3"></div>
+                            <button class="btn btn-primary w-100"
+                                    id="createButton"
+                                    type="submit">Создать стол</button>
+                            <p class="st-field-hint mt-2 mb-0">До старта взнос не списывается. Закрытый стол доступен приглашённым по ссылке.</p>
+                        </form>
+                    </section>
+                </aside>
+            </div>
+        </main>
+        <script nonce="{{ request.state.csp_nonce }}">
+const createForm = document.getElementById("createForm");
+DK.form(createForm);
+// Keep generated settings inside the form, before the fixed submit controls.
+const controls = document.createElement("div");
+controls.innerHTML =
+    '<div id="createPayout" class="dk-payout my-3"></div><button class="btn btn-primary w-100" type="submit">Создать стол</button><p class="st-field-hint mt-2 mb-0">Взнос спишется только при начале партии.</p>';
+createForm.append(controls);
+
+function previewPayout() {
+    try {
+        const r = DK.read(createForm);
+        document.getElementById("createPayout").innerHTML = DK.payouts(
+            r.max_players,
+            r.entry_cents,
+        );
+    } catch {
+        document.getElementById("createPayout").textContent =
+            "Укажите взнос, чтобы увидеть доли банка.";
+    }
+}
+createForm.addEventListener("input", previewPayout);
+createForm.addEventListener("change", previewPayout);
+previewPayout();
+createForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const button = createForm.querySelector("[type=submit]");
+    button.disabled = true;
+    try {
+        const data = await DK.api("/api/durak/tables", {
+            rules: DK.read(createForm),
+        });
+        location.href = "/games/durak/table/" + encodeURIComponent(data.table_id);
+    } catch (error) {
+        STUI.notice(error.message, "error");
+        button.disabled = false;
+    }
+});
+let loading = false;
+document.addEventListener("st-tables-changed", () => loadTables());
+async function loadTables() {
+    if (loading) return;
+    loading = true;
+    try {
+        const data = await DK.api("/api/durak/tables");
+        document.getElementById("tableList").innerHTML = data.tables.length
+            ? data.tables
+                  .map(
+                      (t) =>
+                          `<article class="dk-list-card"><div><h3>${t.mine ? "Ваш стол" : DK.esc(t.creator)}</h3><p>${t.rules.variant === "transfer" ? "Переводной" : "Подкидной"} · ${t.rules.deck_size} карт · по ${t.rules.hand_size} на руках</p><p>${t.players}/${t.rules.max_players} игроков · взнос ${DK.money(t.rules.entry_cents)} · ${t.phase === "waiting" ? "Набор игроков" : t.phase === "finished" ? "Партия завершена" : "Идёт партия"}${t.rules.private ? " · закрытый" : ""}${t.rules.cheating ? " · шулерство" : ""}${t.rules.unlimited_attack ? " · без лимита" : ""}</p></div>${t.mine || t.phase === "waiting" ? `<a class="btn ${t.mine ? "btn-primary" : "btn-outline-light"}" href="/games/durak/table/${encodeURIComponent(t.id)}">${t.mine ? "Вернуться" : "Посмотреть"}</a>` : '<span class="st-field-hint">Участники за столом</span>'}${TableAdmin.markup(t, "durak")}</article>`,
+                  )
+                  .join("")
+            : '<div class="dk-empty">Свободных столов пока нет. Создай свой и пригласи друзей.</div>';
+    } catch (error) {
+        STUI.notice(error.message, "error");
+    } finally {
+        loading = false;
+    }
+}
+document.getElementById("refreshTables").addEventListener("click", loadTables);
+loadTables();
+setInterval(() => {
+    if (!document.hidden) loadTables();
+}, 10000);
+
+</script>
+    </body>
+</html>

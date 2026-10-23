@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <title>Blackjack — Strike Team 9</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+              rel="stylesheet">
+        <style>
+            body {
+                background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+                min-height: 100vh;
+                position: relative;
+                overflow-x: hidden
+            }
+
+            body::before {
+                content: '';
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: radial-gradient(circle at 20% 30%, rgba(120, 119, 198, .3) 0%, transparent 50%), radial-gradient(circle at 80% 70%, rgba(255, 119, 198, .2) 0%, transparent 50%);
+                pointer-events: none;
+                z-index: 0
+            }
+
+            @keyframes float {
+
+                0%,
+                100% {
+                    transform: translateY(0) rotate(0deg)
+                }
+
+                50% {
+                    transform: translateY(-30px) rotate(180deg)
+                }
+            }
+
+            .bg-shape {
+                position: fixed;
+                opacity: .08;
+                border-radius: 50%;
+                pointer-events: none;
+                z-index: 0
+            }
+
+            .shape-1 {
+                width: 300px;
+                height: 300px;
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                top: 10%;
+                left: 5%;
+                animation: float 20s ease-in-out infinite
+            }
+
+            .shape-2 {
+                width: 200px;
+                height: 200px;
+                background: linear-gradient(135deg, #f093fb, #f5576c);
+                top: 60%;
+                right: 10%;
+                animation: float 15s ease-in-out infinite 2s
+            }
+
+            .container {
+                position: relative;
+                z-index: 1
+            }
+
+            .navbar {
+                position: relative;
+                z-index: 10
+            }
+
+            :root {
+                --card-w: 100px;
+                --card-h: 140px
+            }
+
+            .table-felt {
+                background: radial-gradient(ellipse at center, #2d5a3d 0%, #1a3a25 100%);
+                border-radius: 200px;
+                border: 12px solid #3e2723;
+                box-shadow: inset 0 0 60px rgba(0, 0, 0, .5), 0 10px 30px rgba(0, 0, 0, .5);
+                min-height: 500px;
+                position: relative;
+                padding: 40px
+            }
+
+            .card-container {
+                width: var(--card-w);
+                height: var(--card-h);
+                perspective: 800px;
+                display: inline-block;
+                margin: 0 -15px;
+                position: relative;
+                opacity: 0
+            }
+
+            .card-inner {
+                width: 100%;
+                height: 100%;
+                position: relative;
+                transform-style: preserve-3d;
+                transition: transform .6s cubic-bezier(.4, 0, .2, 1)
+            }
+
+            .card-container.flipped .card-inner {
+                transform: rotateY(180deg)
+            }
+
+            .card-face {
+                position: absolute;
+                width: 100%;
+                height: 100%;
+                backface-visibility: hidden;
+                border-radius: 10px;
+                box-shadow: 2px 2px 8px rgba(0, 0, 0, .4);
+                display: flex;
+                flex-direction: column;
+                justify-content: space-between;
+                padding: 8px;
+                font-weight: bold;
+                font-size: 1.1rem;
+                background: #fff;
+                user-select: none
+            }
+
+            .card-back {
+                background: repeating-linear-gradient(45deg, #b71c1c, #b71c1c 10px, #c62828 10px, #c62828 20px);
+                border: 2px solid #fff;
+                transform: rotateY(0deg)
+            }
+
+            .card-front {
+                transform: rotateY(180deg)
+            }
+
+            .red {
+                color: #d32f2f
+            }
+
+            .black {
+                color: #212121
+            }
+
+            .center-suit {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                font-size: 2.5rem;
+                opacity: .3
+            }
+
+            .hand-zone {
+                min-height: var(--card-h);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                margin: 20px 0
+            }
+
+            .score-badge {
+                background: rgba(0, 0, 0, .7);
+                padding: 4px 14px;
+                border-radius: 20px;
+                font-size: .9rem;
+                margin-top: 10px;
+                display: inline-block
+            }
+
+            @keyframes dealCard {
+                from {
+                    opacity: 0;
+                    transform: translateY(-80px) scale(.5)
+                }
+
+                to {
+                    opacity: 1;
+                    transform: translateY(0) scale(1)
+                }
+            }
+
+            .card-container.animate-in {
+                animation: dealCard .4s ease-out forwards
+            }
+
+            .controls-panel {
+                background: rgba(0, 0, 0, .6);
+                backdrop-filter: blur(10px);
+                border-radius: 16px;
+                padding: 20px;
+                margin-top: 20px
+            }
+
+            .btn-game {
+                min-width: 120px;
+                font-weight: 600;
+                letter-spacing: .5px
+            }
+
+            .result-overlay {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0, 0, 0, .65);
+                backdrop-filter: blur(8px);
+                padding: 30px 50px;
+                border-radius: 16px;
+                text-align: center;
+                z-index: 10;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity .4s;
+                border: 1px solid rgba(255, 255, 255, .1)
+            }
+
+            .result-overlay.show {
+                opacity: 1;
+                pointer-events: auto
+            }
+
+            .result-overlay h2 {
+                font-size: 2rem;
+                margin-bottom: 10px
+            }
+        </style>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        {% include "_site_ui.html" %}
+        {% include "_card_motion.html" %}
+    </head>
+    <body class="st-blackjack-page">
+        {% set nav_balance_id = "nav-balance" %}{% include "_site_nav.html" %}
+        <main class="container mt-4" id="st-content">
+            <div class="st-page-heading">
+                <div>
+                    <span class="st-eyebrow">Strike Team 9</span>
+                    <h1>Блэкджек</h1>
+                    <p>Ближе к 21 — ближе к победе.</p>
+                </div>
+                <div class="st-actions"></div>
+            </div>
+            <div class="st-game-layout">
+                <section class="st-game-board">
+                    <div class="st-table-heading"><span>Ты против дилера</span><span>Блэкджек · 21</span></div>
+                    <div class="table-felt mx-auto" style="max-width:800px">
+                        <div id="blackjackDeck" class="st-deal-source" aria-label="Колода"></div>
+                        <div class="text-center"><small class="text-white-50">ДИЛЕР</small></div>
+                        <div class="hand-zone" id="dealer-hand"></div>
+                        <div class="text-center">
+                            <span class="score-badge" id="dealer-score"></span>
+                        </div>
+                        <div class="result-overlay" id="result-overlay" hidden>
+                            <h2 id="result-title"></h2>
+                            <p id="result-msg" class="fs-5"></p>
+                            <button class="btn btn-success btn-lg mt-2"
+                                    onclick="resetGame()">Новая игра</button>
+                        </div>
+                        <div class="text-center mt-4"><small class="text-white-50">ВЫ</small></div>
+                        <div class="hand-zone" id="player-hand"></div>
+                        <div class="text-center">
+                            <span class="score-badge" id="player-score"></span>
+                        </div>
+                    </div>
+                </section>
+                <aside class="st-game-control">
+                    <div class="controls-panel mx-auto text-center"
+                         style="max-width:600px"
+                         id="controls">
+                        <div id="bet-panel">
+                            <h2>Твоя ставка</h2>
+                            <label for="bet-input" class="form-label">Сумма, БК</label>
+                            <div class="d-flex flex-column gap-2">
+                                <input type="number"
+                                       id="bet-input"
+                                       step="0.01"
+                                       min="0.01"
+                                       value="10"
+                                       class="form-control">
+                                <div class="st-bet-presets" data-st-bet-target="bet-input">
+                                    <button type="button" data-st-bet-value="10">10</button><button type="button" data-st-bet-value="50">50</button><button type="button" data-st-bet-value="100">100</button><button type="button" data-st-bet-value="half">½</button><button type="button" data-st-bet-value="double">×2</button>
+                                </div>
+                                <button class="btn btn-success btn-game"
+                                        onclick="startGame()">Раздать</button>
+                            </div>
+                        </div>
+                        <div id="action-panel" class="d-none">
+                            <div class="d-flex justify-content-center gap-3">
+                                <button class="btn btn-primary btn-game" onclick="hit()">Взять</button><button class="btn btn-warning btn-game" onclick="stand()">Хватит</button>
+                            </div>
+                            <small class="text-white-50 mt-2 d-block">Ставка: <span id="current-bet"></span> БК</small>
+                        </div>
+                    </div>
+                    <details class="st-rules">
+                        <summary>Как играть и сколько выплачивается</summary>
+                        <p>Собери больше очков, чем дилер, без перебора за 21. «Взять» — ещё карта, «Хватит» — завершить набор. Обычная победа ×2, натуральные 21 ×2,5. Ничья возвращает ставку. Множители включают ставку.</p>
+                    </details>
+                </aside>
+            </div>
+        </main>
+        <script>
+const API = "/api/blackjack";
+let finalizeTimer = null,
+    actionBusy = false,
+    finalizing = false,
+    viewState = null,
+    generation = 0;
+
+function createCardEl(card, hidden = false) {
+    const isRed = ["♥", "♦"].includes(card?.suit);
+    const cc = isRed ? "red" : "black";
+    const s = card?.suit || "";
+    const v = card?.value || "";
+    const d = document.createElement("div");
+    d.className = `card-container ${hidden ? "" : "flipped"}`;
+    d.innerHTML = `<div class="card-inner"><div class="card-face card-back"></div><div class="card-face card-front ${cc}"><div>${v}<br>${s}</div><div class="center-suit">${s}</div><div style="transform:rotate(180deg)">${v}<br>${s}</div></div></div>`;
+    return d;
+}
+
+function score(cards) {
+    let total = 0,
+        aces = 0;
+    for (const c of cards) {
+        if (c.value === "A") {
+            total += 11;
+            aces++;
+        } else total += ["K", "Q", "J"].includes(c.value) ? 10 : Number(c.value);
+    }
+    while (total > 21 && aces-- > 0) total -= 10;
+    return total;
+}
+
+function controls() {
+    document
+        .querySelectorAll("#controls button")
+        .forEach((b) => (b.disabled = actionBusy || viewState?.status === "showdown"));
+    document.getElementById("controls").setAttribute("aria-busy", String(actionBusy));
+}
+async function renderHands(next, animate) {
+    const root = document.querySelector(".table-felt"),
+        pH = document.getElementById("player-hand"),
+        dH = document.getElementById("dealer-hand"),
+        source = document.getElementById("blackjackDeck");
+    const round = next.game_id || "saved";
+    const items = (cards, hand) =>
+        cards.map((card, i) => ({
+            key: round + ":" + hand + ":" + i,
+            card,
+            face: card ? JSON.stringify(card) : "back",
+            order: i * 2 + (hand === "d" ? 1 : 0),
+        }));
+    const before = CardMotion.capture(root),
+        dealer = next.status === "playing" ? [...next.dealer, null] : next.dealer;
+    CardMotion.sync(pH, items(next.player, "p"), (c) => createCardEl(c, !c));
+    // Reveal the dealer's hole card, then deal each further card separately.
+    const staged = animate && viewState?.status === "playing" && next.status !== "playing";
+    const initial = staged ? dealer.slice(0, 2) : dealer;
+    CardMotion.sync(dH, items(initial, "d"), (c) => createCardEl(c, !c));
+    document.getElementById("player-score").textContent = next.p_score;
+    document.getElementById("dealer-score").textContent =
+        next.status === "playing" ? "?" : score(initial);
+    const token = generation;
+    await CardMotion.play(before, root, {
+        source,
+        animate,
+        gap: 180,
+        duration: 540,
+    });
+    if (token !== generation) return;
+    if (staged) {
+        for (let count = 3; count <= dealer.length; count++) {
+            const snapshot = CardMotion.capture(root);
+            CardMotion.sync(dH, items(dealer.slice(0, count), "d"), (c) => createCardEl(c, !c));
+            await CardMotion.play(snapshot, root, {
+                source,
+                gap: 0,
+                duration: 550,
+            });
+            if (token !== generation) return;
+            document.getElementById("dealer-score").textContent = score(dealer.slice(0, count));
+        }
+    }
+}
+async function fetchState(animate = false, entry = false) {
+    const token = generation;
+    const res = await fetch(`${API}/state`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "Ошибка загрузки игры");
+    if (token !== generation) return;
+    if (Number.isFinite(data.balance)) updateBalance(data.balance);
+    if (entry && ["won", "lost", "push"].includes(data.status)) {
+        resetUI();
+        return;
+    }
+    if (!data.active) {
+        resetUI();
+        return;
+    }
+    await renderHands(data, animate);
+    if (token !== generation) return;
+    viewState = data;
+    updateBalance(data.balance);
+    document.getElementById("bet-panel").classList.add("d-none");
+    document.getElementById("action-panel").classList.toggle("d-none", data.status !== "playing");
+    document.getElementById("current-bet").textContent = Number(data.bet).toFixed(2);
+    if (data.status === "showdown") startFinalizePoll();
+    else if (data.status !== "playing") showResult(data);
+    controls();
+}
+
+function startFinalizePoll() {
+    if (finalizeTimer) return;
+    const token = generation;
+    finalizeTimer = setInterval(async () => {
+        if (finalizing) return;
+        finalizing = true;
+        try {
+            const res = await fetch(`${API}/finalize`, {
+                    method: "POST",
+                }),
+                data = await res.json();
+            if (token !== generation) return;
+            if (data.ok) {
+                clearInterval(finalizeTimer);
+                finalizeTimer = null;
+                viewState = {
+                    ...viewState,
+                    ...data,
+                };
+                showResult(data);
+                updateBalance(data.balance);
+                controls();
+            } else if (!res.ok) {
+                clearInterval(finalizeTimer);
+                finalizeTimer = null;
+                STUI.notice(data.detail || "Ошибка расчёта");
+                await fetchState();
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            finalizing = false;
+        }
+    }, 500);
+}
+
+function resetUI() {
+    generation++;
+    CardMotion.clear();
+    if (finalizeTimer) {
+        clearInterval(finalizeTimer);
+        finalizeTimer = null;
+    }
+    viewState = null;
+    document.getElementById("player-hand").replaceChildren();
+    document.getElementById("dealer-hand").replaceChildren();
+    document.getElementById("player-score").textContent = "";
+    document.getElementById("dealer-score").textContent = "";
+    document.getElementById("bet-panel").classList.remove("d-none");
+    document.getElementById("action-panel").classList.add("d-none");
+    document.getElementById("result-overlay").classList.remove("show");
+    document.getElementById("result-overlay").hidden = true;
+    controls();
+}
+
+function showResult(state) {
+    const ov = document.getElementById("result-overlay"),
+        t = document.getElementById("result-title");
+    const colors = {
+        won: "#4caf50",
+        lost: "#f44336",
+        push: "#ff9800",
+    };
+    t.style.color = colors[state.status] || "#fff";
+    t.textContent =
+        state.status === "won"
+            ? "🎉 ПОБЕДА!"
+            : state.status === "push"
+              ? "🤝 НИЧЬЯ"
+              : "😞 ПРОИГРЫШ";
+    document.getElementById("result-msg").textContent = state.message;
+    ov.hidden = false;
+    ov.classList.add("show");
+}
+
+function resetGame() {
+    if (!actionBusy && viewState?.status !== "showdown") resetUI();
+}
+async function gameAction(action) {
+    if (actionBusy) return;
+    actionBusy = true;
+    controls();
+    try {
+        const options = {
+            method: "POST",
+        };
+        if (action === "start") {
+            const fd = new FormData();
+            fd.append("bet", document.getElementById("bet-input").value);
+            options.body = fd;
+        }
+        const response = await fetch(`${API}/${action}`, options),
+            data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "Ошибка игры");
+        if (action === "start") resetUI();
+        if (Number.isFinite(data.balance)) updateBalance(data.balance);
+        await fetchState(true);
+    } catch (e) {
+        STUI.notice(e.message || "Ошибка сети");
+        try {
+            await fetchState();
+        } catch {}
+    } finally {
+        actionBusy = false;
+        controls();
+    }
+}
+async function startGame() {
+    await gameAction("start");
+}
+async function hit() {
+    await gameAction("hit");
+}
+async function stand() {
+    await gameAction("stand");
+}
+
+function updateBalance(b) {
+    STUI.setBalance(b);
+}
+resetUI();
+fetchState(false, true).catch(() => STUI.notice("Ошибка загрузки игры"));
+window.addEventListener("pageshow", (event) => {
+    if (event.persisted) {
+        resetUI();
+        fetchState(false, true).catch(() => STUI.notice("Ошибка загрузки игры"));
+    }
+});
+window.addEventListener("pagehide", () => {
+    generation++;
+    if (finalizeTimer) {
+        clearInterval(finalizeTimer);
+        finalizeTimer = null;
+    }
+});
+
+</script>
+    </body>
+</html>

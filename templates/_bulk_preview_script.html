@@ -1,0 +1,91 @@
+const ST9Bulk = (() => {
+    const paths = new Set([
+        "/admin/batch-update",
+        "/admin/mass-adjust",
+        "/admin/mass-adjust-steam",
+        "/admin/import",
+    ]);
+    function review(plan) {
+        return new Promise((resolve) => {
+            const dialog = document.createElement("dialog");
+            dialog.style.cssText =
+                "color:#eef2ff;background:#172033;border:1px solid #64748b;border-radius:12px;max-width:1000px;width:94vw;max-height:85vh;overflow:auto;padding:24px";
+            const heading = document.createElement("h2");
+            heading.textContent = "Предварительный просмотр";
+            const summary = document.createElement("p");
+            summary.textContent = `Записей: ${plan.requested}. Изменятся: ${plan.changed}. Без изменений / пропущены: ${plan.unchanged_or_skipped}. Итого: ${formatMoney(plan.total_delta)} БК.`;
+            const note = document.createElement("p");
+            note.textContent =
+                "Пока ничего не сохранено. Подтверждение действует 5 минут. При изменении данных потребуется новый просмотр.";
+            const table = document.createElement("table");
+            table.className = "table table-dark";
+            const header = table.createTHead().insertRow();
+            for (const title of ["Игрок", "Было, БК", "Изменение", "Станет, БК", "Другие поля"]) {
+                const cell = document.createElement("th");
+                cell.textContent = title;
+                header.append(cell);
+            }
+            const body = table.createTBody();
+            for (const row of plan.rows) {
+                const tr = body.insertRow();
+                const other = Object.entries(row.changes)
+                    .filter(([key]) => key !== "balance")
+                    .map(
+                        ([key, change]) =>
+                            `${key}: ${String(change.before ?? "—")} → ${String(change.after ?? "—")}`,
+                    )
+                    .join("; ");
+                for (const value of [
+                    row.name,
+                    formatMoney(row.old),
+                    formatMoney(row.delta),
+                    formatMoney(row.new),
+                    other || "—",
+                ]) {
+                    tr.insertCell().textContent = value;
+                }
+            }
+            const warnings = document.createElement("p");
+            warnings.textContent = `Не найдены: ${plan.not_found.join(", ") || "нет"}. Некорректные ID: ${plan.invalid.join(", ") || "нет"}.`;
+            const cancel = document.createElement("button");
+            cancel.className = "btn btn-secondary";
+            cancel.textContent = "Отмена";
+            const apply = document.createElement("button");
+            apply.className = "btn btn-danger ms-3";
+            apply.textContent = "Подтвердить изменения";
+            apply.disabled = !plan.changed;
+            let accepted = false;
+            cancel.onclick = () => dialog.close();
+            apply.onclick = () => {
+                accepted = true;
+                dialog.close();
+            };
+            dialog.addEventListener(
+                "close",
+                () => {
+                    dialog.remove();
+                    resolve(accepted);
+                },
+                { once: true },
+            );
+            dialog.append(heading, summary, note, table, warnings, cancel, apply);
+            document.body.append(dialog);
+            dialog.showModal();
+        });
+    }
+    async function submit(url, options) {
+        const payload = JSON.parse(options.body);
+        const response = await fetch(url, {
+            ...options,
+            body: JSON.stringify({ ...payload, preview: true }),
+        });
+        if (!response.ok) return response;
+        const plan = await response.json();
+        if (!(await review(plan))) throw new Error("Операция отменена. Изменения не сохранены.");
+        return fetch(url, {
+            ...options,
+            headers: { ...options.headers, "X-ST9-Confirmation": plan.confirmation },
+        });
+    }
+    return { paths, submit };
+})();

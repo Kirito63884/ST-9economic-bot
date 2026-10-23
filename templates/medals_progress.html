@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Прогресс наград — Strike Team 9</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+              rel="stylesheet">
+        {% include "_site_ui.html" %}{% include "_medals_style.html" %}
+    </head>
+    <body>
+        {% include "_site_nav.html" %}
+        <main id="st-content" class="container mt-4">
+            <div class="st-page-heading">
+                <div>
+                    <span class="st-eyebrow">Награды · {{ 'мой прогресс' if target.id==user.id else 'просмотр администратора' }}</span>
+                    <h1>{{ target.display_name or target.username }}</h1>
+                    <p>Медали, знаки отличия и путь к следующей награде</p>
+                </div>
+                <div class="st-actions"><a class="btn btn-outline-light" href="{{ '/profile' if target.id==user.id else '/admin?player='~target.id }}">← {{ 'Профиль' if target.id==user.id else 'Карточка игрока' }}</a><a class="btn btn-primary" href="/medals">Все награды</a></div>
+            </div>
+            <div class="st-panel">
+                <div class="medal-status-line">
+                    <strong id="medalWeek">Загружаем статистику…</strong><button class="btn btn-outline-light btn-sm"
+        id="medalRefresh">Обновить</button>
+                </div>
+                <div id="medalWarning" class="medal-notice" role="status" hidden></div>
+                <div class="medal-stats" id="medalStats"></div>
+                <p class="medal-source" id="medalSource"></p>
+                <p class="medal-panel-note">Показатели обновляются автоматически. Основной источник — Protocol; SQSTAT используется как резерв по недостающим условиям. SQSTAT публикует результаты завершённых матчей; статистика текущего боя появляется после его окончания. Недельные места предварительные до завершения и проверки недели. Выгрузки SteamID Protocol подтверждают топы убийств, поднятий, побед, CMD, сквадных и времени на китах. Точный учёт времени на китах начинается с 12.10.2026; FOB — с 07.10.2026. Недельная выдача проходит после подтверждения главного администратора. Войсы обновляются примерно раз в минуту.</p>
+            </div>
+            <section class="st-panel mt-4">
+                <h2>Protocol: опубликованный итог прошлой недели</h2>
+                <p id="protocolPrevState" class="medal-source">Получаем итог…</p>
+                <div id="protocolPrevValues" class="medal-stats"></div>
+                <p class="medal-panel-note">Показаны места и показатели из опубликованных топов Protocol. Отсутствие игрока в коротком топе не означает нулевой результат. Суммарные убийства, урон, часы на китах и оружие уничтожения техники эта страница не раскрывает. По итогам Protocol выдаются награды за топ-3 CMD, топ-3 сквадных и подходящие места по поднятиям. Проверка начинается каждый понедельник по МСК; при сбое повторяется каждые 5 минут.</p>
+                <a href="https://protocol-squad.ru/week?w=prev"
+                   target="_blank"
+                   rel="noopener noreferrer">Источник: Protocol ↗</a>
+            </section>
+            <div id="medalManualAwards" class="medal-awards"></div>
+            <h2 class="mt-4">Медали</h2>
+            <div id="medalCards" class="medal-grid" aria-label="Прогресс по медалям"></div>
+            <h2 class="mt-4">Знаки отличия</h2>
+            <div class="st-panel">
+                <p class="medal-source">«Не менее» означает подтверждённый минимум по публичным данным SQSTAT. Неопознанное оружие исключено; отсутствующий в таблице кит не считается нулевым временем. Недельные часы на китах не вычисляются из итогового кита и общего времени матча. Недоступные условия не заменяются похожими показателями. Сквадной определяется по киту в итоговой таблице матча: SL, SLCrewman или SLPilot.</p>
+            </div>
+            <div id="distinctionCards"
+                 class="medal-grid"
+                 aria-label="Прогресс по знакам отличия"></div>
+            <noscript>
+                <p class="medal-notice">Для автоматического обновления прогресса включите JavaScript.</p>
+            </noscript>
+        </main>
+        <script>
+(() => {
+    const uid = {{ target.id|tojson }},
+        numbers = new Intl.NumberFormat("ru-RU", {
+            maximumFractionDigits: 3,
+        }),
+        dates = new Intl.DateTimeFormat("ru-RU", {
+            timeZone: "Europe/Moscow",
+            dateStyle: "short",
+            timeStyle: "short",
+        });
+    const esc = (value) =>
+        String(value ?? "").replace(
+            /[&<>"']/g,
+            (c) =>
+                ({
+                    "&": "&amp;",
+                    "<": "&lt;",
+                    ">": "&gt;",
+                    '"': "&quot;",
+                    "'": "&#39;",
+                })[c],
+        );
+    const num = (value) => (value === null || value === undefined ? "—" : numbers.format(value)),
+        stamp = (value) => (value ? dates.format(new Date(value)) + " МСК" : "ещё нет данных");
+    const rewardText = (card, award) => {
+        if (card.revoked)
+            return "Автовыдача и новые выплаты отключены; ранее начисленные коины сохранены.";
+        const p = award?.payment;
+        if (p?.paid) return "Начислено " + num(p.amount) + " бишопкоинов · " + stamp(p.paid_at);
+        if (p?.skipped) return "Награда получена до начала денежных выплат";
+        if (p?.error === "balance_limit")
+            return "Начисление " + num(p.amount) + " бишопкоинов ожидает: достигнут предел баланса";
+        if (p?.error === "wallet_invalid")
+            return "Начисление ожидает проверки баланса администратором";
+        return card.reward
+            ? "Награда на сайте: " + num(card.reward) + " бишопкоинов · один раз"
+            : "";
+    };
+    let controller = null,
+        generation = 0,
+        last = "";
+
+    function render(d) {
+        document.getElementById("medalWeek").textContent = d.week
+            ? "Текущая неделя: " + d.week
+            : "Статистика готовится";
+        const warning = document.getElementById("medalWarning"),
+            notes = [];
+        if (!d.steam_id)
+            notes.push("Привяжите Steam ID в профиле, чтобы получать медали за игру на Protocol.");
+        if (d.source_status === "unavailable")
+            notes.push(
+                "Резерв SQSTAT временно недоступен. Подтверждённые данные Protocol используются независимо от него.",
+            );
+        if (d.weekly_unresolved)
+            notes.push(
+                "Результаты побед в " +
+                    d.weekly_unresolved +
+                    " матчах ещё проверяются; они пока не засчитаны.",
+            );
+        if (d.steam_id && !d.profile_checked_at)
+            notes.push("Суммарная статистика Protocol ещё не получена. Сборщик повторит проверку.");
+        if (d.profile_stale)
+            notes.push(
+                "Суммарная статистика устарела. Выдача медалей за часы и K/D ждёт обновления.",
+            );
+        if (d.distinctions_unverified)
+            notes.push(
+                "Проверяется история для знаков отличия: " +
+                    d.distinctions_unverified +
+                    " матчей. Неполные рейтинги не используются для выдачи.",
+            );
+        if (d.sl_unknown_results)
+            notes.push(
+                "Часть побед сквадных не подтверждена из-за отсутствующего кита или исхода матча. Выдача ждёт проверки места.",
+            );
+        if (!d.voice_available)
+            notes.push(
+                "Счётчик войса ожидает подключения Discord-бота. Накопленные часы сохранены.",
+            );
+        if (d.source_status === "warming")
+            notes.push("Резерв SQSTAT проверяет историю матчей; основной источник — Protocol.");
+        warning.hidden = !notes.length;
+        warning.textContent = notes.join(" ");
+        document.getElementById("medalStats").innerHTML = [
+            ["Наград", d.awards.length],
+            ["Часов на Protocol", d.minutes === null ? null : d.minutes / 60],
+            [d.kd_source?.startsWith("Protocol") ? "K/D Protocol" : "K/D за всё время", d.kd],
+            ["Часов сида", d.seed_hours],
+            ["Часов в Discord", d.voice_seconds / 3600],
+        ]
+            .map(
+                ([label, v]) => "<div><small>" + esc(label) + "</small><b>" + num(v) + "</b></div>",
+            )
+            .join("");
+        document.getElementById("medalSource").textContent =
+            "Основной источник: Protocol · Steam ID: " +
+            (d.steam_id || "не привязан") +
+            " · Часы: " +
+            (d.minutes_source || "ещё не получены") +
+            " · K/D: " +
+            (d.kd_source || "ещё не получен") +
+            " · Сид: " +
+            (d.clan_checked_at ? "Protocol, статистика состава" : "ещё не получен") +
+            (d.clan_stats_stale ? " (данные устарели, автовыдача ждёт обновления)" : "") +
+            " · Матчей за неделю: " +
+            d.weekly_matches +
+            "\nSQSTAT за неделю: " +
+            stamp(d.weekly_checked_at) +
+            " · За всё время: " +
+            stamp(d.profile_checked_at) +
+            " · Войсы: " +
+            stamp(d.voice_checked_at);
+        document.getElementById("medalManualAwards").innerHTML = d.awards
+            .filter((a) => a.manual && !d.cards.some((c) => c.code === a.code))
+            .map(
+                (a) =>
+                    '<div class="medal-award" title="' +
+                    esc(a.reason) +
+                    '"><div class="medal-manual-symbol">' +
+                    esc(a.symbol) +
+                    "</div><span>" +
+                    esc(a.name) +
+                    "<br><small>Ручная награда · на сайте с " +
+                    esc(a.date) +
+                    "</small></span></div>",
+            )
+            .join("");
+        const published = d.protocol_previous || {},
+            pstate = document.getElementById("protocolPrevState");
+        pstate.textContent = published.available
+            ? published.period +
+              " · " +
+              published.basis +
+              " · Проверено: " +
+              stamp(published.checked_at) +
+              (published.stale
+                  ? " · Сохранён более ранний период"
+                  : published.status === "unavailable"
+                    ? " · Источник временно недоступен, показываем сохранённый итог"
+                    : "")
+            : "Итог прошлой недели ещё не получен; запросы повторяются автоматически.";
+        document.getElementById("protocolPrevValues").innerHTML = Object.values(
+            published.categories || {},
+        )
+            .map(
+                (c) =>
+                    "<div><small>" +
+                    esc(c.name) +
+                    "</small><b>" +
+                    (c.player
+                        ? "#" + num(c.player.rank) + " · " + num(c.player.value)
+                        : "Не указан в топ-" + c.published_count) +
+                    "</b>" +
+                    (c.player?.matches
+                        ? "<small>Матчей: " + num(c.player.matches) + "</small>"
+                        : "") +
+                    "</div>",
+            )
+            .join("");
+        const snapshot = JSON.stringify([d.cards, d.awards, d.weekly_available, d.can_revoke]);
+        if (snapshot === last) return;
+        last = snapshot;
+        const renderCards = (cards) =>
+            cards
+                .map((c) => {
+                    const a = d.awards.find((x) => x.code === c.code),
+                        state = c.owned
+                            ? (a.manual ? "Назначена вручную " : "Получена ") + a.date
+                            : c.revoked
+                              ? "Снята администратором"
+                              : c.manual
+                                ? "Назначается вручную"
+                                : c.blocked
+                                  ? "Нет нужных данных"
+                                  : c.higher_owned
+                                    ? "Уже получена высшая степень"
+                                    : "В процессе";
+                    const values = c.values
+                        .map((v) => {
+                            const ranked = "target_rank" in v,
+                                available =
+                                    !ranked ||
+                                    v.available === true ||
+                                    (d.weekly_available && v.available !== false),
+                                value = available
+                                    ? (v.lower_bound && v.value !== null ? "Не менее " : "") +
+                                      num(v.value)
+                                    : "—";
+                            const detail = ranked
+                                ? (available
+                                      ? v.rank
+                                          ? "Место: #" + v.rank
+                                          : "Пока вне рейтинга"
+                                      : "Статистика готовится") +
+                                  " · Цель: " +
+                                  (c.code.endsWith("_star") ? "#" : "топ-") +
+                                  v.target_rank
+                                : "below" in v
+                                  ? "Цель: менее " + num(v.below)
+                                  : "Цель: " + num(v.target);
+                            const percent =
+                                !ranked && v.target && v.value !== null
+                                    ? Math.max(0, Math.min(100, (v.value / v.target) * 100))
+                                    : null;
+                            return (
+                                '<div class="medal-value"><div><span>' +
+                                esc(v.label) +
+                                "</span><strong>" +
+                                value +
+                                "</strong></div><small>" +
+                                esc(detail) +
+                                "</small>" +
+                                (percent === null
+                                    ? ""
+                                    : '<div class="medal-meter"><span style="width:' +
+                                      percent +
+                                      '%"></span></div>') +
+                                "</div>"
+                            );
+                        })
+                        .join("");
+                    const art = c.image
+                            ? '<img src="' +
+                              esc(c.image) +
+                              '" alt="' +
+                              esc(c.name) +
+                              '" loading="lazy">'
+                            : '<div class="medal-manual-symbol">' +
+                              (c.code === "iron_cross" ? "✠" : "✦") +
+                              "</div>",
+                        reward = rewardText(c, a);
+                    return (
+                        '<article class="medal-card"><div class="medal-art">' +
+                        art +
+                        '</div><div class="medal-body"><span class="medal-state ' +
+                        (c.owned ? "owned" : "") +
+                        '">' +
+                        esc(state) +
+                        "</span><h2>" +
+                        esc(c.name) +
+                        "</h2><p>" +
+                        esc(c.rule) +
+                        "</p>" +
+                        (reward ? '<p class="medal-reward">' + esc(reward) + "</p>" : "") +
+                        '<div class="medal-values">' +
+                        values +
+                        "</div>" +
+                        (c.blocked
+                            ? '<p class="medal-panel-note">' + esc(c.blocked) + "</p>"
+                            : "") +
+                        (a ? '<p class="medal-reason">' + esc(a.reason) + "</p>" : "") +
+                        (c.revoked
+                            ? '<p class="medal-reason">' +
+                              esc(c.revoked.reason) +
+                              " · " +
+                              stamp(c.revoked.date) +
+                              (c.revoked.role_pending
+                                  ? " · Роль Discord ожидает снятия"
+                                  : " · Роль Discord снята") +
+                              (c.revoked.error ? " · Повторяем запрос Discord" : "") +
+                              "</p>"
+                            : "") +
+                        (d.can_revoke && c.owned
+                            ? '<button class="btn btn-outline-danger btn-sm" data-revoke-award="' +
+                              esc(c.code) +
+                              '" data-award-name="' +
+                              esc(c.name) +
+                              '">Снять награду</button>'
+                            : "") +
+                        "</div></article>"
+                    );
+                })
+                .join("");
+        document.getElementById("medalCards").innerHTML = renderCards(
+            d.cards.filter((c) => c.category === "medal"),
+        );
+        document.getElementById("distinctionCards").innerHTML = renderCards(
+            d.cards.filter((c) => c.category === "distinction"),
+        );
+    }
+    async function refresh() {
+        controller?.abort();
+        controller = new AbortController();
+        const current = ++generation,
+            requestController = controller,
+            signal = requestController.signal,
+            timer = setTimeout(() => requestController.abort(), 15000);
+        document.getElementById("medalRefresh").disabled = true;
+        try {
+            const r = await fetch("/api/medals/progress/" + uid, {
+                cache: "no-store",
+                signal,
+            });
+            if (!r.ok)
+                throw new Error(
+                    r.status === 401
+                        ? "Войдите в аккаунт снова."
+                        : r.status === 403
+                          ? "Нет доступа к этому прогрессу."
+                          : "Не удалось обновить данные.",
+                );
+            const d = await r.json();
+            if (current === generation) render(d);
+        } catch (e) {
+            if (current === generation) {
+                const w = document.getElementById("medalWarning");
+                w.hidden = false;
+                w.textContent =
+                    e.name === "AbortError"
+                        ? "Сайт не ответил вовремя. Повторим обновление."
+                        : e.message;
+            }
+        } finally {
+            clearTimeout(timer);
+            if (current === generation) document.getElementById("medalRefresh").disabled = false;
+        }
+    }
+    document.addEventListener("click", async (e) => {
+        const button = e.target.closest("[data-revoke-award]");
+        if (!button) return;
+        const reason = prompt(
+            "Снять «" +
+                button.dataset.awardName +
+                "»? Роль в Discord будет удалена, автоматическая повторная выдача заблокирована. Выплаченные коины останутся. Причина (необязательно):",
+            "",
+        );
+        if (reason === null) return;
+        if (reason.length > 300) {
+            alert("Причина должна содержать не более 300 символов.");
+            return;
+        }
+        button.disabled = true;
+        try {
+            const response = await fetch(
+                    "/api/admin/medals/" +
+                        uid +
+                        "/" +
+                        encodeURIComponent(button.dataset.revokeAward) +
+                        "/revoke",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-ST9-Action": "revoke-award",
+                        },
+                        body: JSON.stringify({
+                            reason,
+                        }),
+                        signal: AbortSignal.timeout(15000),
+                    },
+                ),
+                data = await response.json();
+            if (!response.ok)
+                throw new Error(
+                    typeof data.detail === "string" ? data.detail : "Не удалось снять награду.",
+                );
+            last = "";
+            await refresh();
+        } catch (error) {
+            alert(error.message);
+            button.disabled = false;
+        }
+    });
+    document.getElementById("medalRefresh").addEventListener("click", refresh);
+    refresh();
+    setInterval(() => {
+        if (!document.hidden) refresh();
+    }, 60000);
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) refresh();
+        else {
+            generation++;
+            controller?.abort();
+        }
+    });
+    window.addEventListener("pagehide", () => {
+        generation++;
+        controller?.abort();
+    });
+    window.addEventListener("pageshow", (e) => {
+        if (e.persisted) refresh();
+    });
+})();
+
+</script>
+    </body>
+</html>

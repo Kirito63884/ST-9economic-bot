@@ -1,0 +1,54 @@
+{% if user %}
+<details class="container mt-3 mb-3" id="statisticsFreshness">
+    <summary>Свежесть статистики <span data-freshness-summary>— проверяем…</span></summary>
+    <p class="small text-secondary">Время последнего успешного получения данных. Сбой новой проверки не обновляет это время. Сохранённые итоги прошлых недель остаются историческими данными.</p>
+    <ul data-freshness-list aria-live="polite">
+    </ul>
+</details>
+<script>
+(() => {
+    const root = document.getElementById("statisticsFreshness");
+    const summary = root.querySelector("[data-freshness-summary]");
+    const list = root.querySelector("[data-freshness-list]");
+    const states = {
+        fresh: "актуально",
+        stale: "устарело",
+        missing: "ещё не получено",
+    };
+    const dates = new Intl.DateTimeFormat("ru-RU", {
+        timeZone: "Europe/Moscow",
+        dateStyle: "short",
+        timeStyle: "short",
+    });
+    async function refresh() {
+        try {
+            const response = await fetch("/api/statistics/freshness", {
+                cache: "no-store",
+                signal: AbortSignal.timeout(10000),
+            });
+            if (!response.ok) throw new Error("unavailable");
+            const data = await response.json();
+            const fragment = document.createDocumentFragment();
+            let attention = 0;
+            for (const source of data.sources) {
+                const warning =
+                    source.state !== "fresh" || !["ready", "offline"].includes(source.status);
+                if (warning) attention++;
+                const item = document.createElement("li");
+                item.textContent = `${source.name}: ${states[source.state]} · ${source.checked_at ? dates.format(new Date(source.checked_at)) + " МСК" : "нет данных"}${source.status !== "ready" ? " · состояние: " + source.status : ""}`;
+                fragment.append(item);
+            }
+            list.replaceChildren(fragment);
+            summary.textContent = attention ? `— требуют внимания: ${attention}` : "— актуально";
+        } catch {
+            summary.textContent = "— проверка недоступна; свежесть не подтверждена";
+        }
+    }
+    refresh();
+    setInterval(() => {
+        if (!document.hidden) refresh();
+    }, 60000);
+})();
+
+</script>
+{% endif %}

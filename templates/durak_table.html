@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Стол дурака — Strike Team 9</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+              rel="stylesheet">
+        {% include "_site_ui.html" %}{% include "_card_motion.html" %}{% include "_durak_ui.html" %}
+    </head>
+    <body class="dk-game-page">
+        {% include "_site_nav.html" %}
+        <main class="container mt-4" id="st-content">
+            <div class="st-page-heading">
+                <div>
+                    <span class="st-eyebrow">Общий стол</span>
+                    <h1>Дурак <small id="matchNumber" style="font-size:17px;color:#a7b8cf"></small></h1>
+                    <p id="connectionStatus" role="status">Подключаемся к столу…</p>
+                </div>
+                <div class="st-actions">
+                    <a class="btn btn-outline-light" href="/games/durak/lobby">Лобби</a><button type="button" class="btn btn-outline-danger" id="leaveButton" hidden>Покинуть стол</button>
+                </div>
+            </div>
+            <section class="st-panel" id="joinPanel" hidden>
+                <h2 id="joinTitle">Присоединиться к столу</h2>
+                <p id="joinRules" class="dk-rule-summary"></p>
+                <div id="joinPayout" class="dk-payout my-3"></div>
+                <button type="button" class="btn btn-primary" id="joinButton">Занять место</button>
+            </section>
+            <div class="dk-layout" id="tablePanel" hidden>
+                <section class="dk-main">
+                    <div class="dk-seat-row" id="seats"></div>
+                    <div class="dk-status">
+                        <div>
+                            <strong id="turnTitle"></strong><small id="turnSubtitle"></small>
+                        </div>
+                        <span class="dk-clock" id="clock" aria-label="Осталось секунд на ход"></span>
+                    </div>
+                    <section class="st-panel" id="waitingPanel" hidden>
+                        <h2>Подготовка к партии</h2>
+                        <div class="dk-tags" id="waitingTags"></div>
+                        <div class="dk-payout" id="waitingPayout"></div>
+                        <p class="dk-help">Проверь правила и подтверди готовность. После изменения правил или состава стола готовность нужно подтвердить заново.</p>
+                        <div class="dk-controls">
+                            <button type="button" class="btn btn-primary" id="readyButton">Готов</button><button type="button" class="btn btn-outline-light" id="startButton" hidden>Начать партию</button>
+                        </div>
+                    </section>
+                    <section id="gamePanel" hidden>
+                        <div class="dk-table">
+                            <span id="durakDeck" class="dk-card dk-back" aria-label="Колода"></span>
+                            <div class="dk-tags" id="deckInfo"></div>
+                            <div class="dk-board" id="board"></div>
+                        </div>
+                        <div class="dk-hand-box">
+                            <h2 id="handTitle">Твои карты</h2>
+                            <div class="dk-hand" id="hand"></div>
+                            <p class="dk-help" id="actionHelp"></p>
+                            <div class="dk-controls">
+                                <button type="button" class="btn btn-primary" id="attackButton" hidden>Сыграть карту</button><button type="button" class="btn btn-outline-info" id="transferButton" hidden>Перевести</button><button type="button" class="btn btn-outline-warning" id="takeButton" hidden>Беру</button><button type="button" class="btn btn-outline-light" id="passButton" hidden>Пас · больше не подкидывать</button><button type="button" class="btn btn-outline-danger" id="catchButton" hidden>Поймать на шулерстве</button><button type="button"
+        class="btn btn-outline-light"
+        id="exchangeButton"
+        hidden>Обменять козырь</button>
+                            </div>
+                        </div>
+                    </section>
+                    <section class="st-panel" id="resultPanel" hidden>
+                        <h2 id="resultTitle">Партия завершена</h2>
+                        <p id="resultReason"></p>
+                        <div id="resultRows"></div>
+                        <button type="button"
+                                class="btn btn-primary mt-3"
+                                id="rematchButton"
+                                hidden>Новая партия</button>
+                        <p class="st-field-hint mt-3">Выплата зачислена в общий баланс. В истории операций записана разница между выплатой и взносом.</p>
+                    </section>
+                </section>
+                <aside class="dk-aside">
+                    <section class="st-panel">
+                        <h2>Пригласи друзей</h2>
+                        <p class="st-field-hint">Ссылка ведёт прямо к этому столу. Для входа нужен профиль на сайте.</p>
+                        <label class="visually-hidden" for="inviteLink">Ссылка на стол</label><input class="form-control dk-invite" id="inviteLink" readonly><button type="button" class="btn btn-outline-light btn-sm" id="copyInvite">Скопировать ссылку</button>
+                    </section>
+                    <section class="st-panel">
+                        <h2>Правила стола</h2>
+                        <div class="dk-rule-warning" id="ruleWarning" hidden></div>
+                        <div class="dk-rule-summary" id="rulesSummary"></div>
+                        <details id="settingsDetails" hidden class="mt-3">
+                            <summary id="settingsTitle">Изменить настройки</summary>
+                            <form id="settingsForm" class="mt-3">
+                            </form>
+                            <p class="st-field-hint">Правила применяются к следующей партии. После сохранения все участники заново подтверждают готовность.</p>
+                        </details>
+                    </section>
+                    <section class="st-panel">
+                        <h2>За столом</h2>
+                        <ol class="dk-log" id="eventLog">
+                        </ol>
+                        <p class="st-field-hint mt-3 mb-0">По таймеру: младшая карта / «Беру» / «Пас». Три пропуска своего хода подряд — сдача. Закрытие страницы не выводит из партии.</p>
+                    </section>
+                </aside>
+            </div>
+            <dialog class="dk-dialog" id="leaveDialog">
+                <h2>Покинуть стол?</h2>
+                <p id="leaveWarning"></p>
+                <div class="dk-controls">
+                    <button class="btn btn-danger" type="button" id="confirmLeave">Покинуть</button><button class="btn btn-outline-light" type="button" id="cancelLeave">Остаться</button>
+                </div>
+            </dialog>
+        </main>
+        <script nonce="{{ request.state.csp_nonce }}">
+const tableId = {{ table_id|tojson }},
+    base = "/api/durak/table/" + encodeURIComponent(tableId);
+let state = null,
+    selected = null,
+    busy = false,
+    polling = false,
+    clockOffset = 0,
+    lastRules = "",
+    visualState = null;
+const $ = (id) => document.getElementById(id),
+    show = (id, value) => ($(id).hidden = !value);
+$("inviteLink").value = location.origin + "/games/durak/table/" + encodeURIComponent(tableId);
+$("inviteLink").addEventListener("click", (e) => e.target.select());
+$("copyInvite").addEventListener("click", async () => {
+    try {
+        await navigator.clipboard.writeText($("inviteLink").value);
+        STUI.notice("Ссылка скопирована", "success");
+    } catch {
+        $("inviteLink").select();
+        STUI.notice("Нажми Ctrl+C, чтобы скопировать ссылку", "info");
+    }
+});
+
+function role(p) {
+    if (state.phase === "waiting") return p.ready ? "✓ Готов" : "Ожидает готовности";
+    if (p.out) return `Вышел · место ${p.place_group}${p.left ? " · покинул стол" : ""}`;
+    if (state.phase === "finished")
+        return state.result.loser === p.id ? "Остался с картами" : "Партия завершена";
+    return `${p.count} карт${p.id === state.defender ? " · защищается" : p.id === state.attacker ? " · атакует" : ""}`;
+}
+
+function renderSeats() {
+    const root = $("seats"),
+        existing = new Map([...root.children].map((el) => [Number(el.dataset.seat), el]));
+    for (const p of state.players) {
+        const node = existing.get(p.id) || document.createElement("div");
+        existing.delete(p.id);
+        node.dataset.seat = p.id;
+        node.className = `dk-seat ${p.id === state.actor ? "dk-current" : ""} ${p.out ? "dk-out" : ""}`;
+        if (!node.querySelector(".dk-seat-backs"))
+            node.innerHTML = '<strong></strong><small></small><div class="dk-seat-backs"></div>';
+        node.querySelector("strong").textContent =
+            p.name + (p.id === state.your_id ? " · ты" : "") + (p.id === state.creator ? " ♛" : "");
+        node.querySelector("small").textContent =
+            role(p) + (p.timeouts ? " · пропуски: " + p.timeouts : "");
+        const backs = node.querySelector(".dk-seat-backs"),
+            old = new Map([...backs.children].map((n) => [n.dataset.motionCard, n]));
+        const count =
+            p.id === state.your_id || state.phase === "waiting" ? 0 : Math.min(p.count, 8);
+        for (let i = 0; i < count; i++) {
+            const key = "back:" + state.match_number + ":" + p.id + ":" + i;
+            const card = old.get(key) || document.createElement("span");
+            old.delete(key);
+            card.className = "dk-card dk-back";
+            card.dataset.motionCard = key;
+            card.dataset.dealOrder = i * state.players.length + state.players.indexOf(p);
+            if (backs.children[i] !== card) backs.insertBefore(card, backs.children[i] || null);
+        }
+        for (const card of old.values()) card.remove();
+        const index = state.players.indexOf(p);
+        if (root.children[index] !== node) root.insertBefore(node, root.children[index] || null);
+    }
+    for (const node of existing.values()) node.remove();
+}
+
+function cardNode(c, button = false) {
+    const box = document.createElement("div");
+    box.innerHTML = DK.playingCard(c, button);
+    const node = box.firstElementChild;
+    node.dataset.motionCard = c.id;
+    return node;
+}
+
+function renderBoard(targets) {
+    const root = $("board"),
+        existing = new Map(
+            [...root.querySelectorAll(".dk-pair")].map((el) => [el.dataset.pair, el]),
+        );
+    root.querySelector(".dk-empty")?.remove();
+    state.board.forEach((pair, i) => {
+        let node = existing.get(pair.attack.id);
+        existing.delete(pair.attack.id);
+        if (!node) {
+            node = document.createElement("div");
+            node.dataset.pair = pair.attack.id;
+            node.append(cardNode(pair.attack));
+        }
+        node.className = "dk-pair" + (targets.includes(i) ? " dk-target" : "");
+        const priorCover = node.querySelector(".dk-cover");
+        if (
+            priorCover &&
+            (!pair.defense || priorCover.firstElementChild.dataset.motionCard !== pair.defense.id)
+        )
+            priorCover.remove();
+        if (pair.defense && !node.querySelector(".dk-cover")) {
+            const cover = document.createElement("span");
+            cover.className = "dk-cover";
+            cover.append(cardNode(pair.defense));
+            node.append(cover);
+        }
+        const act = () =>
+            send("action", {
+                kind: "defend",
+                card: selected,
+                target: i,
+            });
+        node.onclick = targets.includes(i) ? act : null;
+        node.onkeydown = targets.includes(i)
+            ? (e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      act();
+                  }
+              }
+            : null;
+        if (targets.includes(i)) {
+            node.setAttribute("role", "button");
+            node.tabIndex = 0;
+            node.setAttribute(
+                "aria-label",
+                "Отбить " + pair.attack.value + pair.attack.suit + " выбранной картой",
+            );
+        } else {
+            node.removeAttribute("role");
+            node.removeAttribute("tabindex");
+            node.removeAttribute("aria-label");
+        }
+        if (root.children[i] !== node) root.insertBefore(node, root.children[i] || null);
+    });
+    for (const node of existing.values()) node.remove();
+    if (!state.board.length) {
+        const empty = document.createElement("div");
+        empty.className = "dk-empty";
+        empty.textContent = "Первая карта откроет нападение";
+        root.append(empty);
+    }
+}
+
+function renderHand(me, l) {
+    const root = $("hand"),
+        existing = new Map(
+            [...root.querySelectorAll("button[data-card]")].map((el) => [el.dataset.card, el]),
+        );
+    root.querySelector(".dk-empty-hand")?.remove();
+    $("handTitle").textContent = me.out
+        ? "Ты вышел · дождись выплаты"
+        : "Твои карты · " + state.hand.length;
+    for (const c of state.hand) {
+        const node = existing.get(c.id) || cardNode(c, true);
+        existing.delete(c.id);
+        node.dataset.card = c.id;
+        const can =
+            l.attack_cards.includes(c.id) ||
+            (l.defenses[c.id] || []).length ||
+            l.transfer_cards.includes(c.id) ||
+            l.exchange_card === c.id;
+        node.disabled = busy || !can;
+        node.classList.toggle("dk-selected", selected === c.id);
+        node.setAttribute("aria-label", c.value + c.suit);
+        node.setAttribute("aria-pressed", String(selected === c.id));
+        node.onclick = () => {
+            selected = selected === c.id ? null : c.id;
+            render();
+            node.focus();
+        };
+        let slot = node.parentElement?.classList.contains("dk-hand-slot")
+            ? node.parentElement
+            : null;
+        if (!slot) {
+            slot = document.createElement("span");
+            slot.className = "dk-hand-slot";
+            node.removeAttribute("data-motion-card");
+            slot.dataset.motionCard = c.id;
+            slot.append(node);
+        }
+        slot.dataset.dealOrder =
+            state.hand.indexOf(c) * state.players.length +
+            state.players.findIndex((p) => p.id === state.your_id);
+        if (root.children[state.hand.indexOf(c)] !== slot)
+            root.insertBefore(slot, root.children[state.hand.indexOf(c)] || null);
+    }
+    for (const node of existing.values()) node.closest(".dk-hand-slot")?.remove();
+    if (!state.hand.length) {
+        const empty = document.createElement("div");
+        empty.className = "dk-empty-hand";
+        empty.textContent = l.can_pass
+            ? "Карт нет. Нажми «Пас», чтобы завершить подкидывание."
+            : me.out
+              ? "Твоё место в порядке выхода сохранено."
+              : "Карт нет. Дождись завершения нападения и добора.";
+        root.append(empty);
+    }
+}
+
+function finishMotion(snapshot) {
+    DK.motion.play(snapshot, $("tablePanel"), visualState, state);
+    visualState = state;
+}
+
+function render() {
+    if (!state) return;
+    const snapshot = DK.motion.capture($("tablePanel"));
+    const me = state.players.find((p) => p.id === state.your_id),
+        owner = state.creator === state.your_id,
+        l = state.legal;
+    show("joinPanel", false);
+    show("tablePanel", true);
+    show("leaveButton", true);
+    STUI.setBalance(state.balance);
+    $("matchNumber").textContent = state.match_number ? "· партия " + state.match_number : "";
+    renderSeats();
+    const actor = state.players.find((p) => p.id === state.actor),
+        yourTurn = state.actor === state.your_id;
+    $("turnTitle").textContent =
+        state.phase === "waiting"
+            ? "Собираемся за столом"
+            : state.phase === "finished"
+              ? "Партия завершена"
+              : me.out
+                ? "Ты уже вышел из игры"
+                : yourTurn
+                  ? "Твой ход"
+                  : "Ходит " + (actor?.name || "игрок");
+    $("turnSubtitle").textContent =
+        state.phase === "waiting"
+            ? "Взносы спишутся после готовности всех и старта"
+            : state.phase === "finished"
+              ? "Банк распределён без комиссии"
+              : state.taking
+                ? state.rules.throw_after_take
+                    ? "Защитник берёт. Подкинь карты или нажми «Пас»."
+                    : "Защитник берёт. Остальные подтверждают завершение кнопкой «Пас»."
+                : state.phase === "attack"
+                  ? "Нападение · выбери карту"
+                  : state.phase === "defend"
+                    ? "Защита · отбей, переведи или возьми карты"
+                    : "Подкидывание · сыграй карту или нажми «Пас»";
+    show("waitingPanel", state.phase === "waiting");
+    show("gamePanel", !["waiting", "finished"].includes(state.phase));
+    show("resultPanel", state.phase === "finished");
+    show("settingsDetails", owner && ["waiting", "finished"].includes(state.phase));
+    $("settingsTitle").textContent =
+        state.phase === "finished" ? "Правила следующей партии" : "Изменить настройки";
+    show("ruleWarning", state.rules.cheating || state.rules.unlimited_attack);
+    $("ruleWarning").textContent = [
+        state.rules.cheating
+            ? "Шулерство включено: подкидывать и отбивать можно любой картой. Последнюю карту можно проверить."
+            : "",
+        state.rules.unlimited_attack ? "Число подкинутых карт не ограничено." : "",
+    ]
+        .filter(Boolean)
+        .join(" ");
+    $("rulesSummary").innerHTML = DK.summary(state.rules);
+    $("settingsForm").querySelector("[type=submit]")?.toggleAttribute("disabled", busy);
+    const rulesJSON = JSON.stringify(state.rules);
+    if (owner && ["waiting", "finished"].includes(state.phase) && rulesJSON !== lastRules) {
+        DK.form($("settingsForm"), state.rules);
+        $("settingsForm").insertAdjacentHTML(
+            "beforeend",
+            '<button class="btn btn-outline-light mt-3" type="submit">Сохранить правила</button>',
+        );
+        lastRules = rulesJSON;
+    }
+    $("eventLog").innerHTML = state.events
+        .slice(-8)
+        .reverse()
+        .map((e) => `<li>${DK.esc(e.text)}</li>`)
+        .join("");
+    if (state.phase === "waiting") {
+        $("waitingTags").innerHTML =
+            `<span>Взнос ${DK.money(state.rules.entry_cents)}</span><span>Готовы ${state.players.filter((p) => p.ready).length}/${state.players.length}</span>`;
+        $("waitingPayout").innerHTML = DK.payouts(state.players.length, state.rules.entry_cents);
+        $("readyButton").textContent = me.ready
+            ? "Отменить готовность"
+            : "Готов · взнос " + DK.money(state.rules.entry_cents);
+        $("readyButton").disabled = busy;
+        show("startButton", owner);
+        $("startButton").disabled =
+            busy || state.players.length < 2 || !state.players.every((p) => p.ready);
+    }
+    if (state.phase === "finished") {
+        const result = state.result;
+        $("resultTitle").textContent = result.draw
+            ? "Ничья · взносы возвращены"
+            : "Партия завершена";
+        $("resultReason").textContent = result.reason;
+        let position = 1;
+        const places = {};
+        for (const group of result.groups) {
+            for (const id of group) places[id] = position;
+            position += group.length;
+        }
+        $("resultRows").innerHTML = state.participants
+            .map(
+                (p) =>
+                    `<div class="dk-result-row"><span>${DK.esc(p.name)}${result.draw ? " · возврат" : p.id === result.loser ? " · дурак" : ` · место ${places[p.id]}`}</span><strong>${DK.money(result.payouts[String(p.id)] || 0)}</strong></div>`,
+            )
+            .join("");
+        show("rematchButton", owner);
+        $("rematchButton").disabled = busy;
+        finishMotion(snapshot);
+        return;
+    }
+    $("durakDeck").style.opacity = state.deck_count ? "1" : ".35";
+    if (state.phase === "waiting") {
+        finishMotion(snapshot);
+        return;
+    }
+    if (!state.hand.some((c) => c.id === selected)) selected = null;
+    $("deckInfo").innerHTML =
+        `<span>Колода: ${state.deck_count}</span><span>Отбой: ${state.discard_count}</span><span>Козырь: ${DK.esc(state.trump || "")}${state.trump_card ? " " + DK.esc(state.trump_card.value) : ""}</span><span>Нападение: ${state.board.length}/${state.rules.unlimited_attack ? "∞" : state.attack_limit}</span><span>Банк: ${DK.money(state.bank_cents)}</span>`;
+    const targets = selected ? l.defenses[selected] || [] : [];
+    renderBoard(targets);
+    renderHand(me, l);
+    $("actionHelp").textContent = me.out
+        ? "Порядок выхода сохранён. Можно остаться смотреть или покинуть стол."
+        : yourTurn
+          ? state.phase === "defend"
+              ? selected && targets.length
+                  ? "Теперь нажми на карту на столе, которую хочешь отбить."
+                  : "Выбери подсвеченную карту для защиты или перевода. Можно нажать «Беру»."
+              : state.phase === "attack"
+                ? "Выбери карту и нажми «Сыграть карту»."
+                : l.attack_cards.length
+                  ? "Выбери карту и нажми «Сыграть карту» или нажми «Пас»."
+                  : "Подкинуть нечего. Нажми «Пас» — до этого карты останутся на столе."
+          : "Дождись своего хода. Чужие карты скрыты.";
+    for (const [id, visible] of [
+        ["attackButton", l.attack_cards.length > 0],
+        ["transferButton", l.transfer_cards.length > 0],
+        ["takeButton", l.can_take],
+        ["passButton", l.can_pass],
+        ["exchangeButton", !!l.exchange_card],
+        ["catchButton", l.can_catch],
+    ]) {
+        show(id, visible);
+        $(id).disabled = busy;
+    }
+    $("catchButton").textContent = l.can_catch
+        ? "Поймать на шулерстве · " +
+          (state.board
+              .flatMap((p) => [p.attack, p.defense])
+              .find((c) => c?.id === state.last_play.card)?.value || "") +
+          (state.board
+              .flatMap((p) => [p.attack, p.defense])
+              .find((c) => c?.id === state.last_play.card)?.suit || "")
+        : "Поймать на шулерстве";
+    $("attackButton").disabled = busy || !l.attack_cards.includes(selected);
+    $("transferButton").disabled = busy || !l.transfer_cards.includes(selected);
+    finishMotion(snapshot);
+}
+async function poll() {
+    if (polling || busy) return;
+    polling = true;
+    try {
+        if (!state) {
+            const preview = await DK.api(base + "/preview");
+            if (!preview.in_table) {
+                show("joinPanel", true);
+                show("tablePanel", false);
+                $("joinTitle").textContent = "Стол: " + preview.creator;
+                $("joinRules").innerHTML = DK.summary(preview.rules);
+                $("joinPayout").innerHTML = DK.payouts(
+                    Math.min(preview.players + 1, preview.rules.max_players),
+                    preview.rules.entry_cents,
+                );
+                $("joinButton").disabled =
+                    preview.phase !== "waiting" || preview.players >= preview.rules.max_players;
+                $("joinButton").textContent =
+                    preview.phase !== "waiting"
+                        ? "Партия уже началась"
+                        : preview.players >= preview.rules.max_players
+                          ? "Нет свободных мест"
+                          : "Занять место";
+                $("connectionStatus").textContent =
+                    "Игроков: " + preview.players + "/" + preview.rules.max_players;
+                return;
+            }
+        }
+        const fresh = await DK.api(base + "/state");
+        if (state && fresh.revision < state.revision) return;
+        clockOffset = fresh.server_time - Date.now() / 1000;
+        const changed = !state || state.revision !== fresh.revision;
+        state = fresh;
+        STUI.setBalance(state.balance);
+        $("connectionStatus").textContent = "Соединение установлено · состояние сохраняется";
+        if (changed) render();
+    } catch (error) {
+        $("connectionStatus").textContent =
+            error.status === 404
+                ? "Стол закрыт. Вернись в лобби."
+                : error.status
+                  ? error.message
+                  : "Связь прервалась. Переподключаемся…";
+        if (error.status === 403 || error.status === 404) {
+            state = null;
+            show("tablePanel", false);
+            show("leaveButton", false);
+        }
+        if (error.status === 401) location.href = "/login";
+    } finally {
+        polling = false;
+    }
+}
+async function send(endpoint, data = {}) {
+    if (busy || !state) return;
+    busy = true;
+    render();
+    try {
+        const result = await DK.api(base + "/" + endpoint, {
+            revision: state.revision,
+            ...data,
+        });
+        if (endpoint === "leave") {
+            location.href = "/games/durak/lobby";
+            return;
+        }
+        if (endpoint === "action" && data.kind === "catch")
+            STUI.notice(
+                result.events.at(-1)?.text || "Карта проверена",
+                result.last_play ? "info" : "success",
+            );
+        state = result;
+        clockOffset = state.server_time - Date.now() / 1000;
+        selected = null;
+    } catch (error) {
+        STUI.notice(error.message, "error");
+    } finally {
+        busy = false;
+        render();
+        await poll();
+    }
+}
+$("joinButton").addEventListener("click", async () => {
+    if (busy) return;
+    busy = true;
+    $("joinButton").disabled = true;
+    try {
+        await DK.api(base + "/join", {});
+        state = null;
+    } catch (error) {
+        STUI.notice(error.message, "error");
+    } finally {
+        busy = false;
+        await poll();
+    }
+});
+$("readyButton").addEventListener("click", () =>
+    send("ready", {
+        ready: !state.players.find((p) => p.id === state.your_id).ready,
+    }),
+);
+$("startButton").addEventListener("click", () => send("start"));
+$("rematchButton").addEventListener("click", () => {
+    lastRules = "";
+    send("rematch");
+});
+$("settingsForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    try {
+        send("settings", {
+            rules: DK.read($("settingsForm")),
+        });
+    } catch (error) {
+        STUI.notice(error.message, "error");
+    }
+});
+$("catchButton").addEventListener("click", () =>
+    send("action", {
+        kind: "catch",
+        card: state.last_play?.card,
+    }),
+);
+$("attackButton").addEventListener("click", () =>
+    send("action", {
+        kind: "attack",
+        card: selected,
+    }),
+);
+$("transferButton").addEventListener("click", () =>
+    send("action", {
+        kind: "transfer",
+        card: selected,
+    }),
+);
+for (const [id, kind] of [
+    ["takeButton", "take"],
+    ["passButton", "pass"],
+    ["exchangeButton", "exchange"],
+])
+    $(id).addEventListener("click", () =>
+        send("action", {
+            kind,
+        }),
+    );
+$("leaveButton").addEventListener("click", () => {
+    const me = state.players.find((p) => p.id === state.your_id);
+    $("leaveWarning").textContent =
+        !["waiting", "finished"].includes(state.phase) && !me.out
+            ? "У тебя ещё есть карты. Выход означает сдачу: ты получишь 0 БК, а остальные участники разделят банк."
+            : "Ты покинешь стол. Если уже вышел из текущей партии, твоё место и будущая выплата сохранятся.";
+    $("leaveDialog").showModal();
+});
+$("cancelLeave").addEventListener("click", () => $("leaveDialog").close());
+$("confirmLeave").addEventListener("click", () => {
+    $("leaveDialog").close();
+    send("leave");
+});
+setInterval(() => {
+    if (state?.deadline) {
+        const seconds = Math.max(0, Math.ceil(state.deadline - Date.now() / 1000 - clockOffset));
+        $("clock").textContent = seconds + " с";
+        $("clock").style.color = seconds <= 10 ? "#ffb6a9" : "";
+    } else $("clock").textContent = "";
+}, 250);
+setInterval(() => {
+    if (!document.hidden) poll();
+}, 1500);
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) poll();
+});
+poll();
+
+</script>
+    </body>
+</html>

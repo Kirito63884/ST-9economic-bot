@@ -1,0 +1,305 @@
+<style nonce="{{ request.state.csp_nonce }}">
+    .st-live {
+        margin: 0 0 28px
+    }
+
+    .st-live-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        flex-wrap: wrap;
+        margin-bottom: 15px
+    }
+
+    .st-live-heading h2 {
+        font-size: 22px;
+        margin: 0 0 5px
+    }
+
+    .st-live-heading p {
+        font-size: 12px;
+        color: var(--st-muted);
+        margin: 0
+    }
+
+    .st-live-tools {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap
+    }
+
+    .st-live-tools button {
+        font-size: 12px;
+        padding: 7px 11px
+    }
+
+    .st-live-tools button[aria-pressed=true] {
+        background: #2b4166;
+        border-color: #6387bd;
+        color: #eef4ff
+    }
+
+    .st-live-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px
+    }
+
+    .st-live-group {
+        padding: 18px;
+        background: var(--st-panel);
+        border: 1px solid var(--st-line);
+        border-radius: 12px;
+        min-width: 0
+    }
+
+    .st-live-group header {
+        display: flex;
+        gap: 12px;
+        justify-content: space-between;
+        align-items: start;
+        border-bottom: 1px solid var(--st-line);
+        padding-bottom: 13px;
+        margin-bottom: 4px
+    }
+
+    .st-live-group h3 {
+        font-size: 14px;
+        line-height: 1.5;
+        margin: 3px 0 0;
+        overflow-wrap: anywhere
+    }
+
+    .st-live-group header small {
+        font-size: 10px;
+        color: var(--st-muted)
+    }
+
+    .st-live-group header a {
+        font-size: 12px;
+        white-space: nowrap;
+        color: var(--st-blue);
+        padding-top: 5px
+    }
+
+    .st-live-group ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        max-height: 300px;
+        overflow: auto
+    }
+
+    .st-live-group li {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        padding: 12px 0;
+        border-bottom: 1px solid #ffffff06
+    }
+
+    .st-live-group li:last-child {
+        border: 0
+    }
+
+    .st-live-group .st-row-meta {
+        font-size: 11px
+    }
+
+    .st-live-count {
+        font-size: 12px;
+        color: var(--st-green);
+        font-weight: 500
+    }
+
+    .st-live-notice {
+        font-size: 12px;
+        color: var(--st-muted);
+        margin: 12px 0 0
+    }
+
+    .st-live-empty {
+        padding: 23px;
+        border: 1px dashed var(--st-line);
+        border-radius: 12px;
+        color: var(--st-muted);
+        font-size: 13px;
+        grid-column: 1/-1
+    }
+
+    @media(max-width:1000px) {
+        .st-live-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr))
+        }
+    }
+
+    @media(max-width:600px) {
+        .st-live-grid {
+            grid-template-columns: 1fr
+        }
+
+        .st-live-tools {
+            width: 100%
+        }
+    }
+</style>
+<section class="st-live" aria-labelledby="liveHeading">
+    <div class="st-live-heading">
+        <div>
+            <h2 id="liveHeading">Кто сейчас играет <span id="liveCount" class="st-live-count"></span></h2>
+            <p>Игры сайта и участники Strike Team 9 на серверах Squad</p>
+        </div>
+        <div class="st-live-tools" role="group" aria-label="Фильтр активности">
+            <button class="btn btn-outline-light"
+                    data-live-filter="all"
+                    aria-pressed="true">Все</button><button class="btn btn-outline-light"
+        data-live-filter="site"
+        aria-pressed="false">На сайте</button><button class="btn btn-outline-light"
+        data-live-filter="squad"
+        aria-pressed="false">Squad</button><button class="btn btn-outline-light"
+        id="liveRefresh"
+        aria-label="Обновить список игроков">↻</button>
+        </div>
+    </div>
+    <div class="st-live-grid" id="liveGrid" aria-busy="true">
+        <div class="st-live-empty">Проверяем, кто играет…</div>
+    </div>
+    <p class="st-live-notice" id="liveStatus" role="status"></p>
+</section>
+<script nonce="{{ request.state.csp_nonce }}">
+(() => {
+    let state = null,
+        filter = "all",
+        busy = false,
+        timer = null,
+        controller = null,
+        version = 0;
+    const grid = document.getElementById("liveGrid"),
+        status = document.getElementById("liveStatus"),
+        refresh = document.getElementById("liveRefresh");
+    const node = (tag, cls, text) => {
+        const n = document.createElement(tag);
+        if (cls) n.className = cls;
+        if (text !== undefined) n.textContent = text;
+        return n;
+    };
+
+    function render() {
+        grid.replaceChildren();
+        document.getElementById("liveCount").textContent = state?.online_members
+            ? `· ${state.online_members}`
+            : "";
+        const groups = (state?.groups || []).filter((g) => filter === "all" || g.kind === filter);
+        for (const g of groups) {
+            const card = node("article", "st-live-group"),
+                head = node("header"),
+                heading = node("div");
+            heading.append(
+                node("small", "", g.kind === "squad" ? "SQUAD" : "ИГРА НА САЙТЕ"),
+                node("h3", "", g.label),
+            );
+            const link = node("a", "", g.kind === "squad" ? "Серверы →" : "Открыть →");
+            link.href = g.url;
+            head.append(heading, link);
+            card.append(head);
+            const list = node("ul");
+            for (const p of g.members) {
+                const row = node("li"),
+                    identity = node("div"),
+                    button = node("button", "st-player-button", p.name);
+                button.type = "button";
+                button.addEventListener("click", () => openProfile(p.user_id));
+                identity.append(button, node("div", "st-row-meta", p.discord_name));
+                row.append(node("span", "st-avatar-small", p.avatar || "👤"), identity);
+                list.append(row);
+            }
+            card.append(list);
+            grid.append(card);
+        }
+        if (!groups.length)
+            grid.append(
+                node(
+                    "div",
+                    "st-live-empty",
+                    filter === "squad" && state?.squad_unavailable === 5
+                        ? "Списки Squad пока недоступны. Повторим проверку автоматически."
+                        : "Сейчас нет подтверждённых игроков в этом разделе.",
+                ),
+            );
+    }
+    async function load() {
+        if (busy || document.hidden) return;
+        busy = true;
+        const token = ++version;
+        controller = new AbortController();
+        refresh.disabled = true;
+        grid.setAttribute("aria-busy", "true");
+        const timeout = setTimeout(() => controller?.abort(), 12000);
+        try {
+            const r = await fetch("/api/home/activity", {
+                signal: controller.signal,
+                cache: "no-store",
+            });
+            if (!r.ok) throw new Error();
+            const data = await r.json();
+            if (token !== version) return;
+            state = data;
+            render();
+            const stamp = new Date(data.generated_at * 1000).toLocaleTimeString("ru-RU", {
+                hour: "2-digit",
+                minute: "2-digit",
+                timeZone: "Europe/Moscow",
+            });
+            status.textContent =
+                `Обновлено в ${stamp} МСК. Игры сайта: активность за последние 5 минут.` +
+                (data.squad_unavailable
+                    ? ` Squad: ${data.squad_unavailable} из 5 серверов не подтверждены.`
+                    : "") +
+                (data.squad_pending ? " Часть Steam ID ещё проверяется." : "");
+        } catch {
+            if (token !== version) return;
+            state = null;
+            render();
+            status.textContent = "Не удалось обновить список. Повторим проверку автоматически.";
+        } finally {
+            clearTimeout(timeout);
+            if (token === version) {
+                busy = false;
+                refresh.disabled = false;
+                grid.setAttribute("aria-busy", "false");
+            }
+        }
+    }
+    document.querySelectorAll("[data-live-filter]").forEach((b) =>
+        b.addEventListener("click", () => {
+            filter = b.dataset.liveFilter;
+            document
+                .querySelectorAll("[data-live-filter]")
+                .forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+            render();
+        }),
+    );
+    refresh.addEventListener("click", load);
+    const start = () => {
+        if (!timer) timer = setInterval(load, 10000);
+        load();
+    };
+    const stop = () => {
+        clearInterval(timer);
+        timer = null;
+        version++;
+        controller?.abort();
+        busy = false;
+        refresh.disabled = false;
+    };
+    document.addEventListener("visibilitychange", () => (document.hidden ? stop() : start()));
+    window.addEventListener("pagehide", stop);
+    window.addEventListener("pageshow", (e) => {
+        if (e.persisted) start();
+    });
+    start();
+})();
+
+</script>

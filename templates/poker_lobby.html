@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Покер - Лобби — Strike Team 9</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+              rel="stylesheet">
+        <style>
+            body {
+                background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+                min-height: 100vh;
+                position: relative;
+                overflow-x: hidden
+            }
+
+            body::before {
+                content: '';
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: radial-gradient(circle at 20% 30%, rgba(120, 119, 198, .3) 0%, transparent 50%), radial-gradient(circle at 80% 70%, rgba(255, 119, 198, .2) 0%, transparent 50%);
+                pointer-events: none;
+                z-index: 0
+            }
+
+            @keyframes float {
+
+                0%,
+                100% {
+                    transform: translateY(0) rotate(0deg)
+                }
+
+                50% {
+                    transform: translateY(-30px) rotate(180deg)
+                }
+            }
+
+            .bg-shape {
+                position: fixed;
+                opacity: .08;
+                border-radius: 50%;
+                pointer-events: none;
+                z-index: 0
+            }
+
+            .shape-1 {
+                width: 300px;
+                height: 300px;
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                top: 10%;
+                left: 5%;
+                animation: float 20s ease-in-out infinite
+            }
+
+            .shape-2 {
+                width: 200px;
+                height: 200px;
+                background: linear-gradient(135deg, #f093fb, #f5576c);
+                top: 60%;
+                right: 10%;
+                animation: float 15s ease-in-out infinite 2s
+            }
+
+            .container {
+                position: relative;
+                z-index: 1
+            }
+
+            .navbar {
+                position: relative;
+                z-index: 10
+            }
+
+            .mode-card {
+                background: rgba(42, 42, 74, .8);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, .1);
+                border-radius: 16px;
+                padding: 40px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, .3);
+                text-align: center
+            }
+
+            .mode-icon {
+                font-size: 4rem;
+                margin-bottom: 15px
+            }
+
+            .mode-title {
+                font-size: 1.6rem;
+                font-weight: 700;
+                margin-bottom: 10px
+            }
+
+            .mode-desc {
+                color: rgba(255, 255, 255, .7);
+                font-size: 1rem
+            }
+
+            .tables-panel,
+            .create-panel {
+                background: rgba(42, 42, 74, .8);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, .1);
+                border-radius: 16px;
+                padding: 25px;
+                margin-top: 20px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, .3)
+            }
+
+            .table-row {
+                background: rgba(0, 0, 0, .3);
+                border-radius: 12px;
+                padding: 15px;
+                margin-bottom: 10px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                transition: all .2s;
+                border: 1px solid rgba(255, 255, 255, .05)
+            }
+
+            .table-row:hover {
+                background: rgba(0, 0, 0, .5);
+                border-color: rgba(102, 126, 234, .3)
+            }
+
+            .table-info {
+                flex: 1
+            }
+
+            .table-name {
+                font-weight: 700;
+                font-size: 1.1rem;
+                margin-bottom: 3px
+            }
+
+            .table-meta {
+                color: rgba(255, 255, 255, .6);
+                font-size: .9rem
+            }
+
+            .phase-badge {
+                display: inline-block;
+                padding: 3px 10px;
+                border-radius: 10px;
+                font-size: .75rem;
+                font-weight: 700
+            }
+
+            .phase-waiting {
+                background: rgba(76, 175, 80, .2);
+                color: #4caf50
+            }
+
+            .phase-playing {
+                background: rgba(255, 152, 0, .2);
+                color: #ff9800
+            }
+
+            .phase-showdown {
+                background: rgba(156, 39, 176, .2);
+                color: #ce93d8
+            }
+
+            .empty-state {
+                text-align: center;
+                padding: 40px;
+                color: rgba(255, 255, 255, .5)
+            }
+
+            .empty-state-icon {
+                font-size: 3rem;
+                margin-bottom: 15px;
+                opacity: .5
+            }
+
+            .form-check-input:checked {
+                background-color: #4caf50;
+                border-color: #4caf50
+            }
+
+            .toast-container {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 9999;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+                max-width: 400px
+            }
+
+            .toast {
+                background: rgba(42, 42, 74, .95);
+                backdrop-filter: blur(20px);
+                border: 1px solid rgba(255, 255, 255, .2);
+                border-radius: 12px;
+                padding: 16px 20px;
+                color: #fff;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, .5);
+                animation: toastSlideIn .4s;
+                display: flex;
+                align-items: center;
+                gap: 12px;
+                min-width: 300px
+            }
+
+            .toast.hide {
+                animation: toastSlideOut .3s forwards
+            }
+
+            .toast-success {
+                border-left: 4px solid #4caf50
+            }
+
+            .toast-error {
+                border-left: 4px solid #f44336
+            }
+
+            .toast-info {
+                border-left: 4px solid #2196f3
+            }
+
+            @keyframes toastSlideIn {
+                from {
+                    transform: translateX(400px);
+                    opacity: 0
+                }
+
+                to {
+                    transform: translateX(0);
+                    opacity: 1
+                }
+            }
+
+            @keyframes toastSlideOut {
+                from {
+                    transform: translateX(0);
+                    opacity: 1
+                }
+
+                to {
+                    transform: translateX(400px);
+                    opacity: 0
+                }
+            }
+        </style>
+        {% include "_site_ui.html" %}
+        {% include "_table_admin_ui.html" %}
+    </head>
+    <body class="st-lobby-page">
+        <div class="toast-container" id="toastContainer"></div>
+        {% include "_site_nav.html" %}
+        <main class="container mt-4" id="st-content">
+            <div class="st-page-heading">
+                <div>
+                    <span class="st-eyebrow">Strike Team 9</span>
+                    <h1>Покер</h1>
+                    <p>Техасский холдем · до 12 игроков за столом</p>
+                </div>
+                <div class="st-actions"><a href="/games/poker/history"
+   class="btn btn-outline-light">История раздач →</a></div>
+            </div>
+            <div class="st-lobby-layout">
+                <div class="tables-panel">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="mb-0">Активные столы</h4>
+                        <button class="btn btn-outline-info btn-sm"
+                                onclick="refreshTables()">🔄 Обновить</button>
+                    </div>
+                    <div class="st-lobby-tools">
+                        <input id="tableSearch"
+                               class="form-control"
+                               placeholder="Поиск по создателю…"
+                               aria-label="Поиск столов"
+                               oninput="applyTableFilters()"><select id="tableFilter"
+        class="form-select"
+        aria-label="Фильтр столов"
+        onchange="applyTableFilters()">
+                            <option value="all">Все столы</option>
+                            <option value="open">Есть свободные места</option>
+                            <option value="waiting">Ожидают начала</option>
+                            <option value="public">Открытые</option>
+                            <option value="private">Закрытые</option>
+                        </select>
+                    </div>
+                    <p class="st-lobby-status" id="tableStatus" role="status">Обновляем список…</p>
+                    <div id="tablesList">
+                        <div class="empty-state">
+                            <div class="empty-state-icon">🃏</div>
+                            <p>Пока нет активных столов</p>
+                            <p class="small">Создайте первый стол и пригласите друзей!</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="create-panel">
+                    <h4 class="mb-3">Создать стол</h4>
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label" for="maxPlayers">Макс. игроков</label>
+                            <select id="maxPlayers" class="form-select">
+                                <option value="2">2 игрока</option>
+                                <option value="4">4 игрока</option>
+                                <option value="6" selected>6 игроков</option>
+                                <option value="9">9 игроков</option>
+                                <option value="12">12 игроков</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label" for="smallBlind">Малый блайнд, БК</label>
+                            <input type="number"
+                                   id="smallBlind"
+                                   class="form-control"
+                                   value="10"
+                                   min="1"
+                                   step="1">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label" for="bigBlind">Большой блайнд, БК</label>
+                            <input type="number"
+                                   id="bigBlind"
+                                   class="form-control"
+                                   value="20"
+                                   min="2"
+                                   step="1">
+                        </div>
+                        <div class="col-md-2">
+                            <div class="form-check form-switch mt-4">
+                                <input class="form-check-input" type="checkbox" id="isPrivate">
+                                <label class="form-check-label" for="isPrivate">🔒 Закрытый</label>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-success w-100"
+                                    id="createTableBtn"
+                                    onclick="createTable()">🎮 Создать стол</button>
+                        </div>
+                    </div>
+                    <small class="text-white-50 d-block mt-2">💡 В закрытом столе вы одобряете заявки на присоединение</small>
+                </div>
+            </div>
+        </main>
+        <script>
+function escapeHtml(value) {
+    return String(value ?? "").replace(
+        /[&<>"']/g,
+        (ch) =>
+            ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;",
+            })[ch],
+    );
+}
+
+function showToast(message, type = "info") {
+    const container = document.getElementById("toastContainer");
+    const toast = document.createElement("div");
+    toast.className = `toast toast-${type}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.classList.add("hide");
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+let lobbyBusy = false,
+    tablesBusy = false,
+    cachedTables = [];
+async function createTable() {
+    if (lobbyBusy) return;
+    const maxPlayers = document.getElementById("maxPlayers").value;
+    const isPrivate = document.getElementById("isPrivate").checked;
+    const smallBlind = document.getElementById("smallBlind").value;
+    const bigBlind = document.getElementById("bigBlind").value;
+    if (parseFloat(smallBlind) >= parseFloat(bigBlind)) {
+        showToast("❌ Малый блайнд должен быть меньше большого", "error");
+        return;
+    }
+    lobbyBusy = true;
+    document.getElementById("createTableBtn").disabled = true;
+    const fd = new FormData();
+    fd.append("max_players", maxPlayers);
+    fd.append("is_private", isPrivate);
+    fd.append("small_blind", smallBlind);
+    fd.append("big_blind", bigBlind);
+    try {
+        const res = await fetch("/api/poker/create-table", {
+            method: "POST",
+            body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Ошибка");
+        showToast("✅ Стол создан!", "success");
+        setTimeout(() => {
+            window.location.href = `/games/poker/table/${data.table_id}`;
+        }, 1000);
+    } catch (e) {
+        showToast("❌ " + e.message, "error");
+        lobbyBusy = false;
+        document.getElementById("createTableBtn").disabled = false;
+    }
+}
+
+async function joinTable(tableId, isPrivate) {
+    if (lobbyBusy) return;
+    lobbyBusy = true;
+    document.querySelectorAll("#tablesList button").forEach((b) => (b.disabled = true));
+    try {
+        const res = await fetch(`/api/poker/join-table/${tableId}`, {
+            method: "POST",
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Ошибка");
+        if (data.pending) {
+            lobbyBusy = false;
+            showToast("⏳ Заявка отправлена, ждите одобрения", "info");
+            setTimeout(() => refreshTables(), 2000);
+        } else {
+            showToast("✅ Присоединились к столу!", "success");
+            setTimeout(() => {
+                window.location.href = `/games/poker/table/${tableId}`;
+            }, 1000);
+        }
+    } catch (e) {
+        showToast("❌ " + e.message, "error");
+        lobbyBusy = false;
+        applyTableFilters();
+    }
+}
+
+async function refreshTables() {
+    if (tablesBusy) return;
+    tablesBusy = true;
+    try {
+        const res = await fetch("/api/poker/tables");
+        const data = await res.json();
+        if (!res.ok) throw Error(data.detail || "Ошибка обновления");
+        cachedTables = data.tables || [];
+        applyTableFilters();
+        document.getElementById("tableStatus").textContent =
+            "Обновлено " +
+            new Date().toLocaleTimeString("ru-RU", {
+                hour: "2-digit",
+                minute: "2-digit",
+            });
+    } catch (e) {
+        document.getElementById("tableStatus").textContent =
+            "Не удалось обновить список. Повторим автоматически.";
+    } finally {
+        tablesBusy = false;
+    }
+}
+
+function renderTables(tables) {
+    const container = document.getElementById("tablesList");
+    if (tables.length === 0) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-state-icon">🃏</div><p>Пока нет активных столов</p></div>`;
+        return;
+    }
+    container.innerHTML = tables
+        .map(
+            (t) => `
+        <div class="table-row">
+            <div class="table-info">
+                <div class="table-name">
+                    ${t.is_private ? "🔒" : "🌐"} Стол от ${escapeHtml(t.creator)}
+                    <span class="phase-badge ${t.phase === "waiting" ? "phase-waiting" : t.phase === "showdown" ? "phase-showdown" : "phase-playing"}">
+                        ${t.phase === "waiting" ? "⏳ Ожидание" : t.phase === "showdown" ? "🏁 Вскрытие" : "🎮 Игра"}
+                    </span>
+                </div>
+                <div class="table-meta">
+                    👥 ${t.players}/${t.max_players} · 💰 ${t.small_blind}/${t.big_blind} БК · 🕐 ${escapeHtml(t.created_at)}
+                </div>
+            </div>
+            <div class="table-actions">${TableAdmin.markup(t, "poker")}
+                <button class="btn btn-${t.is_private ? "warning" : "success"} btn-sm" ${lobbyBusy ? "disabled" : ""} onclick="joinTable('${encodeURIComponent(t.id)}', ${!!t.is_private})">
+                    ${t.is_private ? "📝 Подать заявку" : "🚪 Присоединиться"}
+                </button>
+            </div>
+        </div>
+    `,
+        )
+        .join("");
+}
+
+document.addEventListener("st-tables-changed", () => refreshTables());
+
+function applyTableFilters() {
+    const q = document.getElementById("tableSearch").value.toLowerCase().trim(),
+        f = document.getElementById("tableFilter").value;
+    renderTables(
+        cachedTables.filter(
+            (t) =>
+                String(t.creator).toLowerCase().includes(q) &&
+                (f === "all" ||
+                    (f === "open" && t.players < t.max_players) ||
+                    (f === "waiting" && t.phase === "waiting") ||
+                    (f === "public" && !t.is_private) ||
+                    (f === "private" && t.is_private)),
+        ),
+    );
+}
+refreshTables();
+setInterval(() => {
+    if (!document.hidden) refreshTables();
+}, 5000);
+
+</script>
+    </body>
+</html>

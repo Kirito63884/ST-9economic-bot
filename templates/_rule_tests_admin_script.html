@@ -1,0 +1,185 @@
+{% if is_senior_or_super %}
+<script>
+(() => {
+    const T = ST9Tests,
+        $ = (id) => document.getElementById(id),
+        form = $("rtAssignForm"),
+        status = $("rtAssignStatus");
+    const rows = [...document.querySelectorAll("[data-rt-user]")];
+    const selected = new Set();
+    let tests = [],
+        loaded = false,
+        busy = false,
+        generation = 0;
+    const normalized = (value) =>
+        String(value || "")
+            .toLocaleLowerCase("ru")
+            .trim();
+
+    function updateSelection() {
+        let visible = 0;
+        const active = new Set(tests.filter((t) => !t.completed_at).map((t) => t.user_id)),
+            term = normalized($("rtPlayerSearch").value),
+            role = $("rtPlayerRole").value,
+            discord = $("rtPlayerDiscordRole").value,
+            eligibility = $("rtPlayerEligibility").value;
+        for (const row of rows) {
+            const uid = Number(row.dataset.rtUser),
+                hasActive = active.has(uid),
+                input = row.querySelector("input");
+            if (hasActive) selected.delete(uid);
+            const roleMatches =
+                role === "all" ||
+                (role === "admin" ? row.dataset.role !== "player" : row.dataset.role === role);
+            row.hidden = !(
+                normalized(row.dataset.search).includes(term) &&
+                roleMatches &&
+                (discord === "all" || row.dataset.discordRoles.split(" ").includes(discord)) &&
+                (eligibility === "all" || (eligibility === "active" ? hasActive : !hasActive))
+            );
+            input.disabled = busy || !loaded || hasActive;
+            input.checked = selected.has(uid);
+            row.querySelector(".rt-active-note").textContent = hasActive
+                ? "Есть незавершённый тест"
+                : "";
+            if (!row.hidden) visible++;
+        }
+        $("rtNoPlayers").hidden = visible !== 0;
+        $("rtSelectionCount").textContent = `Найдено: ${visible} · Выбрано: ${selected.size}`;
+        $("rtAssignSubmit").disabled = busy || !loaded || selected.size === 0;
+        $("rtSelectVisible").disabled = busy || !loaded;
+        $("rtClearSelected").disabled = busy || !loaded;
+        $("rtCount").disabled = busy;
+    }
+
+    function renderResults() {
+        const term = normalized($("rtResultsSearch").value),
+            uid = $("rtResultsFilter").value,
+            state = $("rtResultsStatus").value,
+            lo = $("rtResultMin").value.trim(),
+            hi = $("rtResultMax").value.trim();
+        const min = lo === "" ? null : Number(lo),
+            max = hi === "" ? null : Number(hi);
+        const invalid =
+            (min !== null && (!Number.isFinite(min) || min < 0 || min > 100)) ||
+            (max !== null && (!Number.isFinite(max) || max < 0 || max > 100)) ||
+            (min !== null && max !== null && min > max);
+        if (invalid) {
+            $("rtAllTests").textContent =
+                "Укажите диапазон от 0 до 100%, нижняя граница не должна превышать верхнюю.";
+            $("rtResultsCount").textContent = "";
+            return;
+        }
+        let filtered = tests.filter(
+            (t) =>
+                (!uid || String(t.user_id) === uid) &&
+                normalized(t.player_name + " " + t.user_id).includes(term) &&
+                (state === "all" || (state === "completed" ? !!t.completed_at : !t.completed_at)) &&
+                ((min === null && max === null) ||
+                    (t.completed_at &&
+                        (min === null || t.percent >= min) &&
+                        (max === null || t.percent <= max))),
+        );
+        const sort = $("rtResultsSort").value;
+        filtered.sort((a, b) => {
+            if (sort === "name")
+                return a.player_name.localeCompare(b.player_name, "ru") || b.id - a.id;
+            if (sort.startsWith("score-")) {
+                if (a.percent === null || b.percent === null)
+                    return (a.percent === null) - (b.percent === null) || b.id - a.id;
+                return (
+                    (sort === "score-asc" ? a.percent - b.percent : b.percent - a.percent) ||
+                    b.id - a.id
+                );
+            }
+            return b.id - a.id;
+        });
+        T.render($("rtAllTests"), filtered, true, true);
+        $("rtResultsCount").textContent =
+            `Показано тестов: ${filtered.length} из ${tests.length} · Игроков: ${new Set(filtered.map((t) => t.user_id)).size}`;
+    }
+    async function load() {
+        const current = ++generation;
+        $("rtRefresh").disabled = true;
+        try {
+            const d = await T.api("/api/admin/rule-tests");
+            if (current !== generation) return;
+            tests = d.tests;
+            loaded = true;
+            updateSelection();
+            renderResults();
+        } catch (e) {
+            if (current === generation) $("rtAllTests").textContent = e.message;
+        } finally {
+            if (current === generation) $("rtRefresh").disabled = false;
+        }
+    }
+    for (const id of [
+        "rtPlayerSearch",
+        "rtPlayerRole",
+        "rtPlayerDiscordRole",
+        "rtPlayerEligibility",
+    ])
+        $(id).addEventListener(id === "rtPlayerSearch" ? "input" : "change", updateSelection);
+    rows.forEach((row) =>
+        row.querySelector("input").addEventListener("change", (e) => {
+            const uid = Number(row.dataset.rtUser);
+            if (e.target.checked) selected.add(uid);
+            else selected.delete(uid);
+            updateSelection();
+        }),
+    );
+    $("rtSelectVisible").addEventListener("click", () => {
+        for (const row of rows)
+            if (!row.hidden && !row.querySelector("input").disabled)
+                selected.add(Number(row.dataset.rtUser));
+        updateSelection();
+    });
+    $("rtClearSelected").addEventListener("click", () => {
+        selected.clear();
+        updateSelection();
+    });
+    for (const id of ["rtResultsSearch", "rtResultMin", "rtResultMax"])
+        $(id).addEventListener("input", renderResults);
+    for (const id of ["rtResultsFilter", "rtResultsStatus", "rtResultsSort"])
+        $(id).addEventListener("change", renderResults);
+    $("rtResultsReset").addEventListener("click", () => {
+        for (const id of ["rtResultsSearch", "rtResultMin", "rtResultMax", "rtResultsFilter"])
+            $(id).value = "";
+        $("rtResultsStatus").value = "all";
+        $("rtResultsSort").value = "newest";
+        renderResults();
+    });
+    $("rtRefresh").addEventListener("click", load);
+    form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        if (busy || !selected.size) return;
+        busy = true;
+        const ids = [...selected];
+        updateSelection();
+        status.textContent = "Назначаем тесты…";
+        try {
+            const d = await T.api("/api/admin/rule-tests/batch", {
+                user_ids: ids,
+                count: Number($("rtCount").value),
+            });
+            for (const t of d.assigned) selected.delete(t.user_id);
+            for (const t of d.skipped) selected.delete(t.user_id);
+            status.textContent =
+                `Назначено: ${d.assigned.length}. Пропущено с активным тестом: ${d.skipped.length}.` +
+                (d.skipped.length ? " " + d.skipped.map((t) => t.name).join(", ") : "");
+            await load();
+        } catch (err) {
+            status.textContent = err.message;
+        } finally {
+            busy = false;
+            updateSelection();
+        }
+    });
+    updateSelection();
+    load();
+    if (activePlayer !== null) T.adminPlayer(activePlayer);
+})();
+
+</script>
+{% endif %}

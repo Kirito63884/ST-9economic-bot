@@ -1,0 +1,255 @@
+{% if is_super %}
+<details class="st-panel mt-3" id="awardDesignPanel">
+    <summary>Редактировать названия и изображения наград</summary>
+    <p class="hint mt-3">Изменения появятся в каталоге, профилях и новых сообщениях бота при выдаче наград.</p>
+    <label class="form-label" for="awardDesignSearch">Найти награду</label><input class="form-control"
+       type="search"
+       id="awardDesignSearch"
+       placeholder="Название медали или знака отличия">
+    <label class="form-label mt-2" for="awardDesignSelect">Медали и знаки отличия</label><select class="form-select"
+        id="awardDesignSelect"
+        size="6"
+        aria-describedby="awardDesignStatus"></select>
+    <form id="awardDesignForm" class="mt-3" hidden>
+        <label class="form-label"
+               for="awardDesignName">Название</label><input class="form-control"
+       id="awardDesignName"
+       maxlength="100"
+       required>
+        <label class="d-block mt-2">
+            <input type="checkbox" id="awardDesignResetName">
+            Вернуть название из Discord
+        </label>
+        <div class="medal-art mt-3"
+             id="awardDesignPreview"
+             aria-label="Предпросмотр изображения"></div>
+        <label class="form-label mt-2" for="awardDesignFile">Новое фото (PNG, JPEG или WebP)</label><input class="form-control"
+       type="file"
+       id="awardDesignFile"
+       accept="image/png,image/jpeg,image/webp">
+        <p class="hint">Крупные фото будут уменьшены автоматически. Прозрачность сохранится.</p>
+        <label class="d-block mt-2">
+            <input type="checkbox" id="awardDesignResetImage">
+            Вернуть исходное изображение
+        </label>
+        <div class="action-row mt-3">
+            <button class="btn btn-primary" type="submit" id="awardDesignSave">Сохранить награду</button><button class="btn" type="button" id="awardDesignReload">Обновить список</button>
+        </div>
+    </form>
+    <p id="awardDesignStatus"
+       role="status"
+       aria-live="polite"
+       class="hint mt-2"></p>
+</details>
+<script>
+(() => {
+    const panel = document.getElementById("awardDesignPanel"),
+        select = document.getElementById("awardDesignSelect"),
+        search = document.getElementById("awardDesignSearch"),
+        form = document.getElementById("awardDesignForm"),
+        name = document.getElementById("awardDesignName"),
+        file = document.getElementById("awardDesignFile"),
+        preview = document.getElementById("awardDesignPreview"),
+        status = document.getElementById("awardDesignStatus"),
+        resetName = document.getElementById("awardDesignResetName"),
+        resetImage = document.getElementById("awardDesignResetImage"),
+        save = document.getElementById("awardDesignSave");
+    let awards = [],
+        selected = null,
+        loaded = false,
+        busy = false,
+        localURL = null;
+
+    function showImage(url, symbol) {
+        if (localURL) {
+            URL.revokeObjectURL(localURL);
+            localURL = null;
+        }
+        preview.replaceChildren();
+        if (url) {
+            const img = document.createElement("img");
+            img.src = url;
+            img.alt = "Изображение награды";
+            preview.append(img);
+        } else {
+            const span = document.createElement("span");
+            span.className = "medal-manual-symbol";
+            span.textContent = symbol || "✦";
+            preview.append(span);
+        }
+    }
+
+    function choose() {
+        selected = awards.find((x) => x.code === select.value) || null;
+        form.hidden = !selected;
+        if (!selected) return;
+        name.value = selected.name;
+        name.disabled = false;
+        resetName.checked = false;
+        resetImage.checked = false;
+        file.value = "";
+        showImage(selected.image, selected.symbol);
+    }
+
+    function filter() {
+        const previous = selected?.code,
+            q = search.value.trim().toLocaleLowerCase("ru");
+        select.replaceChildren();
+        for (const a of awards.filter((a) =>
+            (a.name + " " + (a.category === "medal" ? "медаль" : "знак отличия"))
+                .toLocaleLowerCase("ru")
+                .includes(q),
+        )) {
+            const option = document.createElement("option");
+            option.value = a.code;
+            option.textContent = (a.category === "medal" ? "Медаль: " : "Знак: ") + a.name;
+            select.append(option);
+        }
+        if ([...select.options].some((o) => o.value === previous)) select.value = previous;
+        else select.selectedIndex = select.options.length ? 0 : -1;
+        choose();
+        if (!select.options.length) status.textContent = "Награды не найдены.";
+    }
+    async function load() {
+        if (busy) return;
+        busy = true;
+        status.textContent = "Загружаем награды…";
+        try {
+            const r = await fetch("/api/admin/award-design", {
+                    cache: "no-store",
+                    signal: AbortSignal.timeout(15000),
+                }),
+                d = await r.json();
+            if (!r.ok)
+                throw Error(
+                    typeof d.detail === "string" ? d.detail : "Не удалось загрузить награды.",
+                );
+            awards = d.awards;
+            loaded = true;
+            filter();
+            status.textContent = "Выберите награду для редактирования.";
+        } catch (e) {
+            status.textContent = e.message;
+        } finally {
+            busy = false;
+        }
+    }
+    async function prepareImage(value) {
+        if (
+            !["image/png", "image/jpeg", "image/webp"].includes(value.type) ||
+            value.size > 20 * 1024 * 1024
+        )
+            throw Error("Выберите PNG, JPEG или WebP до 20 МБ.");
+        let bitmap;
+        try {
+            bitmap = await createImageBitmap(value);
+        } catch (e) {
+            throw Error("Не удалось открыть фото. Выберите другой файл.");
+        }
+        try {
+            let scale = Math.min(1, 1400 / Math.max(bitmap.width, bitmap.height)),
+                canvas = document.createElement("canvas");
+            for (let attempt = 0; attempt < 4; attempt++) {
+                canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+                canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+                canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+                const blob = await new Promise((resolve) =>
+                    canvas.toBlob(resolve, "image/webp", 0.88 - attempt * 0.1),
+                );
+                if (blob && blob.size <= 880000) return blob;
+                scale *= 0.7;
+            }
+            throw Error("Не удалось уменьшить фото. Выберите другое изображение.");
+        } finally {
+            bitmap.close();
+        }
+    }
+    panel.addEventListener("toggle", () => {
+        if (panel.open && !loaded) load();
+    });
+    select.addEventListener("change", choose);
+    search.addEventListener("input", filter);
+    document.getElementById("awardDesignReload").addEventListener("click", load);
+    resetName.addEventListener("change", () => {
+        name.disabled = resetName.checked;
+    });
+    resetImage.addEventListener("change", () => {
+        if (resetImage.checked) {
+            file.value = "";
+            showImage(null, "Исходное изображение будет восстановлено");
+        } else if (selected) showImage(selected.image, selected.symbol);
+    });
+    file.addEventListener("change", () => {
+        if (!file.files[0]) {
+            if (selected) showImage(selected.image, selected.symbol);
+            return;
+        }
+        resetImage.checked = false;
+        showImage(null, null);
+        localURL = URL.createObjectURL(file.files[0]);
+        const img = document.createElement("img");
+        img.src = localURL;
+        img.alt = "Новое изображение награды";
+        preview.replaceChildren(img);
+    });
+    form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        if (busy || !selected) return;
+        busy = true;
+        save.disabled = true;
+        select.disabled = true;
+        search.disabled = true;
+        status.textContent = "Сохраняем награду…";
+        const chosen = selected,
+            chosenName = name.value.trim(),
+            resetTitle = resetName.checked,
+            resetPhoto = resetImage.checked,
+            chosenFile = file.files[0];
+        try {
+            const data = new FormData();
+            data.append(
+                "settings",
+                JSON.stringify({
+                    name: resetTitle
+                        ? null
+                        : chosenName === chosen.name
+                          ? chosen.custom_name
+                          : chosenName,
+                    reset_image: resetPhoto,
+                    revision: chosen.revision,
+                }),
+            );
+            if (chosenFile) data.append("image", await prepareImage(chosenFile), "award.webp");
+            const r = await fetch("/api/admin/award-design/" + encodeURIComponent(chosen.code), {
+                    method: "POST",
+                    headers: {
+                        "X-ST9-Action": "award-design",
+                    },
+                    body: data,
+                    signal: AbortSignal.timeout(30000),
+                }),
+                d = await r.json();
+            if (!r.ok)
+                throw Error(
+                    typeof d.detail === "string" ? d.detail : "Не удалось сохранить награду.",
+                );
+            awards = d.awards;
+            filter();
+            status.textContent =
+                "Сохранено. Бот использует новое название и фото при следующей выдаче.";
+        } catch (e) {
+            status.textContent = e.message;
+        } finally {
+            busy = false;
+            save.disabled = false;
+            select.disabled = false;
+            search.disabled = false;
+        }
+    });
+    window.addEventListener("pagehide", () => {
+        if (localURL) URL.revokeObjectURL(localURL);
+    });
+})();
+
+</script>
+{% endif %}

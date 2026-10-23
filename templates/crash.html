@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <title>Crash — Strike Team 9</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+              rel="stylesheet">
+        <style>
+            body {
+                background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+                min-height: 100vh;
+                color: #fff;
+                padding-bottom: 30px;
+            }
+
+            .navbar {
+                background: rgba(0, 0, 0, 0.85) !important;
+                backdrop-filter: blur(10px);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            }
+
+            .game-container {
+                max-width: 900px;
+                margin: 20px auto;
+                padding: 20px;
+            }
+
+            .crash-card {
+                background: rgba(42, 42, 74, 0.85);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 16px;
+                padding: 30px;
+                margin-bottom: 20px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            }
+
+            .multiplier-display {
+                font-size: 5rem;
+                font-weight: 700;
+                text-align: center;
+                padding: 40px;
+                border-radius: 12px;
+                background: rgba(0, 0, 0, 0.4);
+                margin-bottom: 20px;
+                transition: all 0.1s;
+                font-family: 'Courier New', monospace;
+            }
+
+            .multiplier-running {
+                background: linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(46, 125, 50, 0.2));
+                color: #4caf50;
+                animation: pulse 1s infinite;
+            }
+
+            .multiplier-crashed {
+                background: linear-gradient(135deg, rgba(244, 67, 54, 0.3), rgba(198, 40, 40, 0.3));
+                color: #f44336;
+            }
+
+            .multiplier-won {
+                background: linear-gradient(135deg, rgba(255, 215, 0, 0.3), rgba(255, 152, 0, 0.3));
+                color: #ffd700;
+            }
+
+            .multiplier-idle {
+                color: rgba(255, 255, 255, 0.5);
+            }
+
+            @keyframes pulse {
+
+                0%,
+                100% {
+                    transform: scale(1);
+                }
+
+                50% {
+                    transform: scale(1.02);
+                }
+            }
+
+            .bet-input {
+                background: rgba(0, 0, 0, 0.4) !important;
+                border: 1px solid rgba(255, 255, 255, 0.2) !important;
+                color: #fff !important;
+                border-radius: 10px;
+                padding: 12px;
+                font-size: 1.1rem;
+                font-weight: 600;
+            }
+
+            .bet-input:focus {
+                outline: none;
+                border-color: #4caf50 !important;
+                box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
+            }
+
+            .quick-bet {
+                background: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                color: #fff;
+                padding: 8px 14px;
+                border-radius: 8px;
+                cursor: pointer;
+                transition: all 0.2s;
+                font-weight: 600;
+                font-size: 0.9rem;
+            }
+
+            .quick-bet:hover {
+                background: rgba(255, 255, 255, 0.2);
+                transform: translateY(-2px);
+            }
+
+            .btn-start {
+                background: linear-gradient(45deg, #4caf50, #2e7d32);
+                color: #fff;
+                border: none;
+                padding: 16px 40px;
+                border-radius: 12px;
+                font-size: 1.3rem;
+                font-weight: 700;
+                cursor: pointer;
+                transition: all 0.2s;
+                width: 100%;
+            }
+
+            .btn-start:hover:not(:disabled) {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 25px rgba(76, 175, 80, 0.4);
+            }
+
+            .btn-start:disabled {
+                opacity: 0.5;
+                cursor: not-allowed;
+            }
+
+            .btn-cashout {
+                background: linear-gradient(45deg, #ffd700, #ff9800);
+                color: #000;
+                border: none;
+                padding: 16px 40px;
+                border-radius: 12px;
+                font-size: 1.3rem;
+                font-weight: 700;
+                cursor: pointer;
+                transition: all 0.2s;
+                width: 100%;
+                animation: cashoutPulse 1s infinite;
+            }
+
+            .btn-cashout:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 25px rgba(255, 215, 0, 0.4);
+            }
+
+            @keyframes cashoutPulse {
+
+                0%,
+                100% {
+                    box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7);
+                }
+
+                50% {
+                    box-shadow: 0 0 0 15px rgba(255, 215, 0, 0);
+                }
+            }
+
+            .stats-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 15px;
+                margin-top: 20px;
+            }
+
+            .stat-box {
+                background: rgba(0, 0, 0, 0.3);
+                border-radius: 10px;
+                padding: 15px;
+                text-align: center;
+                border: 1px solid rgba(255, 255, 255, 0.05);
+            }
+
+            .stat-box-label {
+                font-size: 0.85rem;
+                color: rgba(255, 255, 255, 0.6);
+                margin-bottom: 5px;
+            }
+
+            .stat-box-value {
+                font-size: 1.3rem;
+                font-weight: 700;
+            }
+
+            .history-list {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-top: 15px;
+            }
+
+            .history-item {
+                padding: 4px 12px;
+                border-radius: 6px;
+                font-size: 0.85rem;
+                font-weight: 700;
+            }
+
+            .history-low {
+                background: rgba(244, 67, 54, 0.2);
+                color: #e57373;
+            }
+
+            .history-mid {
+                background: rgba(255, 152, 0, 0.2);
+                color: #ffb74d;
+            }
+
+            .history-high {
+                background: rgba(76, 175, 80, 0.2);
+                color: #81c784;
+            }
+
+            .form-label {
+                color: #fff !important;
+                font-weight: 600;
+                margin-bottom: 8px;
+            }
+
+            .message-box {
+                padding: 15px;
+                border-radius: 10px;
+                margin-top: 15px;
+                font-weight: 600;
+                text-align: center;
+            }
+
+            .message-win {
+                background: rgba(76, 175, 80, 0.2);
+                color: #81c784;
+                border: 1px solid rgba(76, 175, 80, 0.3);
+            }
+
+            .message-loss {
+                background: rgba(244, 67, 54, 0.2);
+                color: #e57373;
+                border: 1px solid rgba(244, 67, 54, 0.3);
+            }
+
+            .message-info {
+                background: rgba(33, 150, 243, 0.2);
+                color: #64b5f6;
+                border: 1px solid rgba(33, 150, 243, 0.3);
+            }
+        </style>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        {% include "_site_ui.html" %}
+    </head>
+    <body class="st-crash-page">
+        {% set nav_balance_id = "balanceDisplay" %}{% include "_site_nav.html" %}
+        <main class="game-container" id="st-content">
+            <div class="st-page-heading">
+                <div>
+                    <span class="st-eyebrow">Strike Team 9</span>
+                    <h1>Crash</h1>
+                    <p>Множитель растёт — успей забрать до падения.</p>
+                </div>
+                <div class="st-actions"></div>
+            </div>
+            <div class="st-crash-grid">
+                <section class="st-crash-board">
+                    <div class="crash-card">
+                        <div class="st-table-heading"><span>Текущая игра</span><span>Комиссия 5%</span></div>
+                        <div class="multiplier-display multiplier-idle" id="multiplierDisplay">0.00x</div>
+                        <div id="messageBox" aria-live="polite"></div>
+                        <p class="st-crash-caption">Последние результаты в этой сессии</p>
+                        <div id="historyList" class="history-list"></div>
+                    </div>
+                    <details class="st-rules">
+                        <summary>Как работает Crash</summary>
+                        <p>Сделай ставку и забери выплату до падения. Из выплаты удерживается комиссия 5%. Автоматический вывод: укажи множитель от 1,01. Значение 0 оставляет ручной вывод. Настройки применяются при старте игры.</p>
+                    </details>
+                </section>
+                <aside class="st-crash-side">
+                    <div class="crash-card">
+                        <h2>Настройки ставки</h2>
+                        <div class="row g-3 mt-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="betAmount">Ставка, БК</label>
+                                <input type="number"
+                                       id="betAmount"
+                                       class="bet-input w-100"
+                                       value="50"
+                                       min="1"
+                                       step="1">
+                                <div class="d-flex gap-2 mt-2 flex-wrap">
+                                    <button class="quick-bet" onclick="setBet(10)">10</button>
+                                    <button class="quick-bet" onclick="setBet(50)">50</button>
+                                    <button class="quick-bet" onclick="setBet(100)">100</button>
+                                    <button class="quick-bet" onclick="setBet(500)">500</button>
+                                    <button class="quick-bet" onclick="multBet(2)">x2</button>
+                                    <button class="quick-bet" onclick="multBet(0.5)">½</button>
+                                    <button class="quick-bet" onclick="maxBet()">MAX</button>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="autoCashout">Автоматически забрать на ×</label>
+                                <input type="number"
+                                       id="autoCashout"
+                                       class="bet-input w-100"
+                                       value="2.00"
+                                       min="0"
+                                       step="0.01">
+                                <small class="text-white-50 d-block mt-2">💡 Оставьте 0 для ручной игры</small>
+                            </div>
+                        </div>
+                        <div class="mt-4">
+                            <button id="startBtn" class="btn-start" onclick="startGame()">🚀 СТАРТ</button>
+                            <button id="cashoutBtn"
+                                    class="btn-cashout"
+                                    style="display:none"
+                                    onclick="cashout()">💰 ЗАБРАТЬ</button>
+                        </div>
+                    </div>
+                </aside>
+            </div>
+            <div class="crash-card st-crash-stats">
+                <h4 class="mb-3">В этой сессии</h4>
+                <div class="stats-grid">
+                    <div class="stat-box">
+                        <div class="stat-box-label">Результат, БК</div>
+                        <div class="stat-box-value text-success" id="totalWon">0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-box-label">Игр сыграно</div>
+                        <div class="stat-box-value text-info" id="gamesPlayed">0</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-box-label">Лучший множитель</div>
+                        <div class="stat-box-value text-warning" id="bestMult">0.00x</div>
+                    </div>
+                    <div class="stat-box">
+                        <div class="stat-box-label">Комиссия</div>
+                        <div class="stat-box-value text-white-50">5%</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <script>
+let startBusy = false,
+    cashoutBusy = false,
+    pollBusy = false,
+    initialBusy = true;
+let nextStatePollAt = 0;
+let gameState = "idle"; // idle, running, crashed, won
+let currentBet = 0;
+let pollInterval = null;
+let history = [];
+let stats = {
+    totalWon: 0,
+    gamesPlayed: 0,
+    bestMult: 0,
+};
+
+function setBet(amount) {
+    document.getElementById("betAmount").value = amount;
+}
+
+function multBet(factor) {
+    const input = document.getElementById("betAmount");
+    const current = parseFloat(input.value) || 0;
+    input.value = Math.max(1, Math.round(current * factor));
+}
+
+function maxBet() {
+    const balance = parseFloat(document.getElementById("balanceDisplay").textContent);
+    document.getElementById("betAmount").value = Math.floor(balance);
+}
+
+async function startGame() {
+    if (startBusy || initialBusy || gameState !== "idle") return;
+    const bet = parseFloat(document.getElementById("betAmount").value);
+    const autoCashout = parseFloat(document.getElementById("autoCashout").value) || 0;
+
+    if (!bet || bet < 1) {
+        showMessage("Минимальная ставка: 1", "loss");
+        return;
+    }
+
+    startBusy = true;
+    document.getElementById("startBtn").disabled = true;
+    const fd = new FormData();
+    fd.append("bet", bet);
+    fd.append("target", autoCashout);
+
+    try {
+        const res = await fetch("/api/crash/start", {
+            method: "POST",
+            body: fd,
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+            showMessage("❌ " + (data.detail || "Ошибка"), "loss");
+            return;
+        }
+
+        currentBet = bet;
+        gameState = "running";
+        updateBalance(data.balance);
+
+        document.getElementById("startBtn").style.display = "none";
+        document.getElementById("cashoutBtn").style.display = "block";
+        document.getElementById("cashoutBtn").disabled = false;
+        document.getElementById("multiplierDisplay").className =
+            "multiplier-display multiplier-running";
+        document.getElementById("messageBox").innerHTML = "";
+
+        pollInterval = setInterval(pollState, 200);
+    } catch (e) {
+        showMessage("Ошибка сети. Проверьте состояние игры перед повторной ставкой.", "loss");
+    } finally {
+        startBusy = false;
+        document.getElementById("startBtn").disabled = false;
+    }
+}
+
+async function pollState() {
+    if (pollBusy || gameState !== "running" || Date.now() < nextStatePollAt) return;
+    pollBusy = true;
+    try {
+        const res = await fetch("/api/crash/state");
+        if (!res.ok) {
+            const retry = Number(res.headers.get("Retry-After"));
+            nextStatePollAt =
+                Date.now() +
+                Math.min(10000, Math.max(1000, Number.isFinite(retry) ? retry * 1000 : 1000));
+            return;
+        }
+        nextStatePollAt = 0;
+        const data = await res.json();
+
+        if (!data.active) {
+            stopPolling();
+            resetUI();
+            return;
+        }
+
+        if (gameState !== "running") return;
+        const mult = data.current_multiplier;
+        if (typeof data.balance === "number") updateBalance(data.balance);
+        document.getElementById("multiplierDisplay").textContent = mult.toFixed(2) + "x";
+
+        if (data.status === "crashed") {
+            stopPolling();
+            gameState = "crashed";
+            document.getElementById("multiplierDisplay").className =
+                "multiplier-display multiplier-crashed";
+            showMessage(
+                `💥 Краш на ${data.crash_point}x! Вы проиграли ${currentBet.toFixed(2)} БК`,
+                "loss",
+            );
+            stats.gamesPlayed++;
+            stats.totalWon -= currentBet;
+            addHistory(data.crash_point);
+            updateStats();
+            setTimeout(resetUI, 2000);
+        } else if (data.status === "cashed_out") {
+            stopPolling();
+            gameState = "won";
+            document.getElementById("multiplierDisplay").className =
+                "multiplier-display multiplier-won";
+            const netWin = data.win_amount - currentBet;
+            showMessage(
+                `Забрано на ${mult.toFixed(2)}x. Получено ${data.win_amount.toFixed(2)} БК. Результат: ${netWin >= 0 ? "+" : ""}${netWin.toFixed(2)} БК`,
+                netWin >= 0 ? "win" : "info",
+            );
+            stats.totalWon += netWin;
+            stats.gamesPlayed++;
+            if (mult > stats.bestMult) stats.bestMult = mult;
+            addHistory(mult);
+            updateStats();
+            await loadBalance();
+            setTimeout(resetUI, 2500);
+        }
+    } catch (e) {
+        console.error("Poll error:", e);
+    } finally {
+        pollBusy = false;
+    }
+}
+
+async function cashout() {
+    if (gameState !== "running" || cashoutBusy) return;
+    cashoutBusy = true;
+    document.getElementById("cashoutBtn").disabled = true;
+
+    try {
+        const res = await fetch("/api/crash/cashout", {
+            method: "POST",
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+            showMessage("❌ " + (data.detail || "Ошибка"), "loss");
+            return;
+        }
+
+        // Состояние обновится в следующем poll
+    } catch (e) {
+        showMessage("Ошибка сети. Состояние игры обновляется автоматически.", "loss");
+    } finally {
+        cashoutBusy = false;
+        document.getElementById("cashoutBtn").disabled = false;
+    }
+}
+
+function stopPolling() {
+    document.getElementById("cashoutBtn").disabled = true;
+    if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+    }
+}
+
+function resetUI() {
+    gameState = "idle";
+    currentBet = 0;
+    document.getElementById("startBtn").style.display = "block";
+    document.getElementById("cashoutBtn").style.display = "none";
+    document.getElementById("multiplierDisplay").className = "multiplier-display multiplier-idle";
+    document.getElementById("multiplierDisplay").textContent = "0.00x";
+}
+
+function showMessage(msg, type) {
+    const box = document.getElementById("messageBox");
+    const cls = type === "win" ? "message-win" : type === "loss" ? "message-loss" : "message-info";
+    box.innerHTML = `<div class="message-box ${cls}">${STUI.escape(msg)}</div>`;
+}
+
+function addHistory(mult) {
+    history.unshift(mult);
+    if (history.length > 20) history = history.slice(0, 20);
+    renderHistory();
+}
+
+function renderHistory() {
+    const list = document.getElementById("historyList");
+    list.innerHTML = history
+        .map((m) => {
+            let cls = "history-low";
+            if (m >= 2) cls = "history-mid";
+            if (m >= 5) cls = "history-high";
+            return `<span class="history-item ${cls}">${m.toFixed(2)}x</span>`;
+        })
+        .join("");
+}
+
+function updateStats() {
+    document.getElementById("totalWon").textContent = stats.totalWon.toFixed(2);
+    document.getElementById("gamesPlayed").textContent = stats.gamesPlayed;
+    document.getElementById("bestMult").textContent = stats.bestMult.toFixed(2) + "x";
+}
+
+function updateBalance(newBalance) {
+    STUI.setBalance(newBalance);
+}
+
+async function loadBalance() {
+    try {
+        const res = await fetch("/api/crash/state");
+        const data = await res.json();
+        // Баланс не возвращается, но ок
+    } catch (e) {}
+}
+
+async function checkInitialState() {
+    document.getElementById("startBtn").disabled = true;
+    try {
+        const res = await fetch("/api/crash/state");
+        if (!res.ok) throw new Error("Состояние игры временно недоступно");
+        const data = await res.json();
+
+        if (typeof data.balance === "number") updateBalance(data.balance);
+        if (data.active && data.status === "running") {
+            currentBet = data.bet;
+            gameState = "running";
+            document.getElementById("startBtn").style.display = "none";
+            document.getElementById("cashoutBtn").style.display = "block";
+            document.getElementById("cashoutBtn").disabled = false;
+            document.getElementById("multiplierDisplay").className =
+                "multiplier-display multiplier-running";
+            pollInterval = setInterval(pollState, 200);
+        }
+    } catch (e) {
+        showMessage("Не удалось проверить игру. Обновите страницу перед ставкой.", "loss");
+        return;
+    } finally {
+        document.getElementById("startBtn").disabled = initialBusy;
+    }
+    initialBusy = false;
+    document.getElementById("startBtn").disabled = false;
+}
+
+checkInitialState();
+
+</script>
+    </body>
+</html>

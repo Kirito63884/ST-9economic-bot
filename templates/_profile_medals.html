@@ -1,0 +1,30 @@
+<section class="profile-card">
+    <div class="st-section-heading">
+        <h2>Награды · {{ medals|length }}</h2>
+        <a class="btn btn-outline-light btn-sm"
+           href="/medals/progress/{{ user.id }}">Мой прогресс →</a>
+    </div>
+    {% if medals %}
+    <div class="medal-awards">
+        {% for a in medals %}<a class="medal-award"
+   href="/medals/progress/{{ user.id }}"
+   title="{{ a.reason }}">{% if a.image %}<img src="{{ a.image }}" alt="{{ a.name }}" loading="lazy">{% else %}
+        <div class="medal-manual-symbol">{{ a.symbol }}</div>
+        {% endif %}<span>{{ a.name }}
+        <br>
+        <small>{{ "На сайте с " if a.manual else "" }}{{ a.date }}</small></span></a>{% endfor %}
+</div>
+{% for a in medals %}
+<details class="medal-award-details">
+    <summary>{{ a.name }} · {{ a.date }}</summary>
+    <p>{{ a.reason }}</p>
+    {% if a.payment and a.payment.paid %}
+    <p class="medal-reward">Начислено {{ a.payment.amount }} бишопкоинов.</p>
+    {% elif a.payment and a.payment.error %}
+    <p class="medal-panel-note">Начисление ожидает. Подробности — в прогрессе наград.</p>
+    {% endif %}
+</details>
+{% endfor %}{% else %}
+<p class="medal-panel-note">Здесь появятся награды за ваши достижения. Посмотрите условия и текущие показатели в разделе прогресса.</p>
+{% endif %}
+</section>

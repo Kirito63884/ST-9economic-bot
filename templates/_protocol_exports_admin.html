@@ -1,0 +1,186 @@
+<details class="st-panel mt-3" id="protocolDumpPanel">
+    <summary>Protocol · все сохранённые выгрузки SteamID</summary>
+    <p class="medal-panel-note">Текущая неделя, завершённые недели и общие счётчики. TXT сохраняется целиком. Если значение игрока не опубликовано на странице, здесь показано «нет числовых данных». Текущие топы ещё меняются.</p>
+    <div class="action-row mt-3">
+        <label for="protocolDumpSelect">Категория и период</label><select id="protocolDumpSelect"
+        class="form-control"
+        aria-label="Категория и период выгрузки"></select><button type="button" class="btn btn-sm" id="protocolDumpRefresh">Обновить список</button>
+    </div>
+    <div class="action-row mt-3">
+        <input type="search"
+               id="protocolDumpSearch"
+               class="form-control"
+               placeholder="Ник или SteamID"
+               aria-label="Поиск в выгрузке"><a id="protocolDumpDownload" class="btn btn-sm" hidden>Скачать сохранённый TXT</a>
+    </div>
+    <p id="protocolDumpStatus" class="medal-source" role="status"></p>
+    <div id="protocolDumpRows" class="archive-list"></div>
+    <div class="action-row mt-3">
+        <button type="button" class="btn btn-sm" id="protocolDumpPrev">Назад</button><span id="protocolDumpPage" class="small muted"></span><button type="button" class="btn btn-sm" id="protocolDumpNext">Далее</button>
+    </div>
+</details>
+<script>
+(() => {
+    const panel = document.getElementById("protocolDumpPanel"),
+        select = document.getElementById("protocolDumpSelect"),
+        search = document.getElementById("protocolDumpSearch"),
+        status = document.getElementById("protocolDumpStatus"),
+        rows = document.getElementById("protocolDumpRows"),
+        download = document.getElementById("protocolDumpDownload"),
+        prev = document.getElementById("protocolDumpPrev"),
+        next = document.getElementById("protocolDumpNext"),
+        page = document.getElementById("protocolDumpPage");
+    const dates = new Intl.DateTimeFormat("ru-RU", {
+        timeZone: "Europe/Moscow",
+        dateStyle: "short",
+        timeStyle: "short",
+    });
+    let offset = 0,
+        total = 0,
+        loaded = false,
+        generation = 0,
+        searchTimer;
+    const text = (tag, value, cls) => {
+        const n = document.createElement(tag);
+        n.textContent = value;
+        if (cls) n.className = cls;
+        return n;
+    };
+    async function loadRows() {
+        const key = select.value,
+            current = ++generation;
+        rows.replaceChildren();
+        download.hidden = true;
+        if (!key) return;
+        status.textContent = "Загружаем сохранённые данные…";
+        try {
+            const r = await fetch(
+                    "/api/admin/protocol-exports/" +
+                        encodeURIComponent(key) +
+                        "?" +
+                        new URLSearchParams({
+                            q: search.value,
+                            offset: String(offset),
+                            limit: "50",
+                        }),
+                    {
+                        cache: "no-store",
+                        signal: AbortSignal.timeout(15000),
+                    },
+                ),
+                d = await r.json();
+            if (current !== generation) return;
+            if (!r.ok) throw Error(d.detail || "Не удалось загрузить выгрузку.");
+            total = d.total;
+            status.textContent =
+                (d.week
+                    ? (d.final ? "Завершённая неделя " : "Промежуточный топ недели ") + d.week
+                    : "За всё время") +
+                " · В TXT: " +
+                d.count +
+                " · Числовых строк на странице: " +
+                d.numeric_rows +
+                " · Обновлено " +
+                dates.format(new Date(d.checked_at)) +
+                " МСК" +
+                (d.coverage ? " · " + d.coverage : "") +
+                (d.full_file_saved
+                    ? ""
+                    : " · Полный TXT сохранится после следующего часового обновления.");
+            for (const item of d.rows) {
+                const box = text("div", "", "medal-player-row"),
+                    info = text("div", ""),
+                    label = text(item.user_id ? "a" : "strong", item.name);
+                if (item.user_id) label.href = "/medals/progress/" + item.user_id;
+                info.append(label, text("div", item.steam_id, "small muted"));
+                const value =
+                    item.value === null
+                        ? "Нет числовых данных"
+                        : String(item.value) + (d.unit === "hours" ? " ч" : "");
+                box.append(
+                    info,
+                    text(
+                        "div",
+                        (item.rank
+                            ? "Место " + item.rank + " · "
+                            : "Позиция в TXT " + item.position + " · ") + value,
+                        "small",
+                    ),
+                );
+                rows.append(box);
+            }
+            if (!d.rows.length)
+                rows.append(text("p", "Подходящих записей нет.", "medal-panel-note"));
+            download.hidden = !d.full_file_saved || !d.file_verified;
+            download.href = "/api/admin/protocol-exports/" + encodeURIComponent(key) + "/download";
+            page.textContent = total
+                ? offset + 1 + "–" + Math.min(offset + 50, total) + " из " + total
+                : "0 записей";
+            prev.disabled = offset === 0;
+            next.disabled = offset + 50 >= total;
+        } catch (e) {
+            if (current === generation) status.textContent = e.message || "Ошибка загрузки.";
+        }
+    }
+    async function loadIndex() {
+        try {
+            const r = await fetch("/api/admin/protocol-exports", {
+                    cache: "no-store",
+                    signal: AbortSignal.timeout(15000),
+                }),
+                d = await r.json();
+            if (!r.ok) throw Error(d.detail || "Нет доступа к выгрузкам.");
+            const old = select.value;
+            select.replaceChildren();
+            for (const item of d.items) {
+                const option = text(
+                    "option",
+                    (item.week || "За всё время") +
+                        " · " +
+                        item.title +
+                        " · " +
+                        item.count +
+                        " игроков",
+                );
+                option.value = item.key;
+                select.append(option);
+            }
+            if (d.items.some((i) => i.key === old)) select.value = old;
+            offset = 0;
+            loaded = true;
+            if (d.items.length) await loadRows();
+            else
+                status.textContent =
+                    "Сохранённых выгрузок пока нет. Их загрузит фоновый сборщик Protocol.";
+        } catch (e) {
+            status.textContent = e.message;
+        }
+    }
+    panel.addEventListener("toggle", () => {
+        if (panel.open && !loaded) loadIndex();
+    });
+    select.addEventListener("change", () => {
+        offset = 0;
+        loadRows();
+    });
+    search.addEventListener("input", () => {
+        clearTimeout(searchTimer);
+        searchTimer = setTimeout(() => {
+            offset = 0;
+            loadRows();
+        }, 250);
+    });
+    prev.addEventListener("click", () => {
+        offset = Math.max(0, offset - 50);
+        loadRows();
+    });
+    next.addEventListener("click", () => {
+        if (offset + 50 < total) {
+            offset += 50;
+            loadRows();
+        }
+    });
+    document.getElementById("protocolDumpRefresh").addEventListener("click", loadIndex);
+})();
+
+</script>

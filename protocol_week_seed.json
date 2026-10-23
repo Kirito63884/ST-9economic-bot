@@ -1,0 +1,327 @@
+{
+  "week": "2026-09-28",
+  "period": "27.09 — 04.10",
+  "source": "https://protocol-squad.ru/week?w=prev",
+  "final": true,
+  "basis": "Опубликованный итог Protocol; закрытие в воскресенье в 23:00 МСК",
+  "categories": {
+    "cmd": {
+      "name": "Победы CMD",
+      "rows": [
+        {
+          "steam_id": "76561199403152311",
+          "name": "country",
+          "rank": 1,
+          "value": 26,
+          "matches": 33
+        },
+        {
+          "steam_id": "76561198400240004",
+          "name": "✤RFA✤ Малый",
+          "rank": 2,
+          "value": 11,
+          "matches": 15
+        },
+        {
+          "steam_id": "76561199335486053",
+          "name": "Helbrayn",
+          "rank": 3,
+          "value": 6,
+          "matches": 11
+        },
+        {
+          "steam_id": "76561198101456666",
+          "name": "=БИS=  Gulman",
+          "rank": 4,
+          "value": 6,
+          "matches": 7
+        },
+        {
+          "steam_id": "76561198114914845",
+          "name": "RDG takoe",
+          "rank": 5,
+          "value": 6,
+          "matches": 7
+        },
+        {
+          "steam_id": "76561199058054607",
+          "name": "Virus",
+          "rank": 6,
+          "value": 5,
+          "matches": 10
+        },
+        {
+          "steam_id": "76561199829157075",
+          "name": "[OSN]  XuL1GuN",
+          "rank": 7,
+          "value": 5,
+          "matches": 7
+        },
+        {
+          "steam_id": "76561198298906500",
+          "name": "Фюpep",
+          "rank": 8,
+          "value": 5,
+          "matches": 7
+        },
+        {
+          "steam_id": "76561199891497852",
+          "name": "[CMD]  Khabarovsk Vortex Blood",
+          "rank": 9,
+          "value": 5,
+          "matches": 7
+        },
+        {
+          "steam_id": "76561199234591480",
+          "name": "『GM』  Хан",
+          "rank": 10,
+          "value": 5,
+          "matches": 6
+        }
+      ],
+      "published_count": 10
+    },
+    "sl": {
+      "name": "Победы сквадным",
+      "rows": [
+        {
+          "steam_id": "76561199086856905",
+          "name": "[OSN]  Romuel",
+          "rank": 1,
+          "value": 20,
+          "matches": 25
+        },
+        {
+          "steam_id": "76561199437956210",
+          "name": "[МЯСО]  Братик",
+          "rank": 2,
+          "value": 13,
+          "matches": 18
+        },
+        {
+          "steam_id": "76561198116283526",
+          "name": "➋【ST-9】 дед",
+          "rank": 3,
+          "value": 13,
+          "matches": 16
+        },
+        {
+          "steam_id": "76561199435735620",
+          "name": "[OSN]  Сквозной",
+          "rank": 4,
+          "value": 11,
+          "matches": 17
+        },
+        {
+          "steam_id": "76561199044520917",
+          "name": "『GM』 Givi",
+          "rank": 5,
+          "value": 11,
+          "matches": 12
+        },
+        {
+          "steam_id": "76561198038531745",
+          "name": "=БИS=  Comrade",
+          "rank": 6,
+          "value": 10,
+          "matches": 11
+        },
+        {
+          "steam_id": "76561198917686399",
+          "name": "[RFA]  4ept",
+          "rank": 7,
+          "value": 10,
+          "matches": 11
+        },
+        {
+          "steam_id": "76561199708393086",
+          "name": "[ZAD] Argon",
+          "rank": 8,
+          "value": 9,
+          "matches": 18
+        },
+        {
+          "steam_id": "76561198400240004",
+          "name": "✤RFA✤  Малый",
+          "rank": 9,
+          "value": 9,
+          "matches": 13
+        },
+        {
+          "steam_id": "76561198956711386",
+          "name": "Яйцо со шрамом",
+          "rank": 10,
+          "value": 9,
+          "matches": 11
+        }
+      ],
+      "published_count": 10
+    },
+    "revive": {
+      "name": "Поднятия",
+      "rows": [
+        {
+          "steam_id": "76561198080913667",
+          "name": "[RDG]  Holy Father",
+          "rank": 1,
+          "value": 194,
+          "matches": null
+        },
+        {
+          "steam_id": "76561199241152112",
+          "name": "[OSN]  Des west",
+          "rank": 2,
+          "value": 162,
+          "matches": null
+        },
+        {
+          "steam_id": "76561199580130504",
+          "name": "Альфредо",
+          "rank": 3,
+          "value": 158,
+          "matches": null
+        },
+        {
+          "steam_id": "76561198312392392",
+          "name": "gin",
+          "rank": 4,
+          "value": 132,
+          "matches": null
+        },
+        {
+          "steam_id": "76561198988945003",
+          "name": "[RFA] sadwayny",
+          "rank": 5,
+          "value": 121,
+          "matches": null
+        }
+      ],
+      "published_count": 5
+    },
+    "vehicles": {
+      "name": "Уничтоженная техника",
+      "rows": [
+        {
+          "steam_id": "76561199175201181",
+          "name": "『GM-T』 LUCIFER",
+          "rank": 1,
+          "value": 81,
+          "matches": null
+        },
+        {
+          "steam_id": "76561199041357999",
+          "name": "[МЯСО] Jimmy_kek",
+          "rank": 2,
+          "value": 67,
+          "matches": null
+        },
+        {
+          "steam_id": "76561199243306285",
+          "name": "➌【ST-9】 Ilyshenka",
+          "rank": 3,
+          "value": 59,
+          "matches": null
+        },
+        {
+          "steam_id": "76561198100941008",
+          "name": "=БИС=  kokoxoko",
+          "rank": 4,
+          "value": 59,
+          "matches": null
+        },
+        {
+          "steam_id": "76561198191412191",
+          "name": "➌【ST-9】 Khan Ye",
+          "rank": 5,
+          "value": 59,
+          "matches": null
+        }
+      ],
+      "published_count": 5
+    },
+    "rifle_kills": {
+      "name": "Убийства стрелками",
+      "rows": [
+        {
+          "steam_id": "76561198249669146",
+          "name": "『GM』  Pororo",
+          "rank": 1,
+          "value": 1137,
+          "matches": null
+        },
+        {
+          "steam_id": "76561199041357999",
+          "name": "[МЯСО] Jimmy_kek",
+          "rank": 2,
+          "value": 848,
+          "matches": null
+        },
+        {
+          "steam_id": "76561199796538584",
+          "name": "[OSN]  ИгорьПрокуратура",
+          "rank": 3,
+          "value": 836,
+          "matches": null
+        },
+        {
+          "steam_id": "76561198114914845",
+          "name": "RDG takoe",
+          "rank": 4,
+          "value": 820,
+          "matches": null
+        },
+        {
+          "steam_id": "76561198038531745",
+          "name": "=БИS=  Comrade",
+          "rank": 5,
+          "value": 601,
+          "matches": null
+        }
+      ],
+      "published_count": 5
+    },
+    "crew_kills": {
+      "name": "Убийства с техники",
+      "rows": [
+        {
+          "steam_id": "76561199175201181",
+          "name": "『GM-T』 LUCIFER",
+          "rank": 1,
+          "value": 395,
+          "matches": null
+        },
+        {
+          "steam_id": "76561199041357999",
+          "name": "[МЯСО] Jimmy_kek",
+          "rank": 2,
+          "value": 320,
+          "matches": null
+        },
+        {
+          "steam_id": "76561198275018666",
+          "name": "Haker",
+          "rank": 3,
+          "value": 277,
+          "matches": null
+        },
+        {
+          "steam_id": "76561199243306285",
+          "name": "➌【ST-9】 Ilyshenka",
+          "rank": 4,
+          "value": 258,
+          "matches": null
+        },
+        {
+          "steam_id": "76561198138321525",
+          "name": "[МЯСО]  CicАdмin",
+          "rank": 5,
+          "value": 255,
+          "matches": null
+        }
+      ],
+      "published_count": 5
+    }
+  },
+  "award_compatible": false,
+  "captured_at": "2026-10-08T21:21:22.304234+00:00"
+}

@@ -1,0 +1,154 @@
+<style nonce="{{ request.state.csp_nonce }}">
+    .st-table-delete-dialog {
+        max-width: 460px;
+        width: calc(100% - 30px);
+        padding: 25px;
+        border: 1px solid #46516b;
+        border-radius: 16px;
+        background: #182337;
+        color: #e3ebf9
+    }
+
+    .st-table-delete-dialog::backdrop {
+        background: #07101bc9;
+        backdrop-filter: blur(4px)
+    }
+
+    .st-table-delete-dialog h2 {
+        font-size: 21px;
+        margin-bottom: 12px
+    }
+
+    .st-table-delete-dialog p {
+        color: #b7c6dc;
+        margin-bottom: 22px
+    }
+
+    .st-table-delete-dialog .st-delete-actions {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end
+    }
+
+    .st-admin-table-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 15px;
+        padding: 17px 0;
+        border-bottom: 1px solid #303d54
+    }
+
+    .st-admin-table-row p {
+        font-size: 13px;
+        margin-top: 5px
+    }
+
+    .st-delete-table {
+        white-space: nowrap
+    }
+
+    @media(max-width:500px) {
+        .st-admin-table-row {
+            align-items: flex-start;
+            flex-direction: column
+        }
+    }
+</style>
+<script nonce="{{ request.state.csp_nonce }}">
+const TableAdmin = (() => {
+    const esc = (s) =>
+        String(s ?? "").replace(
+            /[&<>"']/g,
+            (c) =>
+                ({
+                    "&": "&amp;",
+                    "<": "&lt;",
+                    ">": "&gt;",
+                    '"': "&quot;",
+                    "'": "&#39;",
+                })[c],
+        );
+    let pending = null,
+        busy = false;
+    const notice = (message, error = false) => {
+        if (window.STUI) STUI.notice(message, error ? "error" : "success");
+        else if (typeof showToast === "function") showToast(message, error ? "error" : "success");
+    };
+
+    function markup(t, game) {
+        if (!t.can_manage) return "";
+        return `<button type="button" class="btn btn-outline-danger btn-sm st-delete-table" data-game="${esc(game)}" data-table="${esc(t.id)}" data-version="${esc(t.delete_version)}" ${t.can_delete ? "" : "disabled"} title="${t.can_delete ? "Удалить неактивный стол" : "Дождитесь завершения игры"}">${t.can_delete ? "Удалить стол" : "Идёт игра"}</button>`;
+    }
+
+    function setup() {
+        const dialog = document.createElement("dialog");
+        dialog.className = "st-table-delete-dialog";
+        dialog.innerHTML =
+            '<h2>Удалить стол?</h2><p>Стол исчезнет из списка. Участники смогут создать новый. Балансы сохранятся. Активную игру удалить нельзя.</p><div class="st-delete-actions"><button type="button" class="btn btn-outline-light" data-cancel>Оставить</button><button type="button" class="btn btn-danger" data-confirm>Удалить стол</button></div>';
+        document.body.append(dialog);
+        dialog.querySelector("[data-cancel]").onclick = () => {
+            if (!busy) dialog.close();
+        };
+        dialog.addEventListener("cancel", (event) => {
+            if (busy) event.preventDefault();
+        });
+        document.addEventListener("click", (event) => {
+            const button = event.target.closest(".st-delete-table");
+            if (!button || button.disabled || busy) return;
+            pending = {
+                game: button.dataset.game,
+                id: button.dataset.table,
+                version: button.dataset.version,
+            };
+            dialog.showModal();
+            dialog.querySelector("[data-cancel]").focus();
+        });
+        dialog.querySelector("[data-confirm]").onclick = async () => {
+            if (busy || !pending) return;
+            busy = true;
+            dialog.querySelectorAll("button").forEach((b) => (b.disabled = true));
+            try {
+                const res = await fetch(
+                    "/api/admin/game-tables/" +
+                        encodeURIComponent(pending.game) +
+                        "/" +
+                        encodeURIComponent(pending.id) +
+                        "/delete",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            version: pending.version,
+                        }),
+                    },
+                );
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || "Стол не удалён");
+                dialog.close();
+                notice(data.message);
+                document.dispatchEvent(new CustomEvent("st-tables-changed"));
+            } catch (error) {
+                dialog.close();
+                notice(error.message, true);
+                document.dispatchEvent(new CustomEvent("st-tables-changed"));
+            } finally {
+                busy = false;
+                dialog.querySelectorAll("button").forEach((b) => (b.disabled = false));
+            }
+        };
+    }
+    if (document.readyState === "loading")
+        document.addEventListener("DOMContentLoaded", setup, {
+            once: true,
+        });
+    else setup();
+    return {
+        markup,
+        esc,
+    };
+})();
+
+</script>

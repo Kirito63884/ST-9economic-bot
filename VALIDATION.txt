@@ -1,0 +1,34 @@
+Validation of the supplied code archive, 2026-10-23.
+
+Runtime: Python 3.12; dependencies installed from requirements-dev.txt.
+Application dependency declarations unchanged.
+
+Final suite: python -m pytest -q tests
+333 passed, 0 failed, 0 skipped. Two third-party deprecation warnings:
+- discord.py imports audioop (deprecated in Python 3.13).
+- Starlette reports httpx TestClient deprecation.
+
+python -m ruff check . --select E9,F: All checks passed.
+python -m ruff format --check .: 82 files already formatted.
+
+Rendered JavaScript syntax checked by Node.js on 19 page routes,
+including hostile display names, admin and Jinja partials.
+
+Chromium functional smoke test against an isolated local SQLite database:
+12 pages visited; preview cancelled without application; preview confirmed;
+HTML-like names rendered literally; freshness panel populated;
+logout confirmation submitted and returned a logged-out home page.
+0 pageerror events.
+
+The unmodified uploaded archive initially had 19 failing tests and 294 passing.
+Stale Protocol fixture-count/medical-award expectations were updated to match
+existing fixture contents/current criteria; request guard is reset per test.
+Client fixtures now simulate browser CSRF headers; the fresh-process login test
+uses HTTPS to exercise the new automatic Secure-cookie default.
+Additional tests directly check missing/wrong CSRF tokens are rejected.
+
+Protocol live HTTP request from this cloud environment returned 403.
+New weekly pilot/crew ranking parsing tested using the existing RSC transport
+fixture extended with explicitly synthetic rankings. Live authenticated data,
+actual Discord delivery, production Nginx/TLS/systemd and deployment unverified.
+No production database or credentials were used.

@@ -1,0 +1,316 @@
+<style>
+    .rt-card {
+        background: rgba(24, 30, 49, .95);
+        border: 1px solid #465270;
+        border-radius: 14px;
+        padding: 20px;
+        margin: 16px 0;
+        color: #edf2ff
+    }
+
+    .rt-card h2,
+    .rt-card h3 {
+        color: #edf2ff
+    }
+
+    .rt-card p {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere
+    }
+
+    .rt-row {
+        padding: 14px 0;
+        border-bottom: 1px solid #465270
+    }
+
+    .rt-row:last-child {
+        border: 0
+    }
+
+    .rt-option {
+        display: flex;
+        gap: 12px;
+        padding: 12px;
+        border: 1px solid #465270;
+        border-radius: 8px;
+        margin: 10px 0;
+        cursor: pointer
+    }
+
+    .rt-option input {
+        flex-shrink: 0;
+        width: 18px;
+        height: 18px;
+        margin-top: 3px
+    }
+
+    .rt-meta {
+        color: #bfcbe4;
+        font-size: .9rem
+    }
+
+    .rt-good {
+        color: #8ce8b5
+    }
+
+    .rt-bad {
+        color: #ffadb2
+    }
+
+    .rt-actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-top: 16px
+    }
+
+    .rt-card details {
+        margin-top: 12px
+    }
+
+    .rt-card summary {
+        cursor: pointer
+    }
+
+    .rt-card select,
+    .rt-card input[type=number] {
+        max-width: 100%;
+        padding: 10px;
+        color: #edf2ff;
+        background: #182033;
+        border: 1px solid #637294;
+        border-radius: 8px
+    }
+
+    .rt-card button,
+    .rt-card a.btn {
+        white-space: normal
+    }
+
+    .rt-error {
+        color: #ffadb2;
+        white-space: pre-wrap
+    }
+
+    .rt-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 12px 0
+    }
+
+    .rt-filters label {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        flex: 1 1 170px;
+        min-width: 0
+    }
+
+    .rt-card input[type=search] {
+        width: 100%;
+        padding: 10px;
+        border: 1px solid #637294;
+        border-radius: 8px;
+        background: #182033;
+        color: #edf2ff
+    }
+
+    .rt-picker {
+        max-height: 360px;
+        overflow: auto;
+        border: 1px solid #465270;
+        border-radius: 10px;
+        margin-top: 12px
+    }
+
+    .rt-pick-row {
+        display: flex;
+        gap: 12px;
+        padding: 12px;
+        border-bottom: 1px solid #465270;
+        cursor: pointer
+    }
+
+    .rt-pick-row[hidden] {
+        display: none
+    }
+
+    .rt-pick-row>input {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+        margin-top: 4px
+    }
+
+    .rt-pick-row small {
+        display: block;
+        overflow-wrap: anywhere
+    }
+
+    .rt-pick-row:last-child {
+        border-bottom: 0
+    }
+
+    .voice-history-details>summary {
+        cursor: pointer;
+        padding: 12px 0;
+        font-weight: 600
+    }
+
+    .rt-actions {
+        align-items: center
+    }
+</style>
+<script>
+window.ST9Tests = (() => {
+    const el = (tag, text, cls) => {
+        const node = document.createElement(tag);
+        if (text !== undefined) node.textContent = text;
+        if (cls) node.className = cls;
+        return node;
+    };
+    const date = (value) =>
+        new Intl.DateTimeFormat("ru-RU", {
+            timeZone: "Europe/Moscow",
+            dateStyle: "short",
+            timeStyle: "short",
+        }).format(new Date(value)) + " МСК";
+    async function api(url, body) {
+        const r = await fetch(url, {
+            cache: "no-store",
+            ...(body !== undefined
+                ? {
+                      method: "POST",
+                      headers: {
+                          "Content-Type": "application/json",
+                      },
+                      body: JSON.stringify(body),
+                  }
+                : {}),
+        });
+        const d = await r.json();
+        if (!r.ok) throw Error(d.detail || "Ошибка запроса");
+        return d;
+    }
+
+    function button(text, action) {
+        const b = el("button", text, "btn btn-primary btn-sm");
+        b.type = "button";
+        b.addEventListener("click", async () => {
+            b.disabled = true;
+            try {
+                await action();
+            } catch (e) {
+                let error = b.parentElement.querySelector(".rt-error");
+                if (!error) {
+                    error = el("p", "", "rt-error");
+                    error.setAttribute("role", "alert");
+                    b.parentElement.append(error);
+                }
+                error.textContent = e.message;
+            } finally {
+                b.disabled = false;
+            }
+        });
+        return b;
+    }
+
+    function explanation(host, a, selectedLabel = "Ваш выбор") {
+        host.append(
+            el(
+                "h3",
+                a.is_correct ? "Ответ верный" : "Ответ неверный",
+                a.is_correct ? "rt-good" : "rt-bad",
+            ),
+        );
+        host.append(el("p", a.text));
+        for (const [i, option] of a.options.entries()) {
+            const marks = [
+                a.selected.includes(i) ? selectedLabel : "",
+                a.correct.includes(i) ? "Правильный вариант" : "",
+            ]
+                .filter(Boolean)
+                .join(" · ");
+            host.append(el("p", `${i + 1}. ${option}${marks ? " — " + marks : ""}`));
+        }
+        host.append(el("p", a.explanation));
+        if (a.source_quote) host.append(el("p", `Правило ${a.rule}: ${a.source_quote}`, "rt-meta"));
+    }
+
+    function render(host, tests, review = false, showPlayer = false) {
+        host.replaceChildren(el("h3", "Тесты по правилам"));
+        if (!tests.length) {
+            host.append(el("p", "Тесты пока не назначались.", "rt-meta"));
+            return;
+        }
+        for (const t of tests) {
+            const row = el("div", undefined, "rt-row");
+            row.append(el("strong", `${showPlayer ? t.player_name + " · " : ""}Тест №${t.id}`));
+            row.append(
+                el(
+                    "p",
+                    t.completed_at
+                        ? `${t.score} из ${t.total} · ${t.percent}% · завершён ${date(t.completed_at)}`
+                        : `Назначен · отвечено ${t.answered} из ${t.total}`,
+                ),
+            );
+            row.append(el("p", `Назначил: ${t.assigned_by} · ${date(t.assigned_at)}`, "rt-meta"));
+            if (review) {
+                const detail = el("details");
+                detail.append(el("summary", "Развернуть ответы и ошибки"));
+                detail.addEventListener("toggle", async () => {
+                    if (!detail.open || detail.dataset.loaded) return;
+                    let box = detail.querySelector("div");
+                    if (!box) {
+                        box = el("div");
+                        detail.append(box);
+                    }
+                    box.textContent = "Загрузка…";
+                    try {
+                        const data = await api("/api/admin/rule-tests/" + t.id);
+                        box.replaceChildren();
+                        if (!data.answers.length)
+                            box.append(el("p", "Игрок ещё не ответил на вопросы."));
+                        for (const a of data.answers) {
+                            const item = el("div", undefined, "rt-row");
+                            item.append(el("strong", "Вопрос " + a.position));
+                            explanation(item, a, "Ответ игрока");
+                            box.append(item);
+                        }
+                        detail.dataset.loaded = "1";
+                    } catch (e) {
+                        box.textContent = e.message;
+                    }
+                });
+                row.append(detail);
+            } else if (!t.completed_at) {
+                const link = el("a", "Пройти тест", "btn btn-primary btn-sm");
+                link.href = "/rule-tests?test=" + t.id;
+                row.append(link);
+            }
+            host.append(row);
+        }
+    }
+    async function adminPlayer(uid) {
+        const host = document.getElementById("rt-player-" + uid);
+        if (!host) return;
+        host.textContent = "Загрузка тестов…";
+        try {
+            const d = await api("/api/admin/rule-tests?user_id=" + uid);
+            render(host, d.tests, true);
+        } catch (e) {
+            host.textContent = e.message;
+        }
+    }
+    return {
+        el,
+        api,
+        button,
+        render,
+        explanation,
+        adminPlayer,
+    };
+})();
+
+</script>

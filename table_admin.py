@@ -1,0 +1,151 @@
+"""Only idle tables may be removed; use the same wallet/runtime transaction."""
+
+import hashlib
+import json
+from fastapi import APIRouter, Depends, HTTPException, Request
+
+
+def removable(game, table):
+    if game == "poker":
+        return (
+            table.phase == "waiting"
+            and abs(table.pot) < 0.001
+            and all(abs(p.get("invested", 0)) < 0.001 for p in table.players)
+        )
+    return table.phase == "waiting" or (
+        table.phase == "finished" and bool(table.match and table.match["settled"])
+    )
+
+
+def version(game, table):
+    values = [game, table.id, table.phase]
+    if game == "poker":
+        values += [
+            table.hand_number,
+            table.action_revision,
+            [p["user_id"] for p in table.players],
+        ]
+    else:
+        values += [table.match_number, table.revision, [p["id"] for p in table.players]]
+    return hashlib.sha256(json.dumps(values).encode()).hexdigest()[:24]
+
+
+def management(game, table, allowed):
+    return {
+        "can_manage": bool(allowed),
+        "can_delete": bool(allowed and removable(game, table)),
+        "delete_version": version(game, table) if allowed else None,
+    }
+
+
+def make_router(
+    get_user,
+    get_db,
+    may_manage,
+    read_body,
+    poker,
+    requests,
+    durak,
+    billiards=None,
+    log_game=None,
+):
+    # Older main.py versions pass log_game in the billiards position. Keeping this
+    # compatible makes an emergency source rollback safe after this module exists.
+    if log_game is None:
+        log_game, billiards = billiards, None
+    router = APIRouter()
+
+    def require_chief(user=Depends(get_user)):
+        if not user or not user.is_admin or not may_manage(user):
+            raise HTTPException(
+                403, "Удалять столы могут только главные администраторы."
+            )
+        return user
+
+    @router.get("/api/admin/game-tables")
+    async def list_tables(admin=Depends(require_chief)):
+        rows = []
+        games = [("poker", poker), ("durak", durak.tables)]
+        if billiards is not None:
+            games.append(("billiards", billiards.tables))
+        for game, values in games:
+            for tid, table in values.items():
+                if game == "poker":
+                    creator = next(
+                        (
+                            p["display_name"]
+                            for p in table.players
+                            if p["user_id"] == table.creator_id
+                        ),
+                        "Создатель",
+                    )
+                    private = table.is_private
+                else:
+                    creator = next(
+                        (p["name"] for p in table.players if p["id"] == table.creator),
+                        "Создатель",
+                    )
+                    private = table.rules["private"]
+                rows.append(
+                    {
+                        "id": tid,
+                        "game": game,
+                        "creator": creator,
+                        "phase": table.phase,
+                        "players": len(table.players),
+                        "private": private,
+                        **management(game, table, True),
+                    }
+                )
+        return {"tables": rows}
+
+    @router.post("/api/admin/game-tables/{game}/{tid}/delete")
+    async def remove(
+        game: str,
+        tid: str,
+        request: Request,
+        admin=Depends(require_chief),
+        db=Depends(get_db),
+    ):
+        if game not in ("poker", "durak") and (
+            game != "billiards" or billiards is None
+        ):
+            raise HTTPException(400, "Неизвестная игра.")
+        values = (
+            poker
+            if game == "poker"
+            else durak.tables
+            if game == "durak"
+            else billiards.tables
+        )
+        table = values.get(tid)
+        if table is None:
+            return {"ok": True, "deleted": False, "message": "Стол уже удалён."}
+        if not removable(game, table):
+            raise HTTPException(
+                409, "Идёт активная игра. Дождитесь её завершения; стол не удалён."
+            )
+        body = await read_body(request)
+        if body.get("version") != version(game, table):
+            raise HTTPException(
+                409,
+                "Состояние стола изменилось. Обновите список и подтвердите удаление снова.",
+            )
+        del values[tid]
+        if game == "poker":
+            requests.pop(tid, None)
+        log_game(
+            db,
+            admin.id,
+            "admin",
+            "table_deleted",
+            0,
+            f"Удалён неактивный стол {game}: {tid}; участников {len(table.players)}",
+        )
+        return {
+            "ok": True,
+            "deleted": True,
+            "message": "Стол удалён. Балансы участников сохранены.",
+        }
+
+    return router

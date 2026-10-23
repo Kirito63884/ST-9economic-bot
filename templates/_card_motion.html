@@ -1,0 +1,460 @@
+<style nonce="{{ request.state.csp_nonce }}">
+    .st-card-flight {
+        position: fixed !important;
+        display: block;
+        z-index: 10020 !important;
+        margin: 0 !important;
+        pointer-events: none !important;
+        transform-origin: top left !important;
+        visibility: visible !important;
+        opacity: 1;
+        will-change: transform, opacity;
+        filter: drop-shadow(0 8px 9px #0004)
+    }
+
+    .st-poker-page .player-box {
+        border-width: 2px;
+        transition: border-color .2s, box-shadow .2s, opacity .2s
+    }
+
+    .st-poker-page .player-position,
+    .st-poker-page .player-bet {
+        min-height: 17px
+    }
+
+    .st-card-flight * {
+        pointer-events: none !important
+    }
+
+    .st-card-flight.card-container {
+        animation: none !important
+    }
+
+    .st-deal-source {
+        position: absolute;
+        right: 22px;
+        top: calc(50% - 44px);
+        width: 60px;
+        height: 88px;
+        border: 2px solid #edf2fa;
+        border-radius: 8px;
+        background: repeating-linear-gradient(45deg, #294b76, #294b76 7px, #365e8e 7px, #365e8e 14px);
+        box-shadow: 3px 3px 0 #172e4e, 6px 6px 0 #10253e;
+        pointer-events: none
+    }
+
+    .st-blackjack-page .card-container {
+        opacity: 1;
+        animation: none
+    }
+
+    .st-blackjack-page .card-container.flipped .card-inner {
+        transition: none
+    }
+
+    @media(max-width:600px) {
+        .st-deal-source {
+            right: 12px;
+            width: 42px;
+            height: 62px;
+            top: calc(50% - 31px)
+        }
+    }
+
+    @media(prefers-reduced-motion:reduce) {
+        .st-card-flight {
+            display: none !important
+        }
+    }
+</style>
+<script nonce="{{ request.state.csp_nonce }}">
+const CardMotion = (() => {
+    const motions = new Map(),
+        hidden = new Map();
+    let counter = 0;
+    const enabled = () =>
+        !document.hidden &&
+        !matchMedia("(prefers-reduced-motion: reduce)").matches &&
+        typeof Element.prototype.animate === "function";
+
+    function capture(root, selector = "[data-card-key]", attribute = "cardKey") {
+        const cards = new Map();
+        for (const node of root.querySelectorAll(selector)) {
+            const key = node.dataset[attribute],
+                motion = motions.get(key),
+                box = node.getBoundingClientRect();
+            let layout = box,
+                visual = motion?.ghost?.getBoundingClientRect() || box;
+            if (motion?.kind === "move") {
+                const progress = motion.animation.effect.getComputedTiming().progress ?? 0;
+                layout = {
+                    left: box.left - motion.dx * (1 - progress),
+                    top: box.top - motion.dy * (1 - progress),
+                    width: box.width,
+                    height: box.height,
+                };
+            }
+            if (box.width && box.height)
+                cards.set(key, {
+                    rect: layout,
+                    visualRect: visual,
+                    node,
+                    clone: node.cloneNode(true),
+                    face: node.dataset.cardFace || "",
+                    order: Number(node.dataset.dealOrder) || 0,
+                });
+        }
+        return cards;
+    }
+
+    function release(node) {
+        if (hidden.has(node)) {
+            node.style.visibility = hidden.get(node);
+            hidden.delete(node);
+        }
+    }
+
+    function clear() {
+        for (const clean of [...motions.values()]) clean();
+        for (const node of [...hidden.keys()]) release(node);
+    }
+
+    function rect(node) {
+        return node?.getBoundingClientRect?.() || null;
+    }
+
+    function valid(r) {
+        return r && r.width > 0 && r.height > 0;
+    }
+    // Existing cards move as their original DOM nodes. No clone, flip, scale or fade.
+    function move(old, item, key, duration) {
+        motions.get(key)?.();
+        release(item.node);
+        const from = old.visualRect || old.rect,
+            to = item.node.getBoundingClientRect(),
+            dx = from.left - to.left,
+            dy = from.top - to.top;
+        if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return Promise.resolve();
+        let resolve,
+            finished = false,
+            animation;
+        const done = new Promise((r) => (resolve = r));
+        const clean = () => {
+            if (finished) return;
+            finished = true;
+            animation?.cancel();
+            if (motions.get(key) === clean) motions.delete(key);
+            resolve();
+        };
+        // A defended Durak card has a rotated parent: convert screen displacement
+        // into its local coordinates so its starting position stays under the hand.
+        let lx = dx,
+            ly = dy;
+        try {
+            let matrix = new DOMMatrix();
+            for (let el = item.node; el && el !== document.body; el = el.parentElement) {
+                const t = getComputedStyle(el).transform;
+                if (t && t !== "none") matrix = new DOMMatrix(t).multiply(matrix);
+            }
+            const inv = matrix.inverse();
+            lx = inv.a * dx + inv.c * dy;
+            ly = inv.b * dx + inv.d * dy;
+        } catch {}
+        try {
+            animation = item.node.animate(
+                [
+                    {
+                        transform: `translate(${lx}px,${ly}px)`,
+                    },
+                    {
+                        transform: "translate(0px,0px)",
+                    },
+                ],
+                {
+                    duration: Math.min(duration, 320),
+                    easing: "cubic-bezier(.22,.75,.25,1)",
+                    composite: "add",
+                    fill: "both",
+                },
+            );
+            Object.assign(clean, {
+                kind: "move",
+                animation,
+                dx,
+                dy,
+            });
+            motions.set(key, clean);
+            animation.finished.then(clean, clean);
+        } catch {
+            clean();
+        }
+        return done;
+    }
+
+    function flight(
+        copy,
+        from,
+        to,
+        { node = null, key = null, delay = 0, duration = 560, vanish = false } = {},
+    ) {
+        if (!enabled() || !valid(from) || !valid(to)) {
+            if (node) release(node);
+            return Promise.resolve();
+        }
+        key = key ?? "ghost-" + counter++;
+        if (motions.has(key)) motions.get(key)();
+        while (motions.size >= 96) motions.values().next().value();
+        const ghost = copy.cloneNode(true);
+        ghost.classList.add("st-card-flight");
+        ghost.classList.remove("dealing", "animate-in");
+        ghost.removeAttribute("id");
+        ghost.removeAttribute("data-card-key");
+        ghost.removeAttribute("data-motion-card");
+        for (const n of ghost.querySelectorAll("[id]")) n.removeAttribute("id");
+        ghost.setAttribute("aria-hidden", "true");
+        ghost.setAttribute("inert", "");
+        Object.assign(ghost.style, {
+            left: to.left + "px",
+            top: to.top + "px",
+            width: to.width + "px",
+            height: to.height + "px",
+            visibility: "visible",
+        });
+        document.body.append(ghost);
+        if (node) {
+            if (!hidden.has(node)) hidden.set(node, node.style.visibility);
+            node.style.visibility = "hidden";
+        }
+        const dx = from.left - to.left,
+            dy = from.top - to.top,
+            scale = from.width / to.width;
+        let resolve;
+        const done = new Promise((r) => (resolve = r));
+        let finished = false,
+            animation;
+        const clean = () => {
+            if (finished) return;
+            finished = true;
+            animation?.cancel();
+            ghost.remove();
+            if (node) release(node);
+            if (motions.get(key) === clean) motions.delete(key);
+            resolve();
+        };
+        clean.ghost = ghost;
+        motions.set(key, clean);
+        try {
+            animation = ghost.animate(
+                [
+                    {
+                        transform: `translate(${dx}px,${dy}px) scale(${scale}) rotate(-7deg)`,
+                        opacity: vanish ? 1 : 0.92,
+                    },
+                    {
+                        transform: "translate(0,0) scale(1) rotate(0deg)",
+                        opacity: vanish ? 0 : 1,
+                    },
+                ],
+                {
+                    duration,
+                    delay,
+                    easing: "cubic-bezier(.22,.75,.25,1)",
+                    fill: "both",
+                },
+            );
+            animation.finished.then(clean, clean);
+        } catch {
+            clean();
+        }
+        return done;
+    }
+
+    function reveal(old, item, key, delay = 0) {
+        if (!enabled()) return Promise.resolve();
+        if (motions.has(key)) motions.get(key)();
+        const ghost = old.clone.cloneNode(true);
+        ghost.classList.add("st-card-flight");
+        ghost.removeAttribute("id");
+        ghost.setAttribute("aria-hidden", "true");
+        ghost.setAttribute("inert", "");
+        Object.assign(ghost.style, {
+            left: item.rect.left + "px",
+            top: item.rect.top + "px",
+            width: item.rect.width + "px",
+            height: item.rect.height + "px",
+            visibility: "visible",
+            transformOrigin: "center",
+        });
+        ghost.style.setProperty("transform-origin", "center", "important");
+        document.body.append(ghost);
+        if (!hidden.has(item.node)) hidden.set(item.node, item.node.style.visibility);
+        item.node.style.visibility = "hidden";
+        let resolve,
+            finished = false,
+            animation;
+        const done = new Promise((r) => (resolve = r));
+        const clean = () => {
+            if (finished) return;
+            finished = true;
+            animation?.cancel();
+            ghost.remove();
+            release(item.node);
+            if (motions.get(key) === clean) motions.delete(key);
+            resolve();
+        };
+        clean.ghost = ghost;
+        motions.set(key, clean);
+        const finish = () => {
+            if (finished) return;
+            const face = item.node.cloneNode(true);
+            face.style.visibility = "visible";
+            face.style.position = "static";
+            face.style.width = "100%";
+            face.style.height = "100%";
+            face.removeAttribute("id");
+            ghost.replaceChildren(face);
+            animation = ghost.animate(
+                [
+                    {
+                        transform: "perspective(800px) rotateY(-90deg)",
+                    },
+                    {
+                        transform: "perspective(800px) rotateY(0deg)",
+                    },
+                ],
+                {
+                    duration: 230,
+                    easing: "ease-out",
+                    fill: "both",
+                },
+            );
+            animation.finished.then(clean, clean);
+        };
+        try {
+            animation = ghost.animate(
+                [
+                    {
+                        transform: "perspective(800px) rotateY(0deg)",
+                    },
+                    {
+                        transform: "perspective(800px) rotateY(90deg)",
+                    },
+                ],
+                {
+                    duration: 230,
+                    delay,
+                    easing: "ease-in",
+                    fill: "both",
+                },
+            );
+            animation.finished.then(finish, clean);
+        } catch {
+            clean();
+        }
+        return done;
+    }
+
+    function play(
+        before,
+        root,
+        {
+            selector = "[data-card-key]",
+            attribute = "cardKey",
+            source = null,
+            origin = null,
+            exit = null,
+            animate = true,
+            gap = 150,
+            duration = 560,
+        } = {},
+    ) {
+        if (!animate || !enabled()) {
+            clear();
+            return Promise.resolve();
+        }
+        const after = capture(root, selector, attribute),
+            jobs = [];
+        let fresh = 0;
+        const ordered = [...after].sort((a, b) => a[1].order - b[1].order);
+        for (const [key, item] of ordered) {
+            const old = before.get(key);
+            if (old && old.face !== item.face) {
+                jobs.push(reveal(old, item, key, fresh++ * gap));
+                continue;
+            }
+            if (
+                old &&
+                Math.abs(old.rect.left - item.rect.left) < 1 &&
+                Math.abs(old.rect.top - item.rect.top) < 1
+            )
+                continue;
+            if (old) {
+                jobs.push(move(old, item, key, duration));
+                continue;
+            }
+            const from = origin?.(key, item) || rect(source);
+            if (valid(from)) {
+                const delay = fresh++ * gap;
+                jobs.push(
+                    flight(item.node, from, item.rect, {
+                        node: item.node,
+                        key,
+                        delay: Math.min(delay, 4200),
+                        duration,
+                    }),
+                );
+            }
+        }
+        for (const [key, old] of before) {
+            if (after.has(key)) continue;
+            motions.get(key)?.();
+            const to = exit?.(key, old);
+            if (valid(to))
+                jobs.push(
+                    flight(old.clone, old.visualRect || old.rect, to, {
+                        key: "exit-" + key,
+                        duration,
+                        vanish: true,
+                    }),
+                );
+        }
+        return Promise.all(jobs);
+    }
+
+    function sync(root, items, create) {
+        const existing = new Map(
+            [...root.children].filter((n) => n.dataset.cardKey).map((n) => [n.dataset.cardKey, n]),
+        );
+        for (const [index, item] of items.entries()) {
+            let node = existing.get(item.key);
+            existing.delete(item.key);
+            const face = item.face ?? JSON.stringify(item.card);
+            if (!node || node.dataset.cardFace !== face) {
+                const next = create(item.card);
+                if (node) node.replaceWith(next);
+                node = next;
+                node.dataset.cardKey = item.key;
+                node.dataset.cardFace = face;
+            }
+            node.dataset.dealOrder = String(item.order || 0);
+            if (root.children[index] !== node)
+                root.insertBefore(node, root.children[index] || null);
+        }
+        for (const node of existing.values()) node.remove();
+    }
+    document.addEventListener("visibilitychange", () => {
+        if (document.hidden) clear();
+    });
+    window.addEventListener("pagehide", clear);
+    return {
+        capture,
+        play,
+        flight,
+        clear,
+        sync,
+        rect,
+        enabled,
+    };
+})();
+
+</script>

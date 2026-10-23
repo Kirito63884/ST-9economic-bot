@@ -1,0 +1,362 @@
+<section id="panel-automation"
+         role="tabpanel"
+         aria-labelledby="tab-automation"
+         hidden>
+    <div class="section-card">
+        <div class="section-heading">
+            <div>
+                <h2>Состояние автоматизации</h2>
+                <p>Один экран для Discord, SQSTAT, Protocol, BattleMetrics, ролей, объявлений и журнала.</p>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="loadAutomation(true)">Обновить</button>
+        </div>
+        <div id="automationHealth" class="roster-list">
+            <div class="online-empty">Откройте раздел, чтобы выполнить проверку.</div>
+        </div>
+    </div>
+    {% if is_super %}
+    <div class="section-card">
+        <div class="section-heading">
+            <div>
+                <h2>Источники проверок</h2>
+                <p>Выберите сайты, которые разрешено использовать для автоматических проверок и выдачи наград. Изменение применяется к следующим циклам; сохранённые награды и история не удаляются.</p>
+            </div>
+        </div>
+        <div id="automationSources" class="stack"></div>
+        <p class="hint">Если отключить BattleMetrics, перестанут обновляться онлайн, история игр, часы и посещение субботнего сбора. При отключённом SQSTAT не проверяются его профили, матчи и статистика китов. Protocol отвечает за официальные итоги прошлой недели.</p>
+        <button class="btn btn-primary mt-3" onclick="saveAutomationSettings()">Сохранить источники</button>
+    </div>
+    <div class="section-card">
+        <div class="section-heading">
+            <div>
+                <h2>Сверка наград с Discord</h2>
+                <p>Предпросмотр показывает недостающие и лишние автоматические роли. Применение ставит исправления и пропущенные объявления в безопасные очереди.</p>
+            </div>
+            <button class="btn" onclick="previewAwardReconciliation()">Проверить</button>
+        </div>
+        <div id="reconciliationResult" class="editor-info">Проверка ещё не запускалась.</div>
+        <div class="action-row mt-3">
+            <button id="applyReconciliation"
+                    class="btn btn-primary"
+                    onclick="applyAwardReconciliation()"
+                    disabled>Исправить расхождения</button>
+        </div>
+    </div>
+    <div class="two-columns">
+        <div class="section-card">
+            <div class="section-heading">
+                <div>
+                    <h2>Исключение</h2>
+                    <p>Останавливает будущую автовыдачу награды или отменяет предложенный штраф за выбранный сбор. Причина сохраняется.</p>
+                </div>
+            </div>
+            <div class="stack">
+                <select id="exceptionUser" class="form-select">
+                    <option value="">Выберите игрока</option>
+                    {% for u in users %}
+                    <option value="{{ u.id }}">{{ u.display_name or u.username }} · {{ u.id }}</option>
+                    {% endfor %}
+                </select>
+                <select id="exceptionScope"
+                        class="form-select"
+                        onchange="renderExceptionTarget()">
+                    <option value="award">Автоматическая награда</option>
+                    <option value="assembly">Штраф за сбор</option>
+                </select>
+                <select id="exceptionTarget" class="form-select"></select>
+                <input id="exceptionDate" class="form-control" type="date" hidden>
+                <textarea id="exceptionReason"
+                          class="notes-cell"
+                          maxlength="500"
+                          placeholder="Обязательная причина"></textarea>
+                <button class="btn btn-primary"
+                        onclick="createAutomationException()">Добавить исключение</button>
+            </div>
+            <div id="exceptionList" class="mt-3"></div>
+        </div>
+        <div class="section-card">
+            <div class="section-heading">
+                <div>
+                    <h2>Условия и суммы</h2>
+                    <p>Изменения применяются к следующим проверкам. Уже полученные награды и выплаченные суммы не пересчитываются.</p>
+                </div>
+            </div>
+            <div id="automationSettings" class="stack"></div>
+            <details class="assembly-details">
+                <summary>Суммы за каждую награду</summary>
+                <div id="rewardSettings" class="stack mt-3"></div>
+            </details>
+            <button class="btn btn-primary mt-3"
+                    onclick="saveAutomationSettings()">Сохранить настройки</button>
+        </div>
+    </div>
+    {% endif %}
+</section>
+<script>
+let automationData = null,
+    reconciliationData = null;
+const automationLabels = {
+    source_protocol_enabled: "Protocol · итоги прошлой недели",
+    source_sqstat_enabled: "SQSTAT · профили, матчи и киты",
+    source_battlemetrics_enabled: "BattleMetrics · онлайн, история игр, часы и сборы",
+    assembly_penalty: "Штраф за пропуск сбора, БК",
+    assembly_grace_hours: "Льготный период после сбора, часов",
+    assembly_start: "Начало сбора, МСК",
+    assembly_end: "Окончание сбора, МСК",
+    assembly_coverage_percent: "Минимальное покрытие мониторинга, %",
+    medal_good_protocol_hours: "Отличная служба: часов Protocol",
+    medal_good_voice_hours: "Отличная служба: часов в войсе",
+    medal_combat_hours: "Боевые навыки: часов Protocol",
+    medal_combat_i_kd: "Боевые навыки I: минимальный K/D",
+    medal_combat_ii_kd: "Боевые навыки II: минимальный K/D",
+    medal_combat_iii_kd: "Боевые навыки III: минимальный K/D",
+    medal_purple_hours: "Пурпурное сердце: часов Protocol",
+    medal_purple_kd_below: "Пурпурное сердце: K/D ниже",
+    weekly_gold_rank: "Золотая звезда: место",
+    weekly_silver_rank: "Серебряная звезда: место",
+    weekly_bronze_rank: "Бронзовая звезда: место",
+    weekly_cmd_rank: "Командир стороны: верхнее место",
+    weekly_merit_kills_rank: "Особые заслуги: топ убийств",
+    weekly_merit_revive_rank: "За медпомощь: топ поднятий",
+    weekly_merit_wins_rank: "Особые заслуги: топ побед",
+    weekly_merit_damage_rank: "Особые заслуги: топ урона",
+    weekly_squad_leader_rank: "Лучший командир: верхнее место",
+    weekly_anti_tank_rank: "Антитанк: верхнее место",
+    weekly_best_crew_rank: "Лучший экипаж: верхнее место",
+    weekly_best_knife_rank: "Ножевик: верхнее место",
+    weekly_kit_rank: "Недельные киты: верхнее место",
+};
+async function loadAutomation(force = false) {
+    if (automationLoaded && !force) return;
+    try {
+        const [statusRes, settingsRes, exceptionsRes] = await Promise.all([
+            adminFetch("/api/admin/automation/status"),
+            adminFetch("/api/admin/automation/settings"),
+            adminFetch("/api/admin/automation/exceptions"),
+        ]);
+        const status = await statusRes.json();
+        if (!statusRes.ok) throw new Error(status.detail || "Ошибка состояния");
+        const health = document.getElementById("automationHealth");
+        health.innerHTML =
+            status.services
+                .map((s) => {
+                    const disabled = s.enabled === false;
+                    return `<div class="roster-row"><span class="avatar" style="background:${disabled ? "#303746" : s.ok ? "#17362d" : "#3b232b"}">${disabled ? "—" : s.ok ? "✓" : "!"}</span><div class="identity-text"><div class="user-name">${escapeHtml(s.name)}</div><div class="user-id">${escapeHtml(s.detail || "")}</div></div><span class="role-pill">${disabled ? "Отключён" : s.ok ? "Работает" : "Нужно внимание"}</span></div>`;
+                })
+                .join("") +
+            (status.alerts.length
+                ? `<details class="assembly-details"><summary>Активные уведомления (${status.alerts.length})</summary>${status.alerts.map((a) => `<p class="hint">${escapeHtml(a.message)} · ${assemblyDate(a.created_at)} МСК</p>`).join("")}</details>`
+                : "");
+        if (settingsRes.ok) {
+            automationData = await settingsRes.json();
+            renderAutomationSettings();
+        }
+        if (exceptionsRes.ok) renderExceptions((await exceptionsRes.json()).items);
+        automationLoaded = true;
+    } catch (e) {
+        document.getElementById("automationHealth").innerHTML =
+            `<div class="online-empty">${escapeHtml(e.message)}</div>`;
+    }
+}
+
+function renderAutomationSettings() {
+    if (!automationData) return;
+    const box = document.getElementById("automationSettings");
+    if (!box) return;
+    const entries = Object.entries(automationData.settings),
+        sources = entries.filter(([key]) => key.startsWith("source_"));
+    document.getElementById("automationSources").innerHTML = sources
+        .map(
+            ([key, value]) =>
+                `<label class="roster-row" style="cursor:pointer"><input data-setting="${escapeHtml(key)}" type="checkbox" ${value ? "checked" : ""}><span class="identity-text"><span class="user-name">${escapeHtml(automationLabels[key] || key)}</span><span class="user-id">${value ? "Источник используется" : "Источник отключён"}</span></span></label>`,
+        )
+        .join("");
+    box.innerHTML = entries
+        .filter(([key]) => !key.startsWith("source_"))
+        .map(
+            ([key, value]) =>
+                `<label class="form-label">${escapeHtml(automationLabels[key] || key)}<input class="form-control" data-setting="${escapeHtml(key)}" type="${key.includes("start") || key.includes("end") ? "time" : typeof value === "number" ? "number" : "text"}" ${typeof value === "number" ? 'step="0.1"' : ""} value="${escapeHtml(value)}"></label>`,
+        )
+        .join("");
+    document.getElementById("rewardSettings").innerHTML = Object.entries(automationData.rewards)
+        .map(
+            ([key, value]) =>
+                `<label class="form-label">${escapeHtml((automationData.awards || {})[key] || key)}<input class="form-control" data-reward="${escapeHtml(key)}" type="number" min="0" max="100000" step="1" value="${Number(value)}"></label>`,
+        )
+        .join("");
+    renderExceptionTarget();
+}
+
+function renderExceptionTarget() {
+    const scope = document.getElementById("exceptionScope")?.value;
+    const target = document.getElementById("exceptionTarget");
+    const date = document.getElementById("exceptionDate");
+    if (!target) return;
+    if (scope === "assembly") {
+        target.innerHTML = '<option value="absence_penalty">Штраф за отсутствие</option>';
+        date.hidden = false;
+    } else {
+        target.innerHTML = Object.entries(automationData?.awards || {})
+            .map(
+                ([code, name]) =>
+                    `<option value="${escapeHtml(code)}">${escapeHtml(name)}</option>`,
+            )
+            .join("");
+        date.hidden = true;
+    }
+}
+
+function renderExceptions(items) {
+    const box = document.getElementById("exceptionList");
+    if (!box) return;
+    box.innerHTML = items.length
+        ? items
+              .map(
+                  (i) =>
+                      `<div class="roster-row"><div class="identity-text"><div class="user-name">${escapeHtml(i.name)}</div><div class="user-id">${escapeHtml(i.scope === "assembly" ? "Сбор " + i.event_date : (automationData?.awards || {})[i.target] || i.target)} · ${escapeHtml(i.reason)}</div></div><button class="btn btn-sm btn-outline-danger" onclick="removeAutomationException(${i.id})">Убрать</button></div>`,
+              )
+              .join("")
+        : '<div class="roster-ok">Активных исключений нет.</div>';
+}
+async function saveAutomationSettings() {
+    const values = {};
+    document.querySelectorAll("[data-setting]").forEach((i) => {
+        const old = automationData.settings[i.dataset.setting];
+        values[i.dataset.setting] =
+            typeof old === "boolean"
+                ? i.checked
+                : typeof old === "number"
+                  ? Number(i.value)
+                  : i.value;
+    });
+    const rewards = {};
+    document
+        .querySelectorAll("[data-reward]")
+        .forEach((i) => (rewards[i.dataset.reward] = Number(i.value)));
+    const r = await adminFetch("/api/admin/automation/settings", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            settings: values,
+            rewards,
+        }),
+    });
+    const d = await r.json();
+    if (!r.ok) return showToast(d.detail || "Не удалось сохранить", "error");
+    automationLoaded = false;
+    showToast("Настройки сохранены", "success");
+    loadAutomation(true);
+}
+async function previewAwardReconciliation() {
+    const box = document.getElementById("reconciliationResult");
+    box.textContent = "Получаю роли всех участников Discord…";
+    const r = await adminFetch("/api/admin/automation/reconcile");
+    const d = await r.json();
+    if (!r.ok) {
+        box.textContent = d.detail || "Ошибка";
+        return;
+    }
+    reconciliationData = d;
+    box.innerHTML = `Недостающие роли: <b>${d.missing.length}</b><br>Лишние автоматические роли: <b>${d.extra.length}</b><br>Игроки не найдены в Discord: <b>${d.absent.length}</b><br>Объявления в очереди: <b>${d.pending_announcements}</b>`;
+    document.getElementById("applyReconciliation").disabled = false;
+}
+async function applyAwardReconciliation() {
+    if (!reconciliationData) return;
+    const r = await adminFetch("/api/admin/automation/reconcile", {
+        method: "POST",
+        headers: {
+            "X-ST9-Action": "reconcile-awards",
+        },
+    });
+    const d = await r.json();
+    if (!r.ok) return showToast(d.detail || "Ошибка сверки", "error");
+    showToast(
+        `Поставлено в очередь: вернуть ${d.queued_missing}, убрать ${d.queued_extra}`,
+        "success",
+    );
+    document.getElementById("applyReconciliation").disabled = true;
+    reconciliationData = null;
+}
+async function createAutomationException(prefill = {}) {
+    const body = {
+        user_id: Number(prefill.user_id || document.getElementById("exceptionUser").value),
+        scope: prefill.scope || document.getElementById("exceptionScope").value,
+        target: prefill.target || document.getElementById("exceptionTarget").value,
+        event_date: prefill.event_date || document.getElementById("exceptionDate").value,
+        reason: prefill.reason || document.getElementById("exceptionReason").value,
+    };
+    if (!body.user_id || !body.reason)
+        return showToast("Выберите игрока и укажите причину", "error");
+    const r = await adminFetch("/api/admin/automation/exceptions", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+    });
+    const d = await r.json();
+    if (!r.ok) return showToast(d.detail || "Ошибка", "error");
+    automationLoaded = false;
+    showToast("Исключение сохранено", "success");
+    loadAutomation(true);
+}
+async function removeAutomationException(id) {
+    const r = await adminFetch("/api/admin/automation/exceptions/" + id, {
+        method: "DELETE",
+    });
+    if (!r.ok) return showToast("Не удалось убрать исключение", "error");
+    automationLoaded = false;
+    loadAutomation(true);
+}
+async function exemptAssembly(userId, eventDate) {
+    const reason = window.prompt("Причина освобождения от штрафа:");
+    if (!reason) return;
+    await createAutomationException({
+        user_id: userId,
+        scope: "assembly",
+        target: "absence_penalty",
+        event_date: eventDate,
+        reason,
+    });
+    assemblyLoaded = false;
+    loadAssemblyStatus(true);
+}
+async function finalizeAssembly(eventDate) {
+    if (!window.confirm("Списать оставшиеся подтверждённые штрафы за этот сбор?")) return;
+    const r = await adminFetch("/api/admin/assembly/" + eventDate + "/finalize", {
+        method: "POST",
+        headers: {
+            "X-ST9-Action": "finalize-assembly",
+        },
+    });
+    const d = await r.json();
+    if (!r.ok) return showToast(d.detail || "Не удалось завершить проверку", "error");
+    showToast(`Списано штрафов: ${d.penalized}, сумма ${d.charged} БК`, "success");
+    assemblyLoaded = false;
+    loadAssemblyStatus(true);
+}
+async function showIdentityHistory(userId) {
+    const r = await adminFetch("/api/admin/identities/" + userId);
+    const d = await r.json();
+    if (!r.ok) return showToast(d.detail || "История недоступна", "error");
+    showModal(
+        "История привязок",
+        d.items.length
+            ? d.items
+                  .map(
+                      (i) =>
+                          `${i.kind === "discord" ? "Discord" : "Steam"}: ${i.value}\n${assemblyDate(i.valid_from)} — ${i.valid_to ? assemblyDate(i.valid_to) : "сейчас"}${i.reason ? "\n" + i.reason : ""}`,
+                  )
+                  .join("\n\n")
+            : "История пуста",
+        "⌁",
+        "Закрыть",
+        "",
+        "success",
+        () => {},
+    );
+}
+
+</script>

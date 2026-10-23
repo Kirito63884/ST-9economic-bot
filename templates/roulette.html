@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <title>Рулетка — Strike Team 9</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+              rel="stylesheet">
+        <style>
+            body {
+                background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+                min-height: 100vh;
+                position: relative;
+                overflow-x: hidden
+            }
+
+            body::before {
+                content: '';
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: radial-gradient(circle at 20% 30%, rgba(120, 119, 198, .3) 0%, transparent 50%), radial-gradient(circle at 80% 70%, rgba(255, 119, 198, .2) 0%, transparent 50%);
+                pointer-events: none;
+                z-index: 0
+            }
+
+            @keyframes float {
+
+                0%,
+                100% {
+                    transform: translateY(0) rotate(0deg)
+                }
+
+                50% {
+                    transform: translateY(-30px) rotate(180deg)
+                }
+            }
+
+            .bg-shape {
+                position: fixed;
+                opacity: .08;
+                border-radius: 50%;
+                pointer-events: none;
+                z-index: 0
+            }
+
+            .shape-1 {
+                width: 300px;
+                height: 300px;
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                top: 10%;
+                left: 5%;
+                animation: float 20s ease-in-out infinite
+            }
+
+            .shape-2 {
+                width: 200px;
+                height: 200px;
+                background: linear-gradient(135deg, #f093fb, #f5576c);
+                top: 60%;
+                right: 10%;
+                animation: float 15s ease-in-out infinite 2s
+            }
+
+            .container {
+                position: relative;
+                z-index: 1
+            }
+
+            .navbar {
+                position: relative;
+                z-index: 10
+            }
+
+            .wheel-container {
+                width: 360px;
+                height: 360px;
+                margin: 0 auto 30px;
+                position: relative;
+                border-radius: 50%;
+                border: 10px solid #3e2723;
+                box-shadow: 0 0 40px rgba(0, 0, 0, .6), inset 0 0 20px rgba(0, 0, 0, .3);
+                overflow: hidden
+            }
+
+            .wheel {
+                width: 100%;
+                height: 100%;
+                border-radius: 50%;
+                position: relative;
+                transition: transform 3s cubic-bezier(.25, .1, .25, 1)
+            }
+
+            .wheel-segment {
+                position: absolute;
+                top: 0;
+                left: 50%;
+                width: 2px;
+                height: 50%;
+                transform-origin: bottom center;
+                pointer-events: none
+            }
+
+            .wheel-segment span {
+                position: absolute;
+                top: 10px;
+                left: 50%;
+                transform: translateX(-50%);
+                font-size: .8rem;
+                font-weight: 700;
+                color: #fff;
+                text-shadow: 0 1px 3px rgba(0, 0, 0, .9);
+                white-space: nowrap;
+                z-index: 2
+            }
+
+            .wheel-marker {
+                position: absolute;
+                top: -8px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 0;
+                height: 0;
+                z-index: 5;
+                border-left: 14px solid transparent;
+                border-right: 14px solid transparent;
+                border-top: 24px solid #ffd700;
+                filter: drop-shadow(0 2px 4px rgba(0, 0, 0, .6))
+            }
+
+            .wheel-center {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 50px;
+                height: 50px;
+                background: radial-gradient(circle, #5d4037, #3e2723);
+                border-radius: 50%;
+                border: 3px solid #ffd700;
+                z-index: 3;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 1.2rem;
+                font-weight: 800;
+                color: #ffd700
+            }
+
+            .result-display {
+                font-size: 2rem;
+                font-weight: 800;
+                text-align: center;
+                min-height: 60px;
+                margin-bottom: 20px;
+                opacity: 0;
+                transition: opacity .5s
+            }
+
+            .result-display.show {
+                opacity: 1
+            }
+
+            .res-green {
+                color: #4caf50
+            }
+
+            .res-red {
+                color: #ef5350
+            }
+
+            .res-black {
+                color: #bdbdbd
+            }
+
+            .bet-btn {
+                border-radius: 12px;
+                font-weight: 700;
+                font-size: 1rem;
+                padding: 14px;
+                transition: all .2s;
+                border: 2px solid transparent
+            }
+
+            .bet-btn:hover {
+                transform: scale(1.05)
+            }
+
+            .bet-btn.selected {
+                border-color: #ffd700;
+                box-shadow: 0 0 15px rgba(255, 215, 0, .4)
+            }
+
+            .btn-red {
+                background: #d32f2f;
+                color: #fff
+            }
+
+            .btn-black {
+                background: #212121;
+                color: #fff
+            }
+
+            .btn-green {
+                background: #2e7d32;
+                color: #fff
+            }
+
+            .btn-even {
+                background: #1565c0;
+                color: #fff
+            }
+
+            .btn-odd {
+                background: #6a1b9a;
+                color: #fff
+            }
+
+            .controls-panel {
+                background: rgba(0, 0, 0, .6);
+                backdrop-filter: blur(10px);
+                border-radius: 16px;
+                padding: 25px;
+                max-width: 650px;
+                margin: 0 auto
+            }
+        </style>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        {% include "_site_ui.html" %}
+    </head>
+    <body class="st-roulette-page">
+        {% set nav_balance_id = "nav-balance" %}{% include "_site_nav.html" %}
+        <main class="container mt-4" id="st-content">
+            <div class="st-page-heading">
+                <div>
+                    <span class="st-eyebrow">Strike Team 9</span>
+                    <h1>Рулетка</h1>
+                    <p>Выбери ставку. Остальное решит колесо.</p>
+                </div>
+                <div class="st-actions"></div>
+            </div>
+            <div class="st-game-layout">
+                <section class="st-game-board st-panel text-center">
+                    <div class="wheel-container">
+                        <div class="wheel-marker"></div>
+                        <div class="wheel" id="wheel"></div>
+                        <div class="wheel-center" id="center-number"></div>
+                    </div>
+                    <div class="result-display" id="result-display" aria-live="polite"></div>
+                    <p class="st-field-hint">37 секторов · числа от 0 до 36</p>
+                </section>
+                <aside class="st-game-control">
+                    <div class="controls-panel">
+                        <h2>Сделать ставку</h2>
+                        <label for="bet-amount" class="form-label">Сумма, БК</label>
+                        <input type="number"
+                               id="bet-amount"
+                               step="0.01"
+                               min="0.01"
+                               value="10"
+                               class="form-control mb-3 mx-auto"
+                               style="max-width:200px">
+                        <div class="st-bet-presets" data-st-bet-target="bet-amount">
+                            <button type="button" data-st-bet-value="10">10</button><button type="button" data-st-bet-value="50">50</button><button type="button" data-st-bet-value="100">100</button><button type="button" data-st-bet-value="half">½</button><button type="button" data-st-bet-value="double">×2</button>
+                        </div>
+                        <label class="form-label text-white-50 mb-2">На что ставим?</label>
+                        <div class="row g-2 mb-3">
+                            <div class="col">
+                                <button class="bet-btn btn-red w-100"
+                                        data-type="red"
+                                        onclick="selectBet('red')">🔴 Красное (x2)</button>
+                            </div>
+                            <div class="col">
+                                <button class="bet-btn btn-black w-100"
+                                        data-type="black"
+                                        onclick="selectBet('black')">⚫ Чёрное (x2)</button>
+                            </div>
+                            <div class="col">
+                                <button class="bet-btn btn-green w-100"
+                                        data-type="green"
+                                        onclick="selectBet('green')">🟢 Зеро (x36)</button>
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col">
+                                <button class="bet-btn btn-even w-100"
+                                        data-type="even"
+                                        onclick="selectBet('even')">Чётное (x2)</button>
+                            </div>
+                            <div class="col">
+                                <button class="bet-btn btn-odd w-100"
+                                        data-type="odd"
+                                        onclick="selectBet('odd')">Нечётное (x2)</button>
+                            </div>
+                        </div>
+                        <button id="spin-btn"
+                                class="btn btn-warning btn-lg w-100 fw-bold mt-2"
+                                onclick="spin()"
+                                disabled>🎰 Крутить</button>
+                    </div>
+                    <details class="st-rules">
+                        <summary>Правила и выплаты</summary>
+                        <p>Красное, чёрное, чётное или нечётное — ×2. Зеро — ×36. Ноль не относится к чётным, нечётным, красным или чёрным. Выплата включает ставку.</p>
+                    </details>
+                </aside>
+            </div>
+        </main>
+        <script>
+const RN = {
+    0: "green",
+    1: "red",
+    2: "black",
+    3: "red",
+    4: "black",
+    5: "red",
+    6: "black",
+    7: "red",
+    8: "black",
+    9: "red",
+    10: "black",
+    11: "black",
+    12: "red",
+    13: "black",
+    14: "red",
+    15: "black",
+    16: "red",
+    17: "black",
+    18: "red",
+    19: "red",
+    20: "black",
+    21: "red",
+    22: "black",
+    23: "red",
+    24: "black",
+    25: "red",
+    26: "black",
+    27: "red",
+    28: "black",
+    29: "black",
+    30: "red",
+    31: "black",
+    32: "red",
+    33: "black",
+    34: "red",
+    35: "black",
+    36: "red",
+};
+const WO = [
+    0, 32, 15, 19, 4, 21, 2, 25, 17, 34, 6, 27, 13, 36, 11, 30, 8, 23, 10, 5, 24, 16, 33, 1, 20, 14,
+    31, 9, 22, 18, 29, 7, 28, 12, 35, 3, 26,
+];
+const CM = {
+    green: "#2e7d32",
+    red: "#d32f2f",
+    black: "#212121",
+};
+const SA = 360 / 37;
+let selectedType = null,
+    spinning = false,
+    currentRotation = 0;
+
+function buildWheel() {
+    const w = document.getElementById("wheel");
+    w.innerHTML = "";
+    let gp = [];
+    WO.forEach((n, i) => {
+        const c = RN[n];
+        const s = i * SA,
+            e = (i + 1) * SA;
+        gp.push(`${CM[c]} ${s}deg ${e}deg`);
+        const seg = document.createElement("div");
+        seg.className = "wheel-segment";
+        seg.style.transform = `rotate(${s + SA / 2}deg)`;
+        const l = document.createElement("span");
+        l.textContent = n;
+        seg.appendChild(l);
+        w.appendChild(seg);
+    });
+    w.style.background = `conic-gradient(${gp.join(", ")})`;
+}
+buildWheel();
+
+function selectBet(t) {
+    if (spinning) return;
+    selectedType = t;
+    document.querySelectorAll(".bet-btn").forEach((b) => {
+        b.classList.remove("selected");
+        b.setAttribute("aria-pressed", "false");
+    });
+    document.querySelector(`[data-type="${t}"]`).classList.add("selected");
+    document.querySelector(`[data-type="${t}"]`).setAttribute("aria-pressed", "true");
+    document.getElementById("spin-btn").disabled = false;
+}
+async function spin() {
+    if (spinning || !selectedType) return;
+    spinning = true;
+    const btn = document.getElementById("spin-btn");
+    btn.disabled = true;
+    btn.textContent = "⏳ Крутим...";
+    document.getElementById("result-display").classList.remove("show");
+    document.getElementById("center-number").textContent = "";
+    const fd = new FormData();
+    fd.append("bet_amount", document.getElementById("bet-amount").value);
+    fd.append("bet_type", selectedType);
+    try {
+        const res = await fetch("/api/roulette/spin", {
+            method: "POST",
+            body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            STUI.notice(data.detail);
+            spinning = false;
+            btn.disabled = false;
+            btn.textContent = "🎰 Крутить";
+            return;
+        }
+        const ri = WO.indexOf(data.number);
+        const sc = ri * SA + SA / 2;
+        const tb = currentRotation + 1800;
+        const cor = (360 - sc - (tb % 360) + 360) % 360;
+        currentRotation = tb + cor;
+        const w = document.getElementById("wheel");
+        w.style.transition = "transform 3s cubic-bezier(.25,.1,.25,1)";
+        w.style.transform = `rotate(${currentRotation}deg)`;
+        setTimeout(() => {
+            const cc =
+                data.color === "green"
+                    ? "res-green"
+                    : data.color === "red"
+                      ? "res-red"
+                      : "res-black";
+            const rd = document.getElementById("result-display");
+            rd.className = `result-display show ${cc}`;
+            rd.innerHTML = `${STUI.escape(data.message)}<br><small class="fs-6">${data.won ? "✅" : "❌"}</small>`;
+            document.getElementById("center-number").textContent = data.number;
+            STUI.setBalance(data.balance);
+            spinning = false;
+            btn.disabled = false;
+            btn.textContent = "🎰 Крутить";
+            w.style.transition = "none";
+        }, 3000);
+    } catch (e) {
+        STUI.notice("Ошибка сети");
+        spinning = false;
+        btn.disabled = false;
+        btn.textContent = "🎰 Крутить";
+    }
+}
+
+</script>
+    </body>
+</html>

@@ -1,0 +1,23 @@
+.env
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+venv/
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+tests/.test-data/
+
+.protocol-session.cookies
+.protocol-session-*
+
+# Private configuration, sessions and production state
+.env.*
+*.cookies
+*.sqlite
+*.sqlite3
+squad-data/
+*.pem
+*.key

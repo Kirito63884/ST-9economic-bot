@@ -1,0 +1,47 @@
+{% if user %}
+<script>
+(() => {
+    let lastAction = Date.now(),
+        sent = 0,
+        busy = false;
+    for (const event of ["pointerdown", "keydown", "scroll", "touchstart"])
+        window.addEventListener(
+            event,
+            () => {
+                lastAction = Date.now();
+            },
+            {
+                passive: true,
+            },
+        );
+    async function ping() {
+        const now = Date.now();
+        if (busy || document.hidden || now - lastAction >= 300000 || now - sent < 60000) return;
+        busy = true;
+        try {
+            const r = await fetch("/api/site-presence", {
+                method: "POST",
+                headers: {
+                    "X-ST9-Action": "site-presence",
+                },
+                signal: AbortSignal.timeout(10000),
+            });
+            if (r.ok) sent = Date.now();
+        } catch (e) {
+        } finally {
+            busy = false;
+        }
+    }
+    setInterval(ping, 60000);
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) {
+            lastAction = Date.now();
+            ping();
+        }
+    });
+    window.addEventListener("pageshow", ping);
+    ping();
+})();
+
+</script>
+{% endif %}

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Бильярд — Strike Team 9</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+              rel="stylesheet">
+        {% include "_site_ui.html" %}{% include "_billiards_ui.html" %}{% include "_table_admin_ui.html" %}
+    </head>
+    <body>
+        {% include "_site_nav.html" %}
+        <main class="container mt-4" id="st-content">
+            <div class="st-page-heading">
+                <div>
+                    <span class="st-eyebrow">Физика и точность</span>
+                    <h1>Бильярд</h1>
+                    <p>Тренировка на одного, классический 8-ball или ротация для компании.</p>
+                </div>
+                <a class="btn btn-outline-light" href="/games">Все игры →</a>
+            </div>
+            <div class="bl-layout">
+                <section>
+                    <div class="st-panel">
+                        <div class="st-section-heading">
+                            <h2>Столы</h2>
+                            <button class="btn btn-outline-light btn-sm" id="refresh">Обновить</button>
+                        </div>
+                        <div id="tables" class="bl-list">
+                            <p>Загружаем столы…</p>
+                        </div>
+                    </div>
+                    <details class="st-panel mt-3">
+                        <summary>Правила режимов</summary>
+                        <div class="bl-help mt-3">
+                            <b>Тренировка:</b> один игрок, без ставки. Сайт считает удары, забитые шары, фолы и время. Можно начинать заново без записей в финансовой истории.
+                            <br>
+                            <br>
+                            <b>8-ball:</b> два игрока. После первого законного шара назначаются сплошные и полосатые. Восьмёрка забивается после своей группы. Ранняя восьмёрка или восьмёрка вместе с падением битка означает поражение.
+                            <br>
+                            <br>
+                            <b>Ротация:</b> 2–6 игроков. Первым касанием нужен младший оставшийся шар. За каждый забитый шар начисляется его номер; после последнего шара побеждает участник с наибольшей суммой. При равенстве банк делится точно до копейки.
+                            <br>
+                            <br>
+                            После фола следующий игрок ставит биток в свободную точку. Законный забитый шар сохраняет ход. Три пропуска таймера означают сдачу. Взносы списываются только при старте, банк распределяется без комиссии.
+                        </div>
+                    </details>
+                </section>
+                <aside class="bl-aside">
+                    <section class="st-panel">
+                        <h2>Создать стол</h2>
+                        <form id="create" class="bl-form">
+                            <label>
+                                Режим<select id="mode">
+                                <option value="practice">Тренировка на одного</option>
+                                <option value="eight">8-ball на двоих</option>
+                                <option value="rotation" selected>Ротация, 2–6 игроков</option>
+                            </select></label><label id="playersLabel">Игроков<select id="players">
+                                <option>2</option>
+                                <option>3</option>
+                                <option>4</option>
+                                <option>5</option>
+                                <option>6</option>
+                            </select></label><label id="entryLabel">Ставка каждого, БК<input id="entry" type="number" min="0" max="1000000" step="0.01" value="10"></label><label>Время хода<select id="timer">
+                                <option value="45">45 секунд</option>
+                                <option value="60">60 секунд</option>
+                                <option value="90" selected>90 секунд</option>
+                                <option value="120">120 секунд</option>
+                            </select></label><label id="privateLabel"><span><input id="private"
+       type="checkbox">
+                                Закрытый стол</span>
+                            </label>
+                            <div id="bank" class="bl-status"></div>
+                            <button class="btn btn-primary" type="submit">Создать стол</button>
+                        </form>
+                    </section>
+                </aside>
+            </div>
+        </main>
+        <script nonce="{{ request.state.csp_nonce }}">
+const esc = (v) =>
+    String(v ?? "").replace(
+        /[&<>"']/g,
+        (c) =>
+            ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;",
+            })[c],
+    );
+async function api(url, options) {
+    const r = await fetch(url, options),
+        d = await r.json();
+    if (!r.ok) throw Error(d.detail || "Ошибка запроса");
+    return d;
+}
+const mode = document.getElementById("mode"),
+    players = document.getElementById("players"),
+    entry = document.getElementById("entry");
+
+function adapt() {
+    const practice = mode.value === "practice",
+        eight = mode.value === "eight";
+    players.value = practice ? "1" : eight ? "2" : Math.max(2, Number(players.value) || 2);
+    players.disabled = practice || eight;
+    entry.value = practice ? "0" : entry.value === "0" ? "10" : entry.value;
+    entry.disabled = practice;
+    document.getElementById("private").checked =
+        practice || document.getElementById("private").checked;
+    document.getElementById("private").disabled = practice;
+    const count = Number(players.value),
+        stake = Math.round(Number(entry.value || 0) * 100);
+    document.getElementById("bank").innerHTML = practice
+        ? '<span class="bl-practice">Без ставки и финансовой истории</span>'
+        : `Банк: <b>${((count * stake) / 100).toFixed(2)} БК</b> · без комиссии`;
+}
+mode.addEventListener("change", adapt);
+players.addEventListener("change", adapt);
+entry.addEventListener("input", adapt);
+adapt();
+document.getElementById("create").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const button = e.submitter;
+    button.disabled = true;
+    try {
+        const rules = {
+            mode: mode.value,
+            max_players: Number(players.value),
+            entry_cents: Math.round(Number(entry.value || 0) * 100),
+            turn_seconds: Number(document.getElementById("timer").value),
+            private: document.getElementById("private").checked,
+        };
+        const d = await api("/api/billiards/tables", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                rules,
+            }),
+        });
+        location.href = "/games/billiards/table/" + encodeURIComponent(d.table_id);
+    } catch (error) {
+        STUI.notice(error.message, "error");
+        button.disabled = false;
+    }
+});
+const labels = {
+    practice: "Тренировка",
+    eight: "8-ball",
+    rotation: "Ротация",
+};
+async function load() {
+    try {
+        const d = await api("/api/billiards/tables");
+        document.getElementById("tables").innerHTML = d.tables.length
+            ? d.tables
+                  .map(
+                      (t) =>
+                          `<article class="bl-card"><div><h3>${t.mine ? "Ваш стол" : esc(t.creator)}</h3><p>${labels[t.rules.mode]} · ${t.players}/${t.rules.max_players} игроков · ${t.phase === "waiting" ? "набор" : t.phase === "finished" ? "завершён" : "идёт партия"}</p><p>${t.rules.mode === "practice" ? "без ставки" : `ставка ${(t.rules.entry_cents / 100).toFixed(2)} БК · банк ${((t.rules.entry_cents * t.rules.max_players) / 100).toFixed(2)} БК`}${t.rules.private ? " · закрытый" : ""}</p></div><div><a class="btn ${t.mine ? "btn-primary" : "btn-outline-light"}" href="/games/billiards/table/${encodeURIComponent(t.id)}">${t.mine ? "Вернуться" : "Открыть"}</a>${TableAdmin.markup(t, "billiards")}</div></article>`,
+                  )
+                  .join("")
+            : '<div class="bl-empty">Столов пока нет. Создай тренировку или пригласи игроков.</div>';
+    } catch (e) {
+        STUI.notice(e.message, "error");
+    }
+}
+document.getElementById("refresh").addEventListener("click", load);
+document.addEventListener("st-tables-changed", load);
+load();
+setInterval(() => {
+    if (!document.hidden) load();
+}, 10000);
+
+</script>
+    </body>
+</html>

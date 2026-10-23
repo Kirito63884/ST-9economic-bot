@@ -1,0 +1,45 @@
+{% if is_super %}
+<section id="panel-tables" role="tabpanel" aria-labelledby="tab-tables" hidden>
+    <div class="section-card">
+        <div class="section-heading">
+            <div>
+                <h2>Игровые столы</h2>
+                <p>Открытые и закрытые столы покера и дурака. Удаление доступно после завершения игры.</p>
+            </div>
+            <button type="button" class="btn btn-sm" onclick="loadAdminTables()">Обновить</button>
+        </div>
+        <div id="adminTableList" aria-live="polite">Загрузка…</div>
+    </div>
+</section>
+{% include "_table_admin_ui.html" %}
+<script nonce="{{ request.state.csp_nonce }}">
+let adminTablesBusy = false;
+async function loadAdminTables() {
+    if (adminTablesBusy) return;
+    adminTablesBusy = true;
+    const root = document.getElementById("adminTableList");
+    try {
+        const response = await fetch("/api/admin/game-tables"),
+            data = await response.json();
+        if (!response.ok) throw new Error(data.detail || "Ошибка загрузки");
+        root.innerHTML = data.tables.length
+            ? data.tables
+                  .map(
+                      (t) =>
+                          `<article class="st-admin-table-row"><div><strong>${t.game === "poker" ? "Покер" : "Дурак"} · ${TableAdmin.esc(t.creator)}</strong><p>${t.players} игроков · ${t.private ? "Закрытый" : "Открытый"} · ${t.can_delete ? "Можно удалить" : "Идёт игра"}</p></div>${TableAdmin.markup(t, t.game)}</article>`,
+                  )
+                  .join("")
+            : '<div class="empty-state">Столов пока нет</div>';
+    } catch (e) {
+        root.textContent = e.message;
+    } finally {
+        adminTablesBusy = false;
+    }
+}
+document.addEventListener("st-tables-changed", loadAdminTables);
+setInterval(() => {
+    if (!document.hidden && !document.getElementById("panel-tables").hidden) loadAdminTables();
+}, 10000);
+
+</script>
+{% endif %}

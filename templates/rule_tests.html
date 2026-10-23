@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Тесты по правилам — ST-9</title>{% include "_site_ui.html" %}
+    </head>
+    <body>
+        {% include "_site_nav.html" %}
+        <main class="container" id="st-content">
+            <div class="st-page-heading">
+                <div>
+                    <span class="st-eyebrow">Strike Team 9</span>
+                    <h1>Тесты по правилам</h1>
+                    <p>Выберите все правильные варианты. Сохранённый ответ нельзя изменить.</p>
+                </div>
+                <a class="btn" href="/profile">Мой профиль</a>
+            </div>
+            <div id="rtWork" class="rt-card" aria-live="polite">Загрузка…</div>
+            <div id="rtMyTests" class="rt-card"></div>
+        </main>
+        {% include "_rule_test_ui.html" %}
+        <script>
+(() => {
+    const T = ST9Tests,
+        host = document.getElementById("rtWork");
+    let active = null;
+    async function lists() {
+        const d = await T.api("/api/rule-tests");
+        T.render(document.getElementById("rtMyTests"), d.tests);
+        return d.tests;
+    }
+
+    function result(d) {
+        host.replaceChildren(
+            T.el("h2", "Тест завершён"),
+            T.el("p", `Результат: ${d.score} из ${d.total} · ${d.percent}%`),
+            T.el("p", "Результат сохранён в вашем профиле."),
+        );
+    }
+
+    function question(d) {
+        host.replaceChildren(
+            T.el("h2", `Вопрос ${d.question.position + 1} из ${d.total}`),
+            T.el("p", d.question.text),
+        );
+        const form = T.el("form");
+        for (const [i, text] of d.question.options.entries()) {
+            const label = T.el("label", undefined, "rt-option");
+            const input = T.el("input");
+            input.type = "checkbox";
+            input.value = i;
+            input.name = "answer";
+            label.append(input, T.el("span", text));
+            form.append(label);
+        }
+        const submit = T.el("button", "Сохранить ответ", "btn btn-primary");
+        submit.type = "submit";
+        const error = T.el("p", "", "rt-error");
+        error.setAttribute("role", "alert");
+        form.append(submit, error);
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            submit.disabled = true;
+            error.textContent = "";
+            try {
+                const selected = [...form.querySelectorAll("input:checked")].map((x) =>
+                    Number(x.value),
+                );
+                const next = await T.api("/api/rule-tests/" + active + "/answer", {
+                    position: d.question.position,
+                    selected,
+                });
+                await lists();
+                show(next, true);
+            } catch (err) {
+                error.textContent = err.message;
+            } finally {
+                submit.disabled = false;
+            }
+        });
+        host.append(form);
+    }
+
+    function show(d, afterAnswer = false) {
+        if (d.completed_at) {
+            result(d);
+            return;
+        }
+        if (d.feedback && (afterAnswer || d.ready_to_finish)) {
+            host.replaceChildren(T.el("h2", `Ответ сохранён · ${d.answered} из ${d.total}`));
+            T.explanation(host, d.feedback);
+            host.append(
+                T.button(d.ready_to_finish ? "Завершить тест" : "Следующий вопрос", async () => {
+                    if (d.ready_to_finish) {
+                        const done = await T.api("/api/rule-tests/" + active + "/finish", {});
+                        result(done);
+                        await lists();
+                    } else question(d);
+                }),
+            );
+        } else question(d);
+    }
+    async function init() {
+        try {
+            const rows = await lists();
+            const requested = new URL(location.href).searchParams.get("test");
+            const row = requested
+                ? rows.find((x) => String(x.id) === requested)
+                : rows.find((x) => !x.completed_at);
+            if (!row) {
+                host.textContent = requested ? "Тест не найден." : "Нет назначенных тестов.";
+                return;
+            }
+            active = row.id;
+            show(await T.api("/api/rule-tests/" + active));
+        } catch (e) {
+            host.textContent = e.message;
+        }
+    }
+    init();
+})();
+
+</script>
+    </body>
+</html>

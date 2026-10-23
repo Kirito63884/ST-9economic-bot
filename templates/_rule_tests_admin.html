@@ -1,0 +1,120 @@
+{% if is_senior_or_super %}
+<div class="rt-card">
+    <h2>Назначить тест выбранным игрокам</h2>
+    <p class="rt-meta">У каждого игрока будет свой случайный набор вопросов без повторов. Игроки с незавершённым тестом пропускаются.</p>
+    <form id="rtAssignForm">
+        <div class="rt-filters">
+            <label>
+                Поиск<input id="rtPlayerSearch"
+       type="search"
+       placeholder="Имя, ник, Discord ID или Steam ID">
+            </label>
+            <label>
+                Права<select id="rtPlayerRole">
+                <option value="all">Все права</option>
+                <option value="player">Игроки</option>
+                <option value="admin">Администраторы</option>
+                <option value="senior">Старшие админы</option>
+                <option value="chief">Главные админы</option>
+                <option value="junior">Младшие админы</option>
+                </select>
+            </label>
+            <label>
+                Роль Discord<select id="rtPlayerDiscordRole">
+                <option value="all">Все роли Discord</option>
+                {% for item in role_filters %}
+                <option value="{{ item.id }}">{{ item.name }}</option>
+                {% endfor %}
+                </select>
+            </label>
+            <label>
+                Назначение<select id="rtPlayerEligibility">
+                <option value="eligible">Без активного теста</option>
+                <option value="all">Все игроки</option>
+                <option value="active">С активным тестом</option>
+                </select>
+            </label>
+        </div>
+        <div class="rt-actions">
+            <button type="button" class="btn btn-sm" id="rtSelectVisible">Выбрать найденных</button><button type="button" class="btn btn-sm" id="rtClearSelected">Снять весь выбор</button>
+            <span id="rtSelectionCount" role="status"></span>
+        </div>
+        <div id="rtPlayerList" class="rt-picker">
+            {% for u in users|sort(attribute='username') %}<label class="rt-pick-row"
+       data-rt-user="{{ u.id }}"
+       data-search="{{ u.display_name or '' }} {{ u.username }} {{ u.guild_nickname or '' }} {{ u.discord_id }} {{ u.steam_id or '' }} {{ player_squad[u.id].name or '' }}"
+       data-role="{{ 'chief' if u.discord_id == admin_discord_id or u.is_chief_admin else ('senior' if u.is_senior_admin else ('junior' if u.is_admin else 'player')) }}"
+       data-discord-roles="{{ user_role_ids[u.id]|join(' ') }}"><input type="checkbox"
+       value="{{ u.id }}"
+       aria-label="Выбрать {{ u.display_name or u.username }}"><span><strong>{{ u.display_name or u.username }}</strong><small class="rt-meta">@{{ u.username }} · ID {{ u.id }}{% if user_role_labels[u.id] %} · {{ user_role_labels[u.id]|join(", ") }}{% endif %}</small><small class="rt-active-note rt-meta"></small></span></label>{% endfor %}
+        </div>
+        <p id="rtNoPlayers" hidden>По выбранным фильтрам игроков нет.</p>
+        <div class="rt-actions">
+            <label>
+                Вопросов на игрока
+                <input id="rtCount"
+                       type="number"
+                       min="1"
+                       max="{{ server_rule_questions|length }}"
+                       value="{{ [10, server_rule_questions|length]|min }}"
+                       required></label><button id="rtAssignSubmit"
+        class="btn btn-primary btn-sm"
+        type="submit"
+        disabled>Назначить выбранным</button>
+        </div>
+        <p id="rtAssignStatus" role="status"></p>
+    </form>
+</div>
+<div class="rt-card">
+    <h2>Назначения и результаты</h2>
+    <div class="rt-filters">
+        <label>
+            Поиск игрока<input id="rtResultsSearch" type="search" placeholder="Имя или ID игрока">
+        </label>
+        <label>
+            Игрок<select id="rtResultsFilter">
+            <option value="">Все игроки</option>
+            {% for u in users|sort(attribute='username') %}
+            <option value="{{ u.id }}">{{ u.display_name or u.username }}</option>
+            {% endfor %}
+            </select>
+        </label>
+        <label>
+            Состояние<select id="rtResultsStatus">
+            <option value="all">Все тесты</option>
+            <option value="completed">Завершены</option>
+            <option value="active">Не завершены</option>
+            </select>
+        </label>
+        <label>
+            Результат от, %<input id="rtResultMin"
+       type="number"
+       min="0"
+       max="100"
+       step="0.1"
+       placeholder="0">
+        </label>
+        <label>
+            Результат до, %<input id="rtResultMax"
+       type="number"
+       min="0"
+       max="100"
+       step="0.1"
+       placeholder="100">
+        </label>
+        <label>
+            Сортировка<select id="rtResultsSort">
+            <option value="newest">Сначала новые</option>
+            <option value="score-asc">Сначала низкий результат</option>
+            <option value="score-desc">Сначала высокий результат</option>
+            <option value="name">По игроку</option>
+            </select>
+        </label>
+    </div>
+    <div class="rt-actions">
+        <button type="button" class="btn btn-sm" id="rtRefresh">Обновить</button><button type="button" class="btn btn-sm" id="rtResultsReset">Сбросить фильтры</button>
+        <span id="rtResultsCount" role="status"></span>
+    </div>
+    <div id="rtAllTests"></div>
+</div>
+{% endif %}

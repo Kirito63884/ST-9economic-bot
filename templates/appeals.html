@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width,initial-scale=1">
+        <title>Апелляции по сборам</title>
+        <style>
+    body {
+        margin: 0;
+        background: #0f1420;
+        color: #edf2ff;
+        font: 15px/1.5 system-ui
+    }
+
+    .wrap {
+        max-width: 900px;
+        margin: auto;
+        padding: 24px
+    }
+
+    .card {
+        background: #181f2d;
+        border: 1px solid #303b50;
+        border-radius: 14px;
+        padding: 20px;
+        margin: 14px 0
+    }
+
+    .row {
+        display: flex;
+        gap: 14px;
+        align-items: center;
+        justify-content: space-between
+    }
+
+    .muted {
+        color: #93a1ba
+    }
+
+    .btn,
+    input,
+    textarea {
+        font: inherit;
+        border-radius: 9px
+    }
+
+    .btn {
+        border: 1px solid #49689e;
+        background: #356de8;
+        color: #fff;
+        padding: 9px 13px;
+        cursor: pointer
+    }
+
+    input,
+    textarea {
+        width: 100%;
+        box-sizing: border-box;
+        background: #101622;
+        color: #fff;
+        border: 1px solid #3b465d;
+        padding: 11px;
+        margin-top: 8px
+    }
+
+    textarea {
+        min-height: 100px
+    }
+
+    .status {
+        font-weight: 700
+    }
+
+    @media(max-width:600px) {
+        .wrap {
+            padding: 14px
+        }
+
+        .row {
+            align-items: flex-start;
+            flex-direction: column
+        }
+
+        .btn {
+            width: 100%
+        }
+    }
+</style>
+    </head>
+    <body>
+        {% include "_request_security.html" %}
+        <main class="wrap">
+            <div class="row">
+                <div>
+                    <h1>Апелляции по сборам</h1>
+                    <p class="muted">Здесь можно обжаловать штраф за отсутствие без рапорта.</p>
+                </div>
+                <a class="btn" href="/">На главную</a>
+            </div>
+            <div id="appeals">
+                <div class="card">Загрузка…</div>
+            </div>
+        </main>
+        <script>
+const esc = (v) =>
+    String(v ?? "").replace(
+        /[&<>"']/g,
+        (c) =>
+            ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;",
+            })[c],
+    );
+async function load() {
+    const r = await fetch("/api/appeals/mine"),
+        d = await r.json();
+    document.getElementById("appeals").innerHTML = d.items.length
+        ? d.items
+              .map(
+                  (i) =>
+                      `<section class="card"><div class="row"><div><b>Сбор ${esc(i.event_date)}</b><div class="muted">Решение: ${esc(i.outcome)} · списано ${i.charged} БК</div></div><span class="status">${esc(i.appeal_status || "апелляция не подана")}</span></div>${!i.appeal_status && ["penalized", "pending_penalty"].includes(i.outcome) ? `<textarea id="reason-${i.assessment_id}" maxlength="2000" placeholder="Причина апелляции"></textarea><input id="url-${i.assessment_id}" placeholder="Ссылка на доказательство (необязательно)"><button class="btn" onclick="send(${i.assessment_id})">Отправить</button>` : ""}</section>`,
+              )
+              .join("")
+        : '<div class="card">Решений по сборам пока нет.</div>';
+}
+async function send(id) {
+    const r = await fetch("/api/assembly/appeals", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                assessment_id: id,
+                reason: document.getElementById("reason-" + id).value,
+                evidence_url: document.getElementById("url-" + id).value,
+            }),
+        }),
+        d = await r.json();
+    if (!r.ok) return alert(d.detail || "Ошибка");
+    load();
+}
+load();
+
+</script>
+    </body>
+</html>

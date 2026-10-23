@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Squad — Strike Team 9</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+              rel="stylesheet">
+        {% include "_site_ui.html" %}
+        <style>
+            .sq-intro {
+                display: flex;
+                justify-content: space-between;
+                gap: 20px;
+                align-items: flex-start;
+                margin: 32px 0 24px
+            }
+
+            .sq-intro p {
+                max-width: 690px;
+                margin: 12px 0 0
+            }
+
+            .sq-tools {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 12px;
+                margin: 20px 0;
+                align-items: center
+            }
+
+            .sq-tools input {
+                flex: 1;
+                min-width: 180px
+            }
+
+            .sq-stats {
+                display: flex;
+                gap: 12px;
+                flex-wrap: wrap
+            }
+
+            .sq-stat {
+                border: 1px solid var(--st-line);
+                padding: 12px 18px;
+                border-radius: 12px;
+                background: var(--st-panel);
+                flex: 1;
+                min-width: 120px
+            }
+
+            .sq-stat strong {
+                display: block;
+                font-size: 25px
+            }
+
+            .sq-grid {
+                display: grid;
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+                gap: 18px;
+                align-items: start
+            }
+
+            .sq-server {
+                border: 1px solid var(--st-line);
+                background: var(--st-panel);
+                border-radius: 14px;
+                padding: 22px;
+                min-width: 0
+            }
+
+            .sq-server h2 {
+                font-size: 18px;
+                overflow-wrap: anywhere;
+                margin: 7px 0 12px
+            }
+
+            .sq-server-meta {
+                display: flex;
+                justify-content: space-between;
+                gap: 10px;
+                flex-wrap: wrap;
+                font-size: 12px;
+                color: var(--st-muted)
+            }
+
+            .sq-chip {
+                display: inline-block;
+                padding: 4px 8px;
+                border: 1px solid var(--st-line);
+                border-radius: 6px;
+                font-size: 12px;
+                color: var(--st-muted)
+            }
+
+            .sq-chip.live {
+                color: var(--st-green);
+                background: #70ddb30a
+            }
+
+            .sq-chip.old {
+                color: var(--st-gold)
+            }
+
+            .sq-player {
+                display: flex;
+                gap: 12px;
+                align-items: center;
+                padding: 13px 0;
+                border-bottom: 1px solid var(--st-line)
+            }
+
+            .sq-player:last-child {
+                border: 0
+            }
+
+            .sq-avatar {
+                display: grid;
+                place-items: center;
+                background: #273952;
+                color: var(--st-blue);
+                width: 35px;
+                height: 35px;
+                border-radius: 10px;
+                flex-shrink: 0
+            }
+
+            .sq-player strong {
+                font-size: 14px;
+                overflow-wrap: anywhere
+            }
+
+            .sq-player small {
+                display: block;
+                overflow-wrap: anywhere
+            }
+
+            .sq-empty {
+                padding: 22px 0 5px;
+                font-size: 13px;
+                color: var(--st-muted)
+            }
+
+            .sq-status {
+                border: 1px solid var(--st-line);
+                background: var(--st-panel);
+                border-radius: 10px;
+                padding: 12px 16px;
+                margin-bottom: 18px;
+                color: var(--st-muted);
+                font-size: 13px
+            }
+
+            .sq-status.error {
+                color: var(--st-gold);
+                border-color: #675431
+            }
+
+            .sq-footer {
+                margin: 24px 0 40px;
+                font-size: 12px;
+                max-width: 850px
+            }
+
+            .sq-link {
+                display: inline-flex;
+                margin-top: 14px;
+                font-size: 12px
+            }
+
+            .sq-search-note {
+                font-size: 12px;
+                color: var(--st-muted);
+                margin-top: 10px
+            }
+
+            @media(max-width:650px) {
+                .sq-intro {
+                    flex-direction: column;
+                    margin-top: 22px
+                }
+
+                .sq-grid {
+                    grid-template-columns: 1fr
+                }
+
+                .sq-server {
+                    padding: 17px
+                }
+
+                .sq-tools {
+                    gap: 8px
+                }
+
+                .sq-stat {
+                    padding: 10px 14px
+                }
+
+                .sq-intro h1 {
+                    font-size: 29px
+                }
+            }
+        </style>
+    </head>
+    <body>
+        {% include "_site_nav.html" %}
+        <main class="container" id="st-content">
+            <header class="sq-intro">
+                <div>
+                    <span class="st-eyebrow">Strike Team 9 · Squad</span>
+                    <h1>Кто сейчас играет</h1>
+                    <p>Участники нашего сообщества на пяти серверах Squad. Сопоставляем по Steam ID, поэтому смена игрового ника не мешает найти своих.</p>
+                </div>
+                {% if user %}<a class="btn btn-outline-light"
+   href="/profile#edit">Мой Steam ID</a>{% endif %}
+            </header>
+            <div class="sq-stats">
+                <div class="sq-stat"><small>Участников в игре</small><strong id="sqOnline">—</strong></div>
+                <div class="sq-stat"><small>С привязанным Steam ID</small><strong id="sqTracked">—</strong></div>
+                <div class="sq-stat"><small>Серверов</small><strong>5</strong></div>
+            </div>
+            <div class="sq-tools">
+                <input class="form-control"
+                       id="sqSearch"
+                       type="search"
+                       placeholder="Найти участника или сервер"
+                       aria-label="Поиск участника или сервера"><button class="btn btn-outline-light" id="sqRefresh" type="button">Обновить список</button>
+            </div>
+            <div id="sqStatus" class="sq-status" role="status" aria-live="polite">Загружаем данные…</div>
+            <div id="sqServers" class="sq-grid"></div>
+            <p class="sq-footer">Здесь показаны участники сайта с привязанным Steam ID. Списки обновляются примерно каждые 30 секунд по данным BattleMetrics; источник может передавать их с задержкой. При первом запуске сопоставление игроков занимает несколько минут. Если Steam ID ещё не привязан, добавьте его в профиле.</p>
+        </main>
+        <script>
+(() => {
+    const nodes = {
+        search: document.getElementById("sqSearch"),
+        servers: document.getElementById("sqServers"),
+        status: document.getElementById("sqStatus"),
+        refresh: document.getElementById("sqRefresh"),
+    };
+    let data = null,
+        busy = false;
+    const el = (tag, text, cls) => {
+        const n = document.createElement(tag);
+        if (text !== undefined) n.textContent = text;
+        if (cls) n.className = cls;
+        return n;
+    };
+
+    function age(stamp) {
+        if (!stamp) return "Ещё не обновлялся";
+        const seconds = Math.max(0, Math.floor(Date.now() / 1000 - stamp));
+        return seconds < 60 ? `${seconds} сек. назад` : `${Math.floor(seconds / 60)} мин. назад`;
+    }
+
+    function draw() {
+        if (!data) return;
+        const term = nodes.search.value.trim().toLocaleLowerCase("ru");
+        nodes.servers.replaceChildren();
+        let shown = 0;
+        for (const server of data.servers) {
+            const whole = server.name.toLocaleLowerCase("ru").includes(term);
+            const members = server.members.filter(
+                (p) =>
+                    whole ||
+                    [p.name, p.discord_name, p.game_name].some((x) =>
+                        x.toLocaleLowerCase("ru").includes(term),
+                    ),
+            );
+            if (term && !whole && !members.length) continue;
+            shown++;
+            const card = el("section", undefined, "sq-server"),
+                top = el("div", undefined, "sq-server-meta");
+            const live = server.status === "ready" && !server.stale;
+            top.append(
+                el(
+                    "span",
+                    server.status === "offline" && !server.stale
+                        ? "Сервер офлайн"
+                        : live
+                          ? server.pending
+                              ? "Сопоставляем Steam ID"
+                              : "Список обновлён"
+                          : "Последние известные данные",
+                    "sq-chip " + (live ? "live" : "old"),
+                ),
+                el("span", age(server.updated_at)),
+            );
+            card.append(top, el("h2", server.name));
+            const meta = el("div", undefined, "sq-server-meta");
+            meta.append(
+                el("span", `Наших участников: ${server.members.length}`),
+                el("span", `На сервере: ${server.total_players} / ${server.max_players || "—"}`),
+            );
+            card.append(meta);
+            const details = el("div", undefined, "sq-search-note");
+            details.append(
+                el("p", "Карта / слой: " + (server.map || "нет данных")),
+                el("p", "Режим: " + (server.mode || "нет данных")),
+                el(
+                    "p",
+                    "Очередь: " +
+                        (Number.isInteger(server.queue) ? server.queue + " игроков" : "нет данных"),
+                ),
+                el(
+                    "p",
+                    "Фракции: " +
+                        (server.factions?.length === 2
+                            ? server.factions.join(" против ")
+                            : "нет данных"),
+                ),
+                el(
+                    "p",
+                    "Онлайн: " +
+                        (server.source || "BattleMetrics") +
+                        (Object.values(server.metadata_sources || {}).includes("SQSTAT")
+                            ? " · сведения о сервере дополнены SQSTAT (" +
+                              age(server.metadata_checked_at) +
+                              ")"
+                            : ""),
+                ),
+            );
+            card.append(details);
+            if (server.error) card.append(el("p", server.error, "sq-search-note"));
+            if (server.pending)
+                card.append(
+                    el(
+                        "p",
+                        `Проверяем Steam ID ещё ${server.pending} игроков. Список участников пока неполный.`,
+                        "sq-search-note",
+                    ),
+                );
+            if (members.length)
+                for (const p of members) {
+                    const row = el("div", undefined, "sq-player"),
+                        identity = el("div");
+                    identity.append(el("strong", p.name));
+                    if (p.discord_name !== p.name)
+                        identity.append(el("small", `Discord: ${p.discord_name}`));
+                    if (p.game_name && p.game_name !== p.name)
+                        identity.append(el("small", `В Squad: ${p.game_name}`));
+                    row.append(el("span", p.avatar || p.name.slice(0, 1), "sq-avatar"), identity);
+                    card.append(row);
+                }
+            else
+                card.append(
+                    el(
+                        "div",
+                        term && !whole
+                            ? "Поиск не дал совпадений"
+                            : server.status === "starting"
+                              ? "Служба ещё загружает первый список."
+                              : !live && server.status !== "offline"
+                                ? "Текущий список пока недоступен."
+                                : server.pending
+                                  ? "Участники пока не найдены; сопоставление продолжается."
+                                  : "Участников Strike Team 9 на этом сервере не обнаружено.",
+                        "sq-empty",
+                    ),
+                );
+            const link = el("a", "Открыть сервер в BattleMetrics ↗", "sq-link");
+            link.href = server.url;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            card.append(link);
+            nodes.servers.append(card);
+        }
+        if (!shown) nodes.servers.append(el("div", "По запросу ничего не найдено.", "sq-status"));
+        document.getElementById("sqOnline").textContent = data.online_members;
+        document.getElementById("sqTracked").textContent = data.tracked_members;
+        const incomplete = data.servers.some(
+            (s) => s.pending || s.stale || s.status === "starting",
+        );
+        nodes.status.classList.toggle("error", incomplete);
+        nodes.status.textContent = incomplete
+            ? "Часть данных ещё проверяется или устарела. Показаны только найденные участники; число играющих может быть неполным."
+            : "Данные получены. Список обновляется автоматически каждые 30 секунд.";
+    }
+    async function load() {
+        if (busy) return;
+        busy = true;
+        nodes.refresh.disabled = true;
+        try {
+            const r = await fetch("/api/squad/online", {
+                cache: "no-store",
+            });
+            if (!r.ok) throw new Error();
+            data = await r.json();
+            draw();
+        } catch {
+            nodes.status.textContent =
+                "Не удалось получить новый список. Проверьте соединение и повторите обновление.";
+            nodes.status.classList.add("error");
+        } finally {
+            busy = false;
+            nodes.refresh.disabled = false;
+        }
+    }
+    nodes.search.addEventListener("input", draw);
+    nodes.refresh.addEventListener("click", load);
+    document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) load();
+    });
+    load();
+    setInterval(() => {
+        if (!document.hidden) load();
+    }, 30000);
+})();
+
+</script>
+    </body>
+</html>
