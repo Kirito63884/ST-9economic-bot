@@ -263,7 +263,8 @@
                 display: flex;
                 flex-direction: column;
                 background: #141925;
-                overflow: hidden
+                overflow-x: hidden;
+                overflow-y: auto
             }
 
             .brand {
@@ -1907,7 +1908,6 @@
              id="toastContainer"
              role="status"
              aria-live="polite"></div>
-        {% include "_statistics_freshness.html" %}
         <div class="app-shell" id="appShell">
             <aside class="sidebar">
                 <a class="brand" href="/admin"><span class="brand-icon">ST9</span><span>Strike Team 9<small>Бишопкоины · управление</small></span></a>
@@ -2056,6 +2056,7 @@
                                 hidden></button><a class="btn btn-sm" href="/">На сайт ↗</a>
                     </div>
                 </header>
+                {% include "_statistics_freshness.html" %}
                 <div class="stats">
                     <div class="stat-card">
                         <div class="stat-label">Активные игроки</div>
