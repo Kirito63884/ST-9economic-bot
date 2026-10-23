@@ -1913,7 +1913,9 @@
                 <a class="brand" href="/admin"><span class="brand-icon">ST9</span><span>Strike Team 9<small>Бишопкоины · управление</small></span></a>
                 <div class="eyebrow nav-label">Рабочая область</div>
                 <nav class="side-nav" role="tablist" aria-label="Разделы админки">
+                    {% if may_view_statistics(user) %}
                     <a class="nav-item" href="/statistics"><span class="nav-icon">◷</span>Статистика источников</a>
+                    {% endif %}
                     <button class="nav-item"
                             id="tab-players"
                             role="tab"

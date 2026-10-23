@@ -32,3 +32,10 @@ New weekly pilot/crew ranking parsing tested using the existing RSC transport
 fixture extended with explicitly synthetic rankings. Live authenticated data,
 actual Discord delivery, production Nginx/TLS/systemd and deployment unverified.
 No production database or credentials were used.
+
+Statistics access restriction update:
+Full suite: 342 passed, 0 failed, 0 skipped (same two dependency warnings).
+Page and API deny players/junior admins, allow senior/chief admins and the
+administrator owner, and hide links/widgets for denied roles. Demotion takes
+effect with the existing session. Source status is not read for denied requests.
+Ruff checks pass.

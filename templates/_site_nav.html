@@ -10,7 +10,9 @@
             <a href="/medals" {% if page_path.startswith("/medals") %}aria-current="page"{% endif %}>Медали</a>
             <a href="/squad" {% if page_path == '/squad' %}aria-current="page"{% endif %}>Squad</a>
             {% if user %}
+            {% if may_view_statistics(user) %}
             <a href="/statistics" {% if page_path == '/statistics' %}aria-current="page"{% endif %}>Статистика</a>
+            {% endif %}
             <a href="/rule-tests"
    {% if page_path == "/rule-tests" %}aria-current="page"
    {% endif %}>Тесты</a><a href="/profile"

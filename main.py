@@ -4960,7 +4960,12 @@ from admin_presence import make_router as make_presence_router
 
 app.include_router(make_presence_router())
 app.include_router(make_medals_router(get_user, get_db, templates))
-from statistics_freshness import make_router as make_freshness_router
+from statistics_freshness import (
+    make_router as make_freshness_router,
+    may_view_statistics,
+)
+
+templates.env.globals["may_view_statistics"] = may_view_statistics
 
 app.include_router(make_freshness_router(get_user, get_db))
 app.include_router(make_automation_router(get_user, get_db, is_super_admin))

@@ -99,22 +99,37 @@ def source_status(db, now=None):
     return sources
 
 
+def may_view_statistics(user):
+    """One policy for page, API and navigation; roles are read from the database."""
+    if not user or user.deleted_at is not None or not user.is_admin:
+        return False
+    from main import is_senior_or_super
+
+    return bool(is_senior_or_super(user))
+
+
 def make_router(get_user, get_db):
     router = APIRouter()
 
-    @router.get("/statistics", response_class=HTMLResponse)
-    def page(request: Request, user=Depends(get_user)):
+    def require_statistics_admin(user=Depends(get_user)):
         if not user:
             raise HTTPException(401, "Войдите на сайт для просмотра статистики")
+        if not may_view_statistics(user):
+            raise HTTPException(
+                403, "Статистика доступна только главным и старшим администраторам"
+            )
+        return user
+
+    @router.get("/statistics", response_class=HTMLResponse)
+    def page(request: Request, user=Depends(require_statistics_admin)):
         templates = Jinja2Templates(directory=str(PROJECT_DIR / "templates"))
+        templates.env.globals["may_view_statistics"] = may_view_statistics
         return templates.TemplateResponse(
             request=request, name="statistics.html", context={"user": user}
         )
 
     @router.get("/api/statistics/freshness")
-    def status(user=Depends(get_user), db=Depends(get_db)):
-        if not user:
-            raise HTTPException(401)
+    def status(user=Depends(require_statistics_admin), db=Depends(get_db)):
         return JSONResponse(
             {"sources": source_status(db)}, headers={"Cache-Control": "no-store"}
         )

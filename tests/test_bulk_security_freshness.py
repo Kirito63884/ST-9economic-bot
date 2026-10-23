@@ -183,7 +183,9 @@ def test_freshness_requires_login_and_does_not_call_external_services(
     client, make_user, login_as
 ):
     assert client.get("/api/statistics/freshness").status_code == 401
-    response = login_as(make_user()).get("/api/statistics/freshness")
+    response = login_as(make_user(is_admin=True, is_senior_admin=True)).get(
+        "/api/statistics/freshness"
+    )
     assert response.status_code == 200, response.text
     assert any(row["name"].startswith("SQSTAT") for row in response.json()["sources"])
     assert "no-store" in response.headers["cache-control"]
@@ -212,7 +214,7 @@ def test_admin_custom_layout_includes_csrf_bridge(admin_client):
 
 def test_statistics_page_has_expanded_panel_and_navigation(client, make_user, login_as):
     assert client.get("/statistics").status_code == 401
-    client = login_as(make_user(is_admin=True))
+    client = login_as(make_user(is_admin=True, is_senior_admin=True))
     response = client.get("/statistics")
     assert response.status_code == 200
     assert "Статистика источников" in response.text
@@ -220,3 +222,56 @@ def test_statistics_page_has_expanded_panel_and_navigation(client, make_user, lo
     assert 'id="statisticsFreshness" open' in response.text
     assert 'href="/statistics"' in client.get("/").text
     assert 'href="/statistics"' in client.get("/admin").text
+
+
+@pytest.mark.parametrize(
+    "role,allowed",
+    [
+        ({}, False),
+        ({"is_admin": True}, False),
+        ({"is_admin": True, "is_senior_admin": True}, True),
+        ({"is_admin": True, "is_chief_admin": True}, True),
+        ({"is_senior_admin": True}, False),
+        ({"is_chief_admin": True}, False),
+        ({"is_admin": True, "discord_id": "100000000000000000"}, True),
+    ],
+)
+def test_statistics_access_policy_for_page_api_and_ui(
+    make_user, login_as, monkeypatch, role, allowed
+):
+    role = role.copy()
+    discord_id = role.pop("discord_id", None)
+    uid = make_user(**role)
+    if discord_id:
+        with SessionLocal.begin() as db:
+            db.get(User, uid).discord_id = discord_id
+    client = login_as(uid)
+    if not allowed:
+
+        def must_not_read_sources(*args, **kwargs):
+            pytest.fail("Unauthorized request must not read source status")
+
+        monkeypatch.setattr("statistics_freshness.source_status", must_not_read_sources)
+    for path in ("/statistics", "/api/statistics/freshness"):
+        response = client.get(path)
+        assert response.status_code == (200 if allowed else 403), response.text
+        if not allowed:
+            assert '"sources"' not in response.text
+    home = client.get("/").text
+    assert ('href="/statistics"' in home) is allowed
+    assert ('id="statisticsFreshness"' in home) is allowed
+    if role.get("is_admin"):
+        admin = client.get("/admin").text
+        assert ('href="/statistics"' in admin) is allowed
+        assert ('id="statisticsFreshness"' in admin) is allowed
+
+
+def test_statistics_revocation_takes_effect_without_new_login(make_user, login_as):
+    uid = make_user(is_admin=True, is_senior_admin=True)
+    client = login_as(uid)
+    assert client.get("/api/statistics/freshness").status_code == 200
+    with SessionLocal.begin() as db:
+        db.get(User, uid).is_senior_admin = False
+    assert client.get("/api/statistics/freshness").status_code == 403
+    assert client.get("/statistics").status_code == 403
+    assert 'href="/statistics"' not in client.get("/admin").text
