@@ -1,5 +1,20 @@
 {% if user %}
-<details class="container mt-3 mb-3" id="statisticsFreshness">
+<style>
+    #statisticsFreshness {
+        margin: 16px auto;
+        padding: 16px 20px;
+        max-width: 1180px;
+        border: 1px solid #526c95;
+        border-radius: 12px;
+        background: #172338;
+        color: #edf3ff;
+    }
+    #statisticsFreshness summary { cursor: pointer; font-weight: 700; font-size: 16px; }
+    #statisticsFreshness p { margin: 12px 0; color: #bdcbe0; line-height: 1.6; }
+    #statisticsFreshness ul { margin-top: 12px; padding-left: 22px; }
+    #statisticsFreshness li { padding: 6px 0; line-height: 1.5; overflow-wrap: anywhere; }
+</style>
+<details class="container mt-3 mb-3" id="statisticsFreshness" {% if statistics_expanded|default(false) %}open{% endif %}>
     <summary>Свежесть статистики <span data-freshness-summary>— проверяем…</span></summary>
     <p class="small text-secondary">Время последнего успешного получения данных. Сбой новой проверки не обновляет это время. Сохранённые итоги прошлых недель остаются историческими данными.</p>
     <ul data-freshness-list aria-live="polite">
@@ -14,6 +29,12 @@
         fresh: "актуально",
         stale: "устарело",
         missing: "ещё не получено",
+    };
+    const statuses = {
+        ready: "доступен", offline: "сервер выключен", pending: "ожидает проверки",
+        starting: "запускается", partial: "часть данных не получена",
+        unavailable: "недоступен", auth_required: "нужен вход в источник",
+        error: "ошибка обновления", warming: "собирает историю",
     };
     const dates = new Intl.DateTimeFormat("ru-RU", {
         timeZone: "Europe/Moscow",
@@ -35,7 +56,7 @@
                     source.state !== "fresh" || !["ready", "offline"].includes(source.status);
                 if (warning) attention++;
                 const item = document.createElement("li");
-                item.textContent = `${source.name}: ${states[source.state]} · ${source.checked_at ? dates.format(new Date(source.checked_at)) + " МСК" : "нет данных"}${source.status !== "ready" ? " · состояние: " + source.status : ""}`;
+                item.textContent = `${source.name}: ${states[source.state]} · ${source.checked_at ? dates.format(new Date(source.checked_at)) + " МСК" : "нет данных"}${source.status !== "ready" ? " · состояние: " + (statuses[source.status] || "требует проверки") : ""}`;
                 fragment.append(item);
             }
             list.replaceChildren(fragment);

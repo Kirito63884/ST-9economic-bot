@@ -9,7 +9,9 @@
             <a href="/games" {% if page_path.startswith('/games') %}aria-current="page"{% endif %}>Игры</a>
             <a href="/medals" {% if page_path.startswith("/medals") %}aria-current="page"{% endif %}>Медали</a>
             <a href="/squad" {% if page_path == '/squad' %}aria-current="page"{% endif %}>Squad</a>
-            {% if user %}<a href="/rule-tests"
+            {% if user %}
+            <a href="/statistics" {% if page_path == '/statistics' %}aria-current="page"{% endif %}>Статистика</a>
+            <a href="/rule-tests"
    {% if page_path == "/rule-tests" %}aria-current="page"
    {% endif %}>Тесты</a><a href="/profile"
    {% if page_path == '/profile' %}aria-current="page"
@@ -49,4 +51,6 @@
     {% endif %}
 </header>
 {% include "_site_presence.html" %}
+{% if page_path != '/statistics' %}
 {% include "_statistics_freshness.html" %}
+{% endif %}

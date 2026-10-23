@@ -3,8 +3,10 @@
 import json
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.templating import Jinja2Templates
+from database import PROJECT_DIR
 
 from protocol_award_exports import ProtocolAwardExport, ProtocolExportHealth
 from protocol_clan_source import ProtocolClanStats
@@ -99,6 +101,15 @@ def source_status(db, now=None):
 
 def make_router(get_user, get_db):
     router = APIRouter()
+
+    @router.get("/statistics", response_class=HTMLResponse)
+    def page(request: Request, user=Depends(get_user)):
+        if not user:
+            raise HTTPException(401, "Войдите на сайт для просмотра статистики")
+        templates = Jinja2Templates(directory=str(PROJECT_DIR / "templates"))
+        return templates.TemplateResponse(
+            request=request, name="statistics.html", context={"user": user}
+        )
 
     @router.get("/api/statistics/freshness")
     def status(user=Depends(get_user), db=Depends(get_db)):

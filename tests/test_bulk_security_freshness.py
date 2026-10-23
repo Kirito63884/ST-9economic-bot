@@ -208,3 +208,15 @@ def test_admin_custom_layout_includes_csrf_bridge(admin_client):
     assert response.text.count("const token =") == 1
     assert "X-ST9-CSRF" in response.text
     assert "statisticsFreshness" in response.text
+
+
+def test_statistics_page_has_expanded_panel_and_navigation(client, make_user, login_as):
+    assert client.get("/statistics").status_code == 401
+    client = login_as(make_user(is_admin=True))
+    response = client.get("/statistics")
+    assert response.status_code == 200
+    assert "Статистика источников" in response.text
+    assert response.text.count('id="statisticsFreshness"') == 1
+    assert 'id="statisticsFreshness" open' in response.text
+    assert 'href="/statistics"' in client.get("/").text
+    assert 'href="/statistics"' in client.get("/admin").text
