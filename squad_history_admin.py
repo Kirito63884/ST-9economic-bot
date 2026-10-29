@@ -5,6 +5,7 @@ open connection nor match participation proves presence after that observation.
 All wallet writes use the existing transactional bulk confirmation mechanism.
 """
 
+import json
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -15,6 +16,8 @@ from bulk_operations import bulk_preview
 from database import User
 from squad_play_history import SquadPlaySession
 from squad_routes import amount_cents, apply_credit
+from roster_membership import DiscordMemberRoleSnapshot
+from assembly_export import GROUPS
 
 MOSCOW = ZoneInfo("Europe/Moscow")
 GRANT_PATH = "/api/admin/squad/history/grant"
@@ -44,7 +47,39 @@ def iso(value):
     return value.isoformat() + "Z" if value else None
 
 
-def history_at(db, moment, admin, can_edit_user):
+def group_catalog():
+    return [(f"group_{index}", name) for index, (name, _) in enumerate(GROUPS)] + [
+        ("unassigned", "Без определённой группы"),
+        ("unknown", "Нет данных о группе"),
+    ]
+
+
+def member_groups(db, discord_ids):
+    """Classify saved Discord roles without claiming they describe past roles."""
+    result = {}
+    for row in db.query(DiscordMemberRoleSnapshot).filter(
+        DiscordMemberRoleSnapshot.discord_id.in_(discord_ids)
+    ):
+        try:
+            roles = json.loads(row.role_ids)
+            if not isinstance(roles, list) or any(
+                type(role) not in (str, int) for role in roles
+            ):
+                continue
+            roles = set(map(str, roles))
+        except (ValueError, TypeError):
+            continue
+        groups = [
+            f"group_{index}" for index, (_, ids) in enumerate(GROUPS) if roles & ids
+        ]
+        result[row.discord_id] = {
+            "group_ids": groups or ["unassigned"],
+            "groups_checked_at": iso(row.updated_at),
+        }
+    return result
+
+
+def history_at(db, moment, admin, can_edit_user, *, allow_grant=True, through=None):
     """Return linked active accounts whose saved intervals cover the moment.
 
     Overlapping/imported rows are merged per user/server. Across servers the
@@ -61,7 +96,9 @@ def history_at(db, moment, admin, can_edit_user):
     ).one()
     rows = (
         base.filter(
-            SquadPlaySession.started_at <= moment,
+            SquadPlaySession.started_at < through
+            if through
+            else SquadPlaySession.started_at <= moment,
             SquadPlaySession.last_seen_at >= moment,
             or_(
                 SquadPlaySession.ended_at.is_(None), SquadPlaySession.ended_at >= moment
@@ -72,6 +109,7 @@ def history_at(db, moment, admin, can_edit_user):
     )
     servers = {}
     accounts = set()
+    roles = member_groups(db, {str(user.discord_id) for _, user in rows})
     for session, user in rows:
         server = servers.setdefault(
             session.server_id,
@@ -86,20 +124,42 @@ def history_at(db, moment, admin, can_edit_user):
             "user_id": user.id,
             "name": user.display_name or user.username,
             "steam_id": user.steam_id,
-            "can_select": can_edit_user(admin, user),
+            "can_select": bool(allow_grant and can_edit_user(admin, user)),
+            **roles.get(
+                str(user.discord_id),
+                {"group_ids": ["unknown"], "groups_checked_at": None},
+            ),
             "started_at": iso(session.started_at),
             "last_seen_at": iso(session.last_seen_at),
             "ended_at": iso(session.ended_at),
         }
         accounts.add(user.id)
+    for server in servers.values():
+        server["groups"] = [
+            {
+                "id": key,
+                "name": name,
+                "members": sorted(
+                    (m for m in server["members"].values() if key in m["group_ids"]),
+                    key=lambda m: (m["name"].casefold(), m["user_id"]),
+                ),
+            }
+            for key, name in group_catalog()
+        ]
     return {
         "at": iso(moment),
+        "through": iso(through),
         "at_msk": moment.replace(tzinfo=timezone.utc).astimezone(MOSCOW).isoformat(),
         "timezone": "Europe/Moscow",
         "source": "Сохранённая история подключений BattleMetrics",
         "history_from": iso(first),
         "history_through": iso(last),
         "members_count": len(accounts),
+        "can_grant": allow_grant,
+        "groups_basis": "latest_discord_snapshot",
+        "groups_checked_at": min(
+            (r["groups_checked_at"] for r in roles.values()), default=None
+        ),
         "servers": [
             {
                 **s,
@@ -120,8 +180,13 @@ def make_router(
 ):
     router = APIRouter()
 
-    def require_senior(user=Depends(get_user)):
-        if not user or not user.is_admin or not may_grant(user):
+    def require_admin(user=Depends(get_user)):
+        if not user or not user.is_admin:
+            raise HTTPException(403, "История онлайна доступна администраторам.")
+        return user
+
+    def require_senior(user=Depends(require_admin)):
+        if not may_grant(user):
             raise HTTPException(
                 403, "История онлайна доступна главному и старшим администраторам."
             )
@@ -129,10 +194,16 @@ def make_router(
 
     @router.get("/api/admin/squad/history")
     async def lookup(
-        at: str, response: Response, admin=Depends(require_senior), db=Depends(get_db)
+        at: str, response: Response, admin=Depends(require_admin), db=Depends(get_db)
     ):
         response.headers["Cache-Control"] = "private, no-store"
-        return history_at(db, parse_moment(at), admin, can_edit_user)
+        return history_at(
+            db,
+            parse_moment(at),
+            admin,
+            can_edit_user,
+            allow_grant=bool(may_grant(admin)),
+        )
 
     @router.post(GRANT_PATH)
     @bulk_preview

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Install only the historical-online UI/API; never copy live data or secrets.
+# Install group/history views and role collection; preserve live data and secrets.
 set -euo pipefail
 umask 077
 
@@ -21,6 +21,10 @@ files=(
     templates/_admin_squad.html
     templates/_bulk_preview_script.html
     templates/_admin_squad_history.html
+    templates/admin.html
+    roster_membership.py
+    groups_admin.py
+    templates/_admin_groups.html
 )
 test -x "$app_dir/venv/bin/python"
 test -d "$app_dir/templates"
@@ -35,10 +39,10 @@ rollback() {
     trap - ERR
     if [[ "$changing" == 1 ]]; then
         echo "Ошибка установки. Восстанавливаем прежние файлы."
-        systemctl stop balance-app.service || true
+        systemctl stop balance-app.service discord-bot.service || true
         tar -xzf "$backup" -C "$app_dir" || return 1
         for path in "${absent[@]}"; do rm -f "$app_dir/$path"; done
-        systemctl start balance-app.service || true
+        systemctl start balance-app.service discord-bot.service || true
     fi
     echo "Обновление не завершено. Пришлите вывод терминала."
     exit 1
@@ -67,7 +71,7 @@ done
 from sqlalchemy import inspect
 from database import engine
 tables = set(inspect(engine).get_table_names())
-required = {"squad_play_sessions", "bulk_confirmations"}
+required = {"squad_play_sessions", "bulk_confirmations", "discord_member_role_snapshots", "assembly_windows", "assembly_report_checks", "assembly_assessments"}
 if not required <= tables:
     raise SystemExit("Не найдены таблицы истории/подтверждений. Сначала требуется предыдущее обновление.")
 print("Таблицы истории и подтверждений доступны.")
@@ -79,17 +83,17 @@ tar -czf "$backup" -C "$app_dir" "${original[@]}"
 tar -tzf "$backup" >/dev/null
 echo "Резервная копия файлов: $backup"
 changing=1
-systemctl stop balance-app.service
+systemctl stop balance-app.service discord-bot.service
 for path in "${files[@]}"; do
     install -o www-data -g www-data -m 644 "$stage/code/$path" "$app_dir/$path"
 done
 (
     cd "$app_dir"
-    runuser -u www-data -- ./venv/bin/python -m py_compile main.py bulk_operations.py squad_history_admin.py
+    runuser -u www-data -- ./venv/bin/python -m py_compile main.py bulk_operations.py squad_history_admin.py groups_admin.py roster_membership.py
 )
-systemctl start balance-app.service
+systemctl start balance-app.service discord-bot.service
 curl -fsS --max-time 10 --retry 5 --retry-delay 1 --retry-connrefused \
     http://127.0.0.1:8000/ -o /dev/null
-systemctl is-active balance-app.service
+systemctl is-active balance-app.service discord-bot.service
 changing=0
-echo "Готово. Обновите админку через Ctrl+F5 → Ещё → Squad → Кто был онлайн · история."
+echo "Готово. Обновите админку через Ctrl+F5 → Группы. Состав групп обновляется после синхронизации Discord."

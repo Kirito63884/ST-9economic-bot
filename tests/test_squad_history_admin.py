@@ -12,6 +12,7 @@ from bulk_operations import BulkConfirmation
 from conftest import session_cookie, wallet
 from database import GameHistory, SessionLocal, User
 from squad_play_history import SquadPlaySession
+from roster_membership import DiscordMemberRoleSnapshot, sync_snapshot
 
 MOMENT = datetime(2026, 10, 20, 17, 30)
 STEAM = "76561198000000000"
@@ -25,6 +26,7 @@ def reset_history(monkeypatch):
     with SessionLocal.begin() as db:
         db.query(SquadPlaySession).delete()
         db.query(BulkConfirmation).delete()
+        db.query(DiscordMemberRoleSnapshot).delete()
 
 
 def add_session(steam=STEAM, server="100", **overrides):
@@ -132,7 +134,7 @@ def test_invalid_or_future_time_rejected(admin_client, value):
 @pytest.mark.parametrize(
     "role", ["anonymous", "player", "junior", "senior_flag_only", "archived"]
 )
-def test_history_and_grants_require_active_senior_admin(
+def test_history_requires_admin_and_grants_require_senior(
     make_user, login_as, client, role
 ):
     if role != "anonymous":
@@ -143,7 +145,10 @@ def test_history_and_grants_require_active_senior_admin(
         if role == "archived":
             options["deleted_at"] = MOMENT
         client = login_as(make_user(**options))
-    assert client.get(PATH, params={"at": MOMENT.isoformat() + "Z"}).status_code == 403
+    response = client.get(PATH, params={"at": MOMENT.isoformat() + "Z"})
+    assert response.status_code == (200 if role == "junior" else 403)
+    if role == "junior":
+        assert response.json()["can_grant"] is False
     assert (
         client.post(history.GRANT_PATH, json={**payload(), "preview": True}).status_code
         == 403
@@ -391,3 +396,138 @@ def test_invalid_per_server_selection_is_rejected(admin_client, choices, status)
     response = admin_client.post(history.GRANT_PATH, json={**data, "preview": True})
     assert response.status_code == status, response.text
     assert wallet(102) == 1000
+
+
+def set_roles(discord_id, roles):
+    import json
+
+    with SessionLocal.begin() as db:
+        row = db.get(DiscordMemberRoleSnapshot, str(discord_id))
+        if not row:
+            row = DiscordMemberRoleSnapshot(discord_id=str(discord_id))
+            db.add(row)
+        row.role_ids = json.dumps(roles)
+        row.updated_at = datetime(2026, 10, 29, 10)
+
+
+def test_historical_online_is_grouped_by_latest_discord_roles(admin_client):
+    set_roles(102, ["1457398618192351334"])
+    set_roles(103, ["1468548988826292409"])
+    result = admin_client.get(PATH, params={"at": MOMENT.isoformat() + "Z"}).json()
+    groups = {g["name"]: g["members"] for g in result["servers"][0]["groups"]}
+    assert [m["user_id"] for m in groups["Разведывательная группа"]] == [102]
+    assert [m["user_id"] for m in groups["Группа обеспечения"]] == [103]
+    assert result["groups_basis"] == "latest_discord_snapshot"
+    assert result["groups_checked_at"] == "2026-10-29T10:00:00Z"
+    set_roles(102, ["1467925735674216478"])
+    changed = admin_client.get(PATH, params={"at": MOMENT.isoformat() + "Z"}).json()
+    groups = {g["name"]: g["members"] for g in changed["servers"][0]["groups"]}
+    assert not groups["Разведывательная группа"]
+    assert [m["user_id"] for m in groups["Бронетанковая группа"]] == [102]
+    assert changed["members_count"] == 2
+
+
+def test_multiple_groups_have_unique_server_count_and_one_payment(admin_client):
+    set_roles(102, ["1457398618192351334", "1446836770141507696"])
+    result = admin_client.get(PATH, params={"at": MOMENT.isoformat() + "Z"}).json()
+    groups = result["servers"][0]["groups"]
+    assert sum(any(m["user_id"] == 102 for m in g["members"]) for g in groups) == 2
+    assert result["members_count"] == 2
+    data = {
+        **payload(),
+        "user_ids": [102, 102],
+        "server_selections": {"100": [102, 102]},
+    }
+    plan = prepare(admin_client, data)
+    assert plan["changed"] == 1
+    assert confirm(admin_client, plan, data).status_code == 200
+    assert wallet(102) == 1012.34
+
+
+def test_unknown_roles_are_separate_from_known_unassigned_roles(admin_client):
+    set_roles(102, [])
+    result = admin_client.get(PATH, params={"at": MOMENT.isoformat() + "Z"}).json()
+    groups = {g["id"]: g["members"] for g in result["servers"][0]["groups"]}
+    assert [m["user_id"] for m in groups["unassigned"]] == [102]
+    assert [m["user_id"] for m in groups["unknown"]] == [103]
+    set_roles(102, {"bad": "payload"})
+    result = admin_client.get(PATH, params={"at": MOMENT.isoformat() + "Z"}).json()
+    unknown = next(g for g in result["servers"][0]["groups"] if g["id"] == "unknown")
+    assert len(unknown["members"]) == 2
+
+
+def test_junior_can_read_groups_but_cannot_credit(admin_client, make_user):
+    set_roles(102, ["1506355940935467098"])
+    make_user(104, is_admin=True)
+    admin_client.cookies.set("session", session_cookie(104))
+    response = admin_client.get(PATH, params={"at": MOMENT.isoformat() + "Z"})
+    assert response.status_code == 200
+    result = response.json()
+    assert result["can_grant"] is False
+    assert all(not m["can_select"] for s in result["servers"] for m in s["members"])
+    assert any(
+        g["name"] == "Десантно-штурмовая группа" and g["members"]
+        for g in result["servers"][0]["groups"]
+    )
+    assert (
+        admin_client.post(
+            history.GRANT_PATH, json={**payload(), "preview": True}
+        ).status_code
+        == 403
+    )
+    assert wallet(102) == 1000
+
+
+def test_lost_admin_rights_immediately_block_reading(admin_client):
+    with SessionLocal.begin() as db:
+        db.get(User, 101).is_admin = False
+    assert (
+        admin_client.get(PATH, params={"at": MOMENT.isoformat() + "Z"}).status_code
+        == 403
+    )
+
+
+def test_roster_import_retains_command_and_security_leadership_roles(admin_client):
+    roles = [{"id": "123", "name": "Участник"}, {"id": "456", "name": "Груз 200"}]
+    group_roles = ["1486041117408497704", "1517217078979989564", "1486041548566036540"]
+    with SessionLocal.begin() as db:
+        sync_snapshot(
+            db,
+            roles,
+            [
+                {
+                    "user": {"id": "102", "username": "Игрок"},
+                    "roles": ["123", *group_roles],
+                }
+            ],
+            required_role_id="123",
+        )
+        import json
+
+        assert set(
+            json.loads(db.get(DiscordMemberRoleSnapshot, "102").role_ids)
+        ) == set(group_roles)
+    result = admin_client.get(PATH, params={"at": MOMENT.isoformat() + "Z"}).json()
+    groups = {g["name"]: g["members"] for g in result["servers"][0]["groups"]}
+    assert groups["Высший командный состав"] and groups["Служба безопасности"]
+
+
+def test_junior_page_contains_only_read_only_history_controls(admin_client, make_user):
+    make_user(104, is_admin=True)
+    admin_client.cookies.set("session", session_cookie(104))
+    response = admin_client.get("/admin")
+    assert response.status_code == 200
+    assert 'id="tab-squad"' in response.text and 'id="sqHistoryCard"' in response.text
+    assert 'id="sqHistoryGrant"' not in response.text
+    assert 'id="sqGrantPreview"' not in response.text
+    assert 'id="sqSchedulePrepare"' not in response.text
+    from test_frontend_scripts import Scripts
+    import subprocess
+
+    parser = Scripts()
+    parser.feed(response.text)
+    for block in parser.blocks:
+        check = subprocess.run(
+            ["node", "--check"], input=block, text=True, capture_output=True
+        )
+        assert check.returncode == 0, check.stderr

@@ -1,0 +1,439 @@
+{% if is_senior_or_super %}
+<section id="panel-groups" role="tabpanel" aria-labelledby="tab-groups" hidden>
+  <div class="section-card">
+    <div class="section-heading">
+      <div>
+        <h2>Группы клана</h2>
+        <p>
+          Выберите группу для просмотра онлайна и последнего субботнего сбора.
+        </p>
+      </div>
+      <button class="btn" id="cgRefresh" type="button">Обновить группы</button>
+    </div>
+    <p class="hint">
+      Распределение по группам — по последнему сохранённому составу Discord.
+      Один игрок может состоять в нескольких группах.
+    </p>
+    <p id="cgCatalogStatus" class="hint" role="status" aria-live="polite"></p>
+    <div id="cgCatalog" class="clan-groups-grid"></div>
+  </div>
+  <div id="cgDetails" hidden>
+    <div class="section-card">
+      <h2 id="cgTitle"></h2>
+      <h3>Онлайн на сервере</h3>
+      <p class="hint">
+        Время — Москва (UTC+3). Для периода показываются участники, у которых
+        найдено хотя бы одно пересечение с сохранённым интервалом подключения.
+        Отсутствие записи не подтверждает офлайн.
+      </p>
+      <form id="cgOnlineForm" class="clan-group-filters">
+        <div>
+          <label class="form-label" for="cgMode">Режим</label
+          ><select class="form-select" id="cgMode">
+            <option value="moment">На момент времени</option>
+            <option value="period">За период</option>
+          </select>
+        </div>
+        <div>
+          <label class="form-label" id="cgStartLabel" for="cgStart"
+            >Дата и время · МСК</label
+          ><input
+            class="form-control"
+            id="cgStart"
+            type="datetime-local"
+            step="1"
+            required
+          />
+        </div>
+        <div id="cgEndField" hidden>
+          <label class="form-label" for="cgEnd">Конец периода · МСК</label
+          ><input
+            class="form-control"
+            id="cgEnd"
+            type="datetime-local"
+            step="1"
+          />
+        </div>
+        <button class="btn btn-primary" type="submit">Показать онлайн</button>
+      </form>
+      <p id="cgOnlineStatus" class="hint" role="status" aria-live="polite"></p>
+      <div id="cgOnline"></div>
+    </div>
+    <div class="section-card">
+      <div class="section-heading">
+        <div>
+          <h3>Последний завершённый субботний сбор</h3>
+          <p id="cgAssemblyTime">19:00–22:00 МСК</p>
+        </div>
+        <button class="btn" id="cgAssemblyRefresh" type="button">
+          Обновить сводку
+        </button>
+      </div>
+      <p class="hint">
+        Учитываются подтверждённые появления на игровых серверах и в голосовых
+        каналах Discord, кроме AFK. Принятый рапорт — сохранённая проверка
+        сообщения, поданного до начала сбора. Если игрок был на сборе и подал
+        рапорт, он показан среди присутствовавших с отметкой о рапорте.
+      </p>
+      <p
+        id="cgAssemblyStatus"
+        class="hint"
+        role="status"
+        aria-live="polite"
+      ></p>
+      <div id="cgAssembly"></div>
+    </div>
+  </div>
+</section>
+<style>
+  .clan-groups-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+    gap: 12px;
+  }
+  .clan-group-choice {
+    text-align: left;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    background: #111927;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+  .clan-group-choice[aria-pressed="true"] {
+    border-color: var(--blue);
+    background: #1b2b46;
+  }
+  .clan-group-choice span {
+    display: block;
+    margin-top: 8px;
+    color: var(--muted);
+  }
+  .clan-group-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: end;
+    margin: 18px 0;
+  }
+  .clan-group-filters > div {
+    min-width: 0;
+  }
+  .clan-group-list {
+    margin-top: 16px;
+    padding: 16px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #111927;
+    color: var(--text);
+  }
+  .clan-group-list h4 {
+    font-size: 16px;
+    color: var(--text);
+  }
+  .clan-group-table-wrap {
+    overflow-x: auto;
+  }
+  .clan-group-table {
+    width: 100%;
+    min-width: 420px;
+    border-collapse: collapse;
+  }
+  .clan-group-table td,
+  .clan-group-table th {
+    padding: 12px;
+    text-align: left;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+    color: var(--text);
+    background: #111927;
+    border-bottom: 1px solid var(--line);
+  }
+  .clan-group-table th {
+    background: #1b2537;
+  }
+  @media (max-width: 680px) {
+    .clan-group-filters > div {
+      width: 100%;
+    }
+  }
+</style>
+<script>
+  (() => {
+    const $ = (id) => document.getElementById(id);
+    const dates = new Intl.DateTimeFormat("ru-RU", {
+      timeZone: "Europe/Moscow",
+      dateStyle: "short",
+      timeStyle: "medium",
+    });
+    const stamp = (value) =>
+      value ? dates.format(new Date(value)) : "нет данных";
+    const local = (value) =>
+      new Intl.DateTimeFormat("sv-SE", {
+        timeZone: "Europe/Moscow",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
+      })
+        .format(value)
+        .replace(" ", "T");
+    const node = (tag, text, cls) => {
+      const n = document.createElement(tag);
+      if (text !== undefined) n.textContent = text;
+      if (cls) n.className = cls;
+      return n;
+    };
+    const statuses = {
+      present: "Были на сборе",
+      absent_without_report: "Отсутствовали без рапорта",
+      absent_with_report: "Отсутствовали с рапортом",
+      unknown: "Недостаточно данных — требуется проверка",
+      exempted: "Освобождены от участия",
+      not_required: "Не включены в сохранённый состав сбора",
+    };
+    let selected = null,
+      loaded = false,
+      catalogBusy = false,
+      generation = 0,
+      onlineGeneration = 0,
+      assemblyGeneration = 0;
+    $("cgStart").value = local(new Date(Date.now() - 3600000));
+    $("cgEnd").value = local(new Date(Date.now() - 60000));
+    for (const id of ["cgStart", "cgEnd"])
+      $(id).addEventListener("input", () => {
+        onlineGeneration++;
+        $("cgOnline").replaceChildren();
+        $("cgOnlineStatus").textContent =
+          "Время изменено. Нажмите «Показать онлайн».";
+      });
+    $("cgMode").addEventListener("change", () => {
+      const period = $("cgMode").value === "period";
+      $("cgEndField").hidden = !period;
+      $("cgEnd").required = period;
+      $("cgStartLabel").textContent = period
+        ? "Начало периода · МСК"
+        : "Дата и время · МСК";
+      onlineGeneration++;
+      $("cgOnline").replaceChildren();
+      $("cgOnlineStatus").textContent = "Нажмите «Показать онлайн».";
+    });
+    async function get(url) {
+      const response = await fetch(url, {
+        cache: "no-store",
+        signal: AbortSignal.timeout(20000),
+      });
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(
+          typeof data.detail === "string"
+            ? data.detail
+            : "Не удалось получить данные.",
+        );
+      return data;
+    }
+    function table(headers, rows) {
+      const wrap = node("div", undefined, "clan-group-table-wrap"),
+        result = node("table", undefined, "clan-group-table");
+      const heading = result.createTHead().insertRow();
+      for (const title of headers) {
+        const cell = node("th", title);
+        cell.scope = "col";
+        heading.append(cell);
+      }
+      const body = result.createTBody();
+      for (const values of rows) {
+        const row = body.insertRow();
+        for (const value of values) row.insertCell().textContent = value;
+      }
+      wrap.append(result);
+      return wrap;
+    }
+    function section(title) {
+      const result = node("section", undefined, "clan-group-list");
+      result.append(node("h4", title));
+      return result;
+    }
+    async function loadAssembly() {
+      if (!selected) return;
+      const key = selected.id,
+        version = generation,
+        request = ++assemblyGeneration;
+      $("cgAssembly").replaceChildren();
+      $("cgAssemblyStatus").textContent = "Загружаем учёт сбора…";
+      try {
+        const data = await get(
+          `/api/admin/groups/${encodeURIComponent(key)}/assembly`,
+        );
+        if (version !== generation || request !== assemblyGeneration) return;
+        $("cgAssemblyTime").textContent =
+          `${stamp(data.starts_at)} — ${stamp(data.ends_at)} МСК`;
+        const warnings = [];
+        if (!data.reports_ready)
+          warnings.push("Рапорты ещё не проверены или проверка не завершена.");
+        if (!data.battlemetrics_coverage && !data.voice_coverage)
+          warnings.push(
+            "Полного наблюдения за сбором нет: отсутствие не подтверждается.",
+          );
+        if (!data.window_matches)
+          warnings.push("Нет сохранённого окна сбора 19:00–22:00 МСК.");
+        $("cgAssemblyStatus").textContent =
+          warnings.join(" ") ||
+          `Рапорты проверены: ${stamp(data.reports_checked_at)} МСК. Группы — по текущему сохранённому составу Discord.`;
+        for (const [status, title] of Object.entries(statuses)) {
+          const members = data.members.filter(
+            (member) => member.status === status,
+          );
+          if (
+            !members.length &&
+            ![
+              "present",
+              "absent_without_report",
+              "absent_with_report",
+            ].includes(status)
+          )
+            continue;
+          const block = section(`${title} · ${members.length}`);
+          block.dataset.assemblyStatus = status;
+          if (!members.length)
+            block.append(node("p", "В этой категории нет участников.", "hint"));
+          else
+            block.append(
+              table(
+                ["Игрок", "Подтверждение"],
+                members.map((member) => [
+                  member.name,
+                  [
+                    member.has_report
+                      ? `Есть принятый рапорт (${stamp(member.reported_at)} МСК)`
+                      : "",
+                    ...member.evidence.map(
+                      (proof) =>
+                        proof.server_name ||
+                        proof.channel_name ||
+                        proof.source ||
+                        "Сохранённый учёт",
+                    ),
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") || "По сохранённым данным сбора",
+                ]),
+              ),
+            );
+          $("cgAssembly").append(block);
+        }
+      } catch (error) {
+        if (version === generation && request === assemblyGeneration)
+          $("cgAssemblyStatus").textContent = error.message;
+      }
+    }
+    function choose(group) {
+      selected = group;
+      generation++;
+      onlineGeneration++;
+      for (const button of $("cgCatalog").children)
+        button.setAttribute(
+          "aria-pressed",
+          String(button.dataset.groupId === group.id),
+        );
+      $("cgDetails").hidden = false;
+      $("cgTitle").textContent = group.name;
+      $("cgOnline").replaceChildren();
+      $("cgOnlineStatus").textContent =
+        "Выберите момент или период и нажмите «Показать онлайн».";
+      loadAssembly();
+    }
+    window.loadClanGroups = async (force = false) => {
+      if (catalogBusy || (loaded && !force)) return;
+      catalogBusy = true;
+      $("cgCatalogStatus").textContent = "Загружаем группы…";
+      try {
+        const data = await get("/api/admin/groups");
+        $("cgCatalog").replaceChildren();
+        for (const group of data.groups) {
+          const button = node("button", undefined, "clan-group-choice");
+          button.type = "button";
+          button.dataset.groupId = group.id;
+          button.setAttribute(
+            "aria-pressed",
+            String(selected?.id === group.id),
+          );
+          button.append(
+            node("strong", group.name),
+            node("span", `Участников на сайте: ${group.members_count}`),
+          );
+          button.addEventListener("click", () => choose(group));
+          $("cgCatalog").append(button);
+        }
+        loaded = true;
+        $("cgCatalogStatus").textContent =
+          `Состав по последней синхронизации Discord${data.groups_checked_at ? " от " + stamp(data.groups_checked_at) + " МСК" : ": сведения о ролях ещё не получены"}. Для просмотра выберите группу.`;
+        if (selected) {
+          const refreshed = data.groups.find(
+            (group) => group.id === selected.id,
+          );
+          if (refreshed) choose(refreshed);
+        } else {
+          const overall = data.groups.find((group) => group.id === "all");
+          if (overall) choose(overall);
+        }
+      } catch (error) {
+        $("cgCatalogStatus").textContent = error.message;
+      } finally {
+        catalogBusy = false;
+      }
+    };
+    $("cgRefresh").addEventListener("click", () => window.loadClanGroups(true));
+    $("cgAssemblyRefresh").addEventListener("click", loadAssembly);
+    $("cgOnlineForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (!selected) return;
+      const version = generation,
+        request = ++onlineGeneration,
+        key = selected.id;
+      const query = new URLSearchParams();
+      if ($("cgMode").value === "period") {
+        query.set("start", $("cgStart").value + "+03:00");
+        query.set("end", $("cgEnd").value + "+03:00");
+      } else query.set("at", $("cgStart").value + "+03:00");
+      $("cgOnline").replaceChildren();
+      $("cgOnlineStatus").textContent = "Проверяем сохранённые подключения…";
+      try {
+        const data = await get(
+          `/api/admin/groups/${encodeURIComponent(key)}/online?${query}`,
+        );
+        if (version !== generation || request !== onlineGeneration) return;
+        $("cgOnlineStatus").textContent =
+          `${stamp(data.at)}${data.through ? " — " + stamp(data.through) : ""} МСК. Найдено игроков: ${data.members_count}, серверов: ${data.servers.length}. Группы — по текущему составу Discord.`;
+        for (const server of data.servers) {
+          const block = section(`${server.name} · ${server.members.length}`);
+          block.append(
+            table(
+              ["Игрок", "Сохранённый интервал · МСК"],
+              server.members.map((member) => [
+                member.name,
+                `${stamp(member.started_at)} — ${stamp(member.ended_at && member.ended_at < member.last_seen_at ? member.ended_at : member.last_seen_at)}`,
+              ]),
+            ),
+          );
+          $("cgOnline").append(block);
+        }
+        if (!data.members_count)
+          $("cgOnline").append(
+            node(
+              "p",
+              "В выбранное время нет сохранённых подключений участников этой группы. Это не подтверждает их отсутствие онлайн.",
+              "hint",
+            ),
+          );
+      } catch (error) {
+        if (version === generation && request === onlineGeneration)
+          $("cgOnlineStatus").textContent = error.message;
+      }
+    });
+  })();
+</script>
+{% endif %}

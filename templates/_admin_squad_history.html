@@ -1,10 +1,14 @@
-<div class="section-card" id="sqHistoryCard">
+<div
+  class="section-card"
+  id="sqHistoryCard"
+  data-can-grant="{{ 'true' if is_senior_or_super else 'false' }}"
+>
   <div class="section-heading">
     <div>
       <h2>Кто был онлайн · история</h2>
       <p>
-        Выберите дату и время по Москве. Каждый сервер показан отдельно —
-        отметьте нужных участников в его списке.
+        Выберите дату и время по Москве. Внутри каждого сервера участники
+        распределены по текущим группам клана из Discord.
       </p>
     </div>
   </div>
@@ -35,6 +39,8 @@
     </div>
     <div id="sqHistoryResults" hidden>
       <p id="sqHistoryCoverage" class="hint"></p>
+      <p id="sqHistoryGroupsBasis" class="hint"></p>
+      {% if is_senior_or_super %}
       <div class="action-row mt-3">
         <label
           ><input id="sqHistorySelectAll" type="checkbox" /> Выбрать всех
@@ -42,7 +48,9 @@
         >
         <span id="sqHistorySelected" class="hint">Игроки не выбраны.</span>
       </div>
+      {% endif %}
       <div id="sqHistoryServers" class="sq-history-servers"></div>
+      {% if is_senior_or_super %}
       <div class="sq-admin-actions">
         <div>
           <label class="form-label" for="sqHistoryAmount"
@@ -86,6 +94,7 @@
         балансов. Уже выполненное начисление не запрещает отдельное новое
         начисление за тот же момент.
       </p>
+      {% endif %}
     </div>
   </fieldset>
   <p id="sqHistoryStatus" class="hint" role="status" aria-live="polite">
@@ -128,6 +137,16 @@
     color: var(--text);
     font-size: 17px;
     overflow-wrap: anywhere;
+  }
+  .sq-history-group {
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--line);
+  }
+  .sq-history-group h4 {
+    margin: 0;
+    font-size: 15px;
+    color: var(--text);
   }
   .sq-history-server label {
     display: inline-flex;
@@ -178,6 +197,7 @@
 <script>
   (() => {
     const $ = (id) => document.getElementById(id);
+    const canGrant = $("sqHistoryCard").dataset.canGrant === "true";
     const dateInput = $("sqHistoryAt");
     const selectAll = $("sqHistorySelectAll");
     const grantButton = $("sqHistoryGrant");
@@ -229,23 +249,27 @@
       const available = servers.flatMap((server) =>
         server.members.filter((member) => member.can_select),
       );
-      selectAll.disabled = !available.length;
-      selectAll.checked =
-        available.length > 0 &&
-        servers.every((server) =>
-          server.members.every(
-            (member) =>
-              !member.can_select ||
-              selected.get(server.id)?.has(member.user_id),
-          ),
-        );
+      if (selectAll) {
+        selectAll.disabled = !available.length;
+        selectAll.checked =
+          available.length > 0 &&
+          servers.every((server) =>
+            server.members.every(
+              (member) =>
+                !member.can_select ||
+                selected.get(server.id)?.has(member.user_id),
+            ),
+          );
+      }
       const unique = selectedIds();
       const serverCount = [...selected.values()].filter(
         (ids) => ids.size,
       ).length;
-      selectAll.indeterminate = unique.size > 0 && !selectAll.checked;
-      $("sqHistorySelected").textContent =
-        `Выбрано игроков: ${unique.size}. Серверов: ${serverCount}.`;
+      if (selectAll)
+        selectAll.indeterminate = unique.size > 0 && !selectAll.checked;
+      if ($("sqHistorySelected"))
+        $("sqHistorySelected").textContent =
+          `Выбрано игроков: ${unique.size}. Серверов: ${serverCount}.`;
       for (const server of servers) {
         const choice = selected.get(server.id) || new Set();
         const block = [...$("sqHistoryServers").children].find(
@@ -254,16 +278,35 @@
         if (!block) continue;
         const enabled = server.members.filter((member) => member.can_select);
         const all = block.querySelector("[data-server-all]");
-        all.disabled = !enabled.length;
-        all.checked =
-          enabled.length > 0 &&
-          enabled.every((member) => choice.has(member.user_id));
-        all.indeterminate = choice.size > 0 && !all.checked;
-        block.querySelector("[data-server-count]").textContent =
-          `Игроков: ${server.members.length}. Выбрано: ${choice.size}.`;
+        if (all) {
+          all.disabled = !enabled.length;
+          all.checked =
+            enabled.length > 0 &&
+            enabled.every((member) => choice.has(member.user_id));
+          all.indeterminate = choice.size > 0 && !all.checked;
+        }
+        block.querySelector("[data-server-count]").textContent = canGrant
+          ? `Игроков: ${server.members.length}. Выбрано: ${choice.size}.`
+          : `Игроков: ${server.members.length}.`;
+        for (const group of server.groups || []) {
+          const section = [...block.querySelectorAll("[data-group-id]")].find(
+            (node) => node.dataset.groupId === group.id,
+          );
+          const check = section?.querySelector("[data-group-all]");
+          if (!check) continue;
+          const eligible = group.members.filter((member) => member.can_select);
+          check.disabled = !eligible.length;
+          check.checked =
+            eligible.length > 0 &&
+            eligible.every((member) => choice.has(member.user_id));
+          check.indeterminate =
+            !check.checked &&
+            eligible.some((member) => choice.has(member.user_id));
+        }
         for (const input of block.querySelectorAll("[data-user-id]"))
           input.checked = choice.has(Number(input.dataset.userId));
       }
+      if (!grantButton) return;
       const amount = $("sqHistoryAmount").value.trim().replace(",", ".");
       const reason = $("sqHistoryReason").value.trim();
       grantButton.disabled =
@@ -276,52 +319,67 @@
         reason.length > 500;
     }
 
-    function renderMembers() {
-      const root = $("sqHistoryServers");
-      root.replaceChildren();
-      for (const server of roster?.servers || []) {
-        const block = element("section", undefined, "sq-history-server");
-        block.dataset.serverId = server.id;
-        const header = element("div", undefined, "sq-history-server-header");
-        const title = element("div");
-        title.append(element("h3", server.name));
-        const count = element("p", undefined, "hint");
-        count.dataset.serverCount = "";
-        title.append(count);
-        const label = element("label");
-        const all = element("input");
-        all.type = "checkbox";
-        all.dataset.serverAll = "";
-        all.setAttribute(
-          "aria-label",
-          `Выбрать всех на сервере: ${server.name}`,
-        );
-        all.addEventListener("change", () => {
-          selected.set(
-            server.id,
-            new Set(
-              all.checked
-                ? server.members
-                    .filter((member) => member.can_select)
-                    .map((member) => member.user_id)
-                : [],
-            ),
-          );
-          updateSelection();
-        });
-        label.append(all, element("span", "Выбрать весь сервер"));
-        header.append(title, label);
-        const wrap = element("div", undefined, "sq-history-table-wrap");
-        const table = element("table", undefined, "table sq-history-table");
-        const heading = table.createTHead().insertRow();
-        for (const text of ["Выбрать", "Игрок", "Сохранённый интервал · МСК"]) {
-          const cell = element("th", text);
-          cell.scope = "col";
-          heading.append(cell);
+    function selectionControl(server, members, text, attribute, ariaLabel) {
+      const label = element("label");
+      const checkbox = element("input");
+      checkbox.type = "checkbox";
+      checkbox.dataset[attribute] = "";
+      checkbox.setAttribute("aria-label", ariaLabel);
+      checkbox.addEventListener("change", () => {
+        if (!selected.has(server.id)) selected.set(server.id, new Set());
+        const ids = selected.get(server.id);
+        for (const member of members) {
+          if (!member.can_select) continue;
+          if (checkbox.checked) ids.add(member.user_id);
+          else ids.delete(member.user_id);
         }
-        const body = table.createTBody();
-        for (const member of server.members) {
-          const row = document.createElement("tr");
+        updateSelection();
+      });
+      label.append(checkbox, element("span", text));
+      return label;
+    }
+
+    function renderGroup(server, group) {
+      const section = element("section", undefined, "sq-history-group");
+      section.dataset.groupId = group.id;
+      const header = element("div", undefined, "sq-history-server-header");
+      header.append(element("h4", `${group.name} · ${group.members.length}`));
+      if (canGrant && group.members.length)
+        header.append(
+          selectionControl(
+            server,
+            group.members,
+            "Выбрать группу",
+            "groupAll",
+            `Выбрать группу ${group.name} на сервере ${server.name}`,
+          ),
+        );
+      section.append(header);
+      if (!group.members.length) {
+        section.append(
+          element(
+            "p",
+            "В сохранённой истории на этот момент участники этой группы не найдены.",
+            "hint",
+          ),
+        );
+        return section;
+      }
+      const wrap = element("div", undefined, "sq-history-table-wrap");
+      const table = element("table", undefined, "table sq-history-table");
+      const heading = table.createTHead().insertRow();
+      const titles = canGrant
+        ? ["Выбрать", "Игрок", "Сохранённый интервал · МСК"]
+        : ["Игрок", "Сохранённый интервал · МСК"];
+      for (const text of titles) {
+        const cell = element("th", text);
+        cell.scope = "col";
+        heading.append(cell);
+      }
+      const body = table.createTBody();
+      for (const member of group.members) {
+        const row = document.createElement("tr");
+        if (canGrant) {
           const checkbox = document.createElement("input");
           checkbox.type = "checkbox";
           checkbox.dataset.userId = member.user_id;
@@ -336,32 +394,59 @@
             updateSelection();
           });
           row.insertCell().append(checkbox);
-          const name = row.insertCell();
-          name.append(element("span", member.name));
-          if (!member.can_select)
-            name.append(
-              element(
-                "small",
-                "Баланс владельца защищён",
-                "sq-history-interval",
-              ),
-            );
-          const evidence = row.insertCell();
-          const last =
-            member.ended_at && member.ended_at < member.last_seen_at
-              ? member.ended_at
-              : member.last_seen_at;
-          evidence.append(
+        }
+        const name = row.insertCell();
+        name.append(element("span", member.name));
+        if (canGrant && !member.can_select)
+          name.append(
+            element("small", "Баланс владельца защищён", "sq-history-interval"),
+          );
+        const last =
+          member.ended_at && member.ended_at < member.last_seen_at
+            ? member.ended_at
+            : member.last_seen_at;
+        row
+          .insertCell()
+          .append(
             element(
               "small",
               `${formatDate(member.started_at)} — ${formatDate(last)}`,
               "sq-history-interval",
             ),
           );
-          body.append(row);
-        }
-        wrap.append(table);
-        block.append(header, wrap);
+        body.append(row);
+      }
+      wrap.append(table);
+      section.append(wrap);
+      return section;
+    }
+
+    function renderMembers() {
+      const root = $("sqHistoryServers");
+      root.replaceChildren();
+      for (const server of roster?.servers || []) {
+        const block = element("section", undefined, "sq-history-server");
+        block.dataset.serverId = server.id;
+        const header = element("div", undefined, "sq-history-server-header");
+        const title = element("div");
+        title.append(element("h3", server.name));
+        const count = element("p", undefined, "hint");
+        count.dataset.serverCount = "";
+        title.append(count);
+        header.append(title);
+        if (canGrant)
+          header.append(
+            selectionControl(
+              server,
+              server.members,
+              "Выбрать весь сервер",
+              "serverAll",
+              `Выбрать всех на сервере: ${server.name}`,
+            ),
+          );
+        block.append(header);
+        for (const group of server.groups || [])
+          block.append(renderGroup(server, group));
         root.append(block);
       }
       updateSelection();
@@ -381,7 +466,7 @@
         "Время изменено. Нажмите «Показать онлайн» для нового поиска.";
       updateSelection();
     });
-    selectAll.addEventListener("change", () => {
+    selectAll?.addEventListener("change", () => {
       selected.clear();
       if (selectAll.checked)
         for (const server of roster?.servers || [])
@@ -396,7 +481,7 @@
       updateSelection();
     });
     for (const id of ["sqHistoryAmount", "sqHistoryReason"])
-      $(id).addEventListener("input", updateSelection);
+      $(id)?.addEventListener("input", updateSelection);
 
     $("sqHistorySearch").addEventListener("click", async () => {
       if (busy || !dateInput.reportValidity()) return;
@@ -419,6 +504,8 @@
               : "Не удалось загрузить историю.",
           );
         roster = data;
+        $("sqHistoryGroupsBasis").textContent =
+          `Онлайн — на выбранный момент; группы — по последнему сохранённому составу Discord${data.groups_checked_at ? " от " + formatDate(data.groups_checked_at) + " МСК" : ": сведения о группах ещё не получены"}. Исторический состав групп здесь не восстанавливается. Участник с несколькими ролями показан в каждой своей группе; общее число игроков считается без повторов.`;
         $("sqHistoryCoverage").textContent =
           `Самая ранняя сохранённая сессия: ${formatDate(data.history_from)}. Последнее наблюдение: ${formatDate(data.history_through)}. Между этими датами возможны пропуски.`;
         $("sqHistoryResults").hidden = false;
@@ -433,7 +520,7 @@
       }
     });
 
-    grantButton.addEventListener("click", async () => {
+    grantButton?.addEventListener("click", async () => {
       if (busy || grantButton.disabled || !roster) return;
       const servers = roster.servers.filter(
         (server) => selected.get(server.id)?.size,

@@ -1,6 +1,7 @@
-{% if is_senior_or_super %}
+{% if user.is_admin %}
 <section id="panel-squad" role="tabpanel" aria-labelledby="tab-squad" hidden>
     {% include "_admin_squad_history.html" %}
+    {% if is_senior_or_super %}
     <div class="section-card">
         <div class="section-heading">
             <div>
@@ -56,7 +57,9 @@
         <h3 class="mt-3">Задания и результаты</h3>
         <div id="sqScheduleJobs" class="sq-schedule-jobs"></div>
     </div>
+    {% endif %}
 </section>
+{% if is_senior_or_super %}
 <dialog id="sqGrantDialog"
         class="sq-grant-dialog"
         aria-labelledby="sqGrantTitle">
@@ -844,4 +847,5 @@
 })();
 
 </script>
+{% endif %}
 {% endif %}

@@ -40,6 +40,14 @@ FILTER_ROLE_IDS = (
     "1402207362126712864",
     "1457398926406844417",
 )
+# The roster filters retain their existing order. Saved membership also needs
+# command/security leadership roles for the per-group online history view.
+SNAPSHOT_ROLE_IDS = (
+    *FILTER_ROLE_IDS,
+    "1486041117408497704",
+    "1517217078979989564",
+    "1486041548566036540",
+)
 
 
 def utcnow():
@@ -252,7 +260,7 @@ def sync_snapshot(db, roles, members, required_role_id=None, now=None):
             row.updated_at = now
     db.query(DiscordMemberRoleSnapshot).delete(synchronize_session=False)
     for sid, _, _, member_roles in normalized:
-        values = [role_id for role_id in FILTER_ROLE_IDS if role_id in member_roles]
+        values = [role_id for role_id in SNAPSHOT_ROLE_IDS if role_id in member_roles]
         db.add(
             DiscordMemberRoleSnapshot(
                 discord_id=sid, role_ids=json.dumps(values), updated_at=now

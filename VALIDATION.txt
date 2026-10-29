@@ -83,3 +83,28 @@ cards, independent checkboxes/counts, cross-server deduplication, preview cancel
 and apply, dark table background/light text, HTML-like names rendered as text,
 mobile width and denied junior access. Zero pageerror events.
 Production installation has not been performed from this cloud environment.
+
+Clan Groups tab, current-role grouping and assembly review, 2026-10-29:
+Full suite: 467 passed, 0 failed, 0 skipped; two unchanged dependency warnings.
+Ruff lint and formatting pass (89 Python files).
+The dedicated Groups tab/API is limited to active senior/chief/owner admins.
+All configured groups and an overall unique roster are available. Online lookup
+supports a point or overlapping period in Moscow time, grouped by latest saved
+Discord roles. Junior admins retain read-only point lookup in the Squad tab;
+all grant and schedule controls/endpoints remain restricted to senior roles.
+Role import now retains command/security leadership roles without changing
+existing role-filter ordering. No schema/dependency migration is required.
+Assembly tests cover the last completed Saturday and exact 19:00–22:00 Moscow
+boundaries; presence, accepted reports, verified unexcused absence, missing
+sources/reports, late reports, mismatched collector windows, non-monitored game
+servers, unlinked accounts, historical required membership and unique totals.
+The new summaries do not write assessments, wallet logs, balances or penalties.
+Chromium with the production Bootstrap stylesheet verified the separate tab,
+group list and switching, point/range results, three main assembly categories,
+escaped HTML-like names, dark colours, 390px layout, junior read-only grouping
+and restricted financial controls. Zero pageerror events.
+Installer simulated with stubbed service/network/ownership commands: all ten
+files installed; failed HTTP health check restores originals and starts both
+web/bot services. Synthetic database and settings were preserved in both paths.
+Real production deployment and live Discord/report/history completeness remain
+unverified from this environment.

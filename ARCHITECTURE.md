@@ -91,6 +91,10 @@ award_exports выдаёт новые знаки только первому м�
   для главных/старших администраторов; начисления через `bulk_operations.py`.
   Интерфейс — `templates/_admin_squad_history.html`, инструкция установки и
   ограничения покрытия — `SQUAD_HISTORY_UPDATE.md`.
+- `groups_admin.py`, `templates/_admin_groups.html`: вкладка групп для главных
+  и старших администраторов, онлайн на момент/за период и безопасная сводка
+  последнего завершённого сбора 19:00–22:00 МСК. Роли берутся из последнего
+  снимка Discord; рапорты и посещаемость — из существующего учёта сборов.
 - `squad_routes.py`, `squad_scheduler.py`: онлайн и начисления по расписанию.
 - `assembly_attendance.py`, `assembly_export.py`: сборы, проверки и штрафы.
 - `automation_control.py`, `automation_admin.py`: настройки, исключения и статусы.

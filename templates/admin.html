@@ -1964,6 +1964,11 @@
                             aria-selected="false"
                             tabindex="-1"
                             onclick="switchTab('online')"><span class="nav-icon">●</span>Онлайн</button>
+                    {% if is_senior_or_super %}
+                    <button class="nav-item" id="tab-groups" role="tab"
+                            aria-controls="panel-groups" aria-selected="false" tabindex="-1"
+                            onclick="switchTab('groups')"><span class="nav-icon">▥</span>Группы</button>
+                    {% endif %}
                     <details class="nav-more" id="adminMore">
                         <summary><span class="nav-icon">•••</span>Ещё</summary>
                         <div class="nav-more-items">
@@ -1988,13 +1993,13 @@
         aria-selected="false"
         tabindex="-1"
         onclick="switchTab('backups')"><span class="nav-icon">◫</span>Резервные копии</button>{% endif %}
-                            {% if is_senior_or_super %}<button class="nav-item"
+                            {% if user.is_admin %}<button class="nav-item"
         id="tab-squad"
         role="tab"
         aria-controls="panel-squad"
         aria-selected="false"
         tabindex="-1"
-        onclick="switchTab('squad')"><span class="nav-icon">▦</span>Squad · начисления</button>{% endif %}
+        onclick="switchTab('squad')"><span class="nav-icon">▦</span>Squad · онлайн</button>{% endif %}
                             {% if is_super %}<button class="nav-item"
         id="tab-tables"
         role="tab"
@@ -2636,6 +2641,7 @@
                 </section>
                 {% include "_admin_tables.html" %}
                 {% include "_admin_squad.html" %}
+                {% include "_admin_groups.html" %}
                 {% include "_admin_hub.html" %}
                 {% include "_admin_backups.html" %}
                 {% include "_admin_medals.html" %}
@@ -2959,6 +2965,7 @@ function switchTab(name, focus = false) {
     }
     if (name === "automation") loadAutomation();
     if (name === "hub") loadAdminHub();
+    if (name === "groups") window.loadClanGroups();
     const selectedTab = document.getElementById("tab-" + name);
     const selectedMore = selectedTab?.closest("details");
     const moreMenu = document.getElementById("adminMore");

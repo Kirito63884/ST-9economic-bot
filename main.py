@@ -4909,6 +4909,7 @@ app.include_router(
 # ST9_SQUAD_END
 
 from squad_history_admin import make_router as make_squad_history_router
+from groups_admin import make_router as make_groups_router
 
 app.include_router(
     make_squad_history_router(
@@ -4920,6 +4921,9 @@ app.include_router(
         log_game,
         MAX_BALANCE,
     )
+)
+app.include_router(
+    make_groups_router(get_user, get_db, is_senior_or_super, can_edit_user)
 )
 
 # ST9_SQUAD_SCHEDULER_BEGIN
