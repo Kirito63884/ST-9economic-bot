@@ -3,8 +3,8 @@
     <div>
       <h2>Кто был онлайн · история</h2>
       <p>
-        Выберите дату и время по Москве, затем сервер и участников для
-        начисления.
+        Выберите дату и время по Москве. Каждый сервер показан отдельно —
+        отметьте нужных участников в его списке.
       </p>
     </div>
   </div>
@@ -35,8 +35,6 @@
     </div>
     <div id="sqHistoryResults" hidden>
       <p id="sqHistoryCoverage" class="hint"></p>
-      <label class="form-label" for="sqHistoryServer">Сервер</label>
-      <select id="sqHistoryServer" class="form-select"></select>
       <div class="action-row mt-3">
         <label
           ><input id="sqHistorySelectAll" type="checkbox" /> Выбрать всех
@@ -44,18 +42,7 @@
         >
         <span id="sqHistorySelected" class="hint">Игроки не выбраны.</span>
       </div>
-      <div class="sq-history-table-wrap">
-        <table class="table sq-history-table">
-          <thead>
-            <tr>
-              <th scope="col">Выбрать</th>
-              <th scope="col">Игрок</th>
-              <th scope="col">Сервер и сохранённый интервал · МСК</th>
-            </tr>
-          </thead>
-          <tbody id="sqHistoryMembers"></tbody>
-        </table>
-      </div>
+      <div id="sqHistoryServers" class="sq-history-servers"></div>
       <div class="sq-admin-actions">
         <div>
           <label class="form-label" for="sqHistoryAmount"
@@ -93,10 +80,11 @@
         </button>
       </div>
       <p class="hint">
-        Один игрок получает одну выплату, даже если встречается на нескольких
-        серверах. Перед начислением будут показаны получатели, время, причина и
-        изменения балансов. Уже выполненное начисление не запрещает отдельное
-        новое начисление за тот же момент.
+        Выбор в каждом блоке относится только к этому серверу. Один игрок
+        получает одну выплату, даже если выбран на нескольких серверах. Перед
+        начислением будут показаны получатели, время, причина и изменения
+        балансов. Уже выполненное начисление не запрещает отдельное новое
+        начисление за тот же момент.
       </p>
     </div>
   </fieldset>
@@ -113,15 +101,69 @@
   }
   .sq-history-table-wrap {
     overflow-x: auto;
+    margin-top: 12px;
+  }
+  .sq-history-servers {
+    display: grid;
+    gap: 16px;
     margin: 16px 0;
+  }
+  .sq-history-server {
+    min-width: 0;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    background: #111927;
+    color: var(--text);
+  }
+  .sq-history-server-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .sq-history-server h3 {
+    margin: 0;
+    color: var(--text);
+    font-size: 17px;
+    overflow-wrap: anywhere;
+  }
+  .sq-history-server label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--text);
+  }
+  #sqHistoryCard input[type="checkbox"] {
+    accent-color: var(--accent);
   }
   .sq-history-table {
     width: 100%;
-    min-width: 460px;
+    min-width: 420px;
+    margin: 0;
+    color: var(--text);
+    --bs-table-bg: #111927;
+    --bs-table-color: var(--text);
+    --bs-table-border-color: var(--line);
   }
-  .sq-history-table td {
+  #sqHistoryCard .sq-history-table th,
+  #sqHistoryCard .sq-history-table td {
     vertical-align: top;
     overflow-wrap: anywhere;
+    padding: 12px;
+    color: var(--text);
+    background: #111927;
+    border-bottom: 1px solid var(--line);
+    box-shadow: none;
+  }
+  #sqHistoryCard .sq-history-table th {
+    background: #1b2537;
+  }
+  @media (max-width: 680px) {
+    .sq-history-server {
+      padding: 12px;
+    }
   }
   .sq-history-reason {
     flex: 1;
@@ -137,11 +179,12 @@
   (() => {
     const $ = (id) => document.getElementById(id);
     const dateInput = $("sqHistoryAt");
-    const serverFilter = $("sqHistoryServer");
     const selectAll = $("sqHistorySelectAll");
     const grantButton = $("sqHistoryGrant");
     const status = $("sqHistoryStatus");
-    const selected = new Set();
+    // Keep the choice for each server independent. Deduplicate only when
+    // building the list of wallet recipients.
+    const selected = new Map();
     const dates = new Intl.DateTimeFormat("ru-RU", {
       timeZone: "Europe/Moscow",
       dateStyle: "short",
@@ -177,34 +220,55 @@
       () => (dateInput.max = localDate(new Date())),
     );
 
-    function visibleMembers() {
-      const members = new Map();
-      for (const server of roster?.servers || []) {
-        if (serverFilter.value && server.id !== serverFilter.value) continue;
-        for (const member of server.members) {
-          if (!members.has(member.user_id))
-            members.set(member.user_id, { ...member, servers: [] });
-          members.get(member.user_id).servers.push({ ...server, member });
-        }
-      }
-      return [...members.values()].sort(
-        (a, b) => a.name.localeCompare(b.name, "ru") || a.user_id - b.user_id,
-      );
+    function selectedIds() {
+      return new Set([...selected.values()].flatMap((ids) => [...ids]));
     }
 
     function updateSelection() {
-      const available = visibleMembers().filter((member) => member.can_select);
+      const servers = roster?.servers || [];
+      const available = servers.flatMap((server) =>
+        server.members.filter((member) => member.can_select),
+      );
       selectAll.disabled = !available.length;
       selectAll.checked =
         available.length > 0 &&
-        available.every((member) => selected.has(member.user_id));
-      selectAll.indeterminate = selected.size > 0 && !selectAll.checked;
-      $("sqHistorySelected").textContent = `Выбрано игроков: ${selected.size}.`;
+        servers.every((server) =>
+          server.members.every(
+            (member) =>
+              !member.can_select ||
+              selected.get(server.id)?.has(member.user_id),
+          ),
+        );
+      const unique = selectedIds();
+      const serverCount = [...selected.values()].filter(
+        (ids) => ids.size,
+      ).length;
+      selectAll.indeterminate = unique.size > 0 && !selectAll.checked;
+      $("sqHistorySelected").textContent =
+        `Выбрано игроков: ${unique.size}. Серверов: ${serverCount}.`;
+      for (const server of servers) {
+        const choice = selected.get(server.id) || new Set();
+        const block = [...$("sqHistoryServers").children].find(
+          (node) => node.dataset.serverId === server.id,
+        );
+        if (!block) continue;
+        const enabled = server.members.filter((member) => member.can_select);
+        const all = block.querySelector("[data-server-all]");
+        all.disabled = !enabled.length;
+        all.checked =
+          enabled.length > 0 &&
+          enabled.every((member) => choice.has(member.user_id));
+        all.indeterminate = choice.size > 0 && !all.checked;
+        block.querySelector("[data-server-count]").textContent =
+          `Игроков: ${server.members.length}. Выбрано: ${choice.size}.`;
+        for (const input of block.querySelectorAll("[data-user-id]"))
+          input.checked = choice.has(Number(input.dataset.userId));
+      }
       const amount = $("sqHistoryAmount").value.trim().replace(",", ".");
       const reason = $("sqHistoryReason").value.trim();
       grantButton.disabled =
         busy ||
-        !selected.size ||
+        !unique.size ||
         !/^[0-9]{1,13}(?:\.[0-9]{1,2})?$/.test(amount) ||
         Number(amount) <= 0 ||
         Number(amount) > 1e12 ||
@@ -213,44 +277,92 @@
     }
 
     function renderMembers() {
-      const body = $("sqHistoryMembers");
-      body.replaceChildren();
-      for (const member of visibleMembers()) {
-        const row = document.createElement("tr");
-        const checkbox = document.createElement("input");
-        checkbox.type = "checkbox";
-        checkbox.checked = selected.has(member.user_id);
-        checkbox.disabled = !member.can_select;
-        checkbox.setAttribute("aria-label", `Выбрать: ${member.name}`);
-        checkbox.addEventListener("change", () => {
-          if (checkbox.checked) selected.add(member.user_id);
-          else selected.delete(member.user_id);
+      const root = $("sqHistoryServers");
+      root.replaceChildren();
+      for (const server of roster?.servers || []) {
+        const block = element("section", undefined, "sq-history-server");
+        block.dataset.serverId = server.id;
+        const header = element("div", undefined, "sq-history-server-header");
+        const title = element("div");
+        title.append(element("h3", server.name));
+        const count = element("p", undefined, "hint");
+        count.dataset.serverCount = "";
+        title.append(count);
+        const label = element("label");
+        const all = element("input");
+        all.type = "checkbox";
+        all.dataset.serverAll = "";
+        all.setAttribute(
+          "aria-label",
+          `Выбрать всех на сервере: ${server.name}`,
+        );
+        all.addEventListener("change", () => {
+          selected.set(
+            server.id,
+            new Set(
+              all.checked
+                ? server.members
+                    .filter((member) => member.can_select)
+                    .map((member) => member.user_id)
+                : [],
+            ),
+          );
           updateSelection();
         });
-        row.insertCell().append(checkbox);
-        const name = row.insertCell();
-        name.append(element("span", member.name));
-        if (!member.can_select)
-          name.append(
-            element("small", "Баланс владельца защищён", "sq-history-interval"),
-          );
-        const evidence = row.insertCell();
-        for (const server of member.servers) {
-          evidence.append(element("div", server.name));
+        label.append(all, element("span", "Выбрать весь сервер"));
+        header.append(title, label);
+        const wrap = element("div", undefined, "sq-history-table-wrap");
+        const table = element("table", undefined, "table sq-history-table");
+        const heading = table.createTHead().insertRow();
+        for (const text of ["Выбрать", "Игрок", "Сохранённый интервал · МСК"]) {
+          const cell = element("th", text);
+          cell.scope = "col";
+          heading.append(cell);
+        }
+        const body = table.createTBody();
+        for (const member of server.members) {
+          const row = document.createElement("tr");
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.dataset.userId = member.user_id;
+          checkbox.checked =
+            selected.get(server.id)?.has(member.user_id) || false;
+          checkbox.disabled = !member.can_select;
+          checkbox.setAttribute("aria-label", `Выбрать: ${member.name}`);
+          checkbox.addEventListener("change", () => {
+            if (!selected.has(server.id)) selected.set(server.id, new Set());
+            if (checkbox.checked) selected.get(server.id).add(member.user_id);
+            else selected.get(server.id).delete(member.user_id);
+            updateSelection();
+          });
+          row.insertCell().append(checkbox);
+          const name = row.insertCell();
+          name.append(element("span", member.name));
+          if (!member.can_select)
+            name.append(
+              element(
+                "small",
+                "Баланс владельца защищён",
+                "sq-history-interval",
+              ),
+            );
+          const evidence = row.insertCell();
           const last =
-            server.member.ended_at &&
-            server.member.ended_at < server.member.last_seen_at
-              ? server.member.ended_at
-              : server.member.last_seen_at;
+            member.ended_at && member.ended_at < member.last_seen_at
+              ? member.ended_at
+              : member.last_seen_at;
           evidence.append(
             element(
               "small",
-              `${formatDate(server.member.started_at)} — ${formatDate(last)}`,
+              `${formatDate(member.started_at)} — ${formatDate(last)}`,
               "sq-history-interval",
             ),
           );
+          body.append(row);
         }
-        body.append(row);
+        wrap.append(table);
+        block.append(header, wrap);
+        root.append(block);
       }
       updateSelection();
     }
@@ -269,16 +381,19 @@
         "Время изменено. Нажмите «Показать онлайн» для нового поиска.";
       updateSelection();
     });
-    serverFilter.addEventListener("change", () => {
-      selected.clear();
-      renderMembers();
-    });
     selectAll.addEventListener("change", () => {
       selected.clear();
       if (selectAll.checked)
-        for (const member of visibleMembers())
-          if (member.can_select) selected.add(member.user_id);
-      renderMembers();
+        for (const server of roster?.servers || [])
+          selected.set(
+            server.id,
+            new Set(
+              server.members
+                .filter((member) => member.can_select)
+                .map((member) => member.user_id),
+            ),
+          );
+      updateSelection();
     });
     for (const id of ["sqHistoryAmount", "sqHistoryReason"])
       $(id).addEventListener("input", updateSelection);
@@ -304,9 +419,6 @@
               : "Не удалось загрузить историю.",
           );
         roster = data;
-        serverFilter.replaceChildren(new Option("Все найденные серверы", ""));
-        for (const server of data.servers)
-          serverFilter.add(new Option(server.name, server.id));
         $("sqHistoryCoverage").textContent =
           `Самая ранняя сохранённая сессия: ${formatDate(data.history_from)}. Последнее наблюдение: ${formatDate(data.history_through)}. Между этими датами возможны пропуски.`;
         $("sqHistoryResults").hidden = false;
@@ -324,14 +436,15 @@
     grantButton.addEventListener("click", async () => {
       if (busy || grantButton.disabled || !roster) return;
       const servers = roster.servers.filter(
-        (server) =>
-          (!serverFilter.value || server.id === serverFilter.value) &&
-          server.members.some((member) => selected.has(member.user_id)),
+        (server) => selected.get(server.id)?.size,
       );
       const payload = {
         at: roster.at,
         server_ids: servers.map((server) => server.id),
-        user_ids: [...selected],
+        user_ids: [...selectedIds()],
+        server_selections: Object.fromEntries(
+          servers.map((server) => [server.id, [...selected.get(server.id)]]),
+        ),
         amount: $("sqHistoryAmount").value.trim().replace(",", "."),
         reason: $("sqHistoryReason").value.trim(),
       };

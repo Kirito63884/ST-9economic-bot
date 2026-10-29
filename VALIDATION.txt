@@ -71,3 +71,15 @@ service/network/ownership commands verified six-file installation and automatic
 file rollback after an HTTP failure; synthetic database/settings were preserved.
 Real production deployment, systemd restart and actual history coverage on the
 user's server are not verified from this cloud environment.
+
+Per-server historical selection and dark theme, 2026-10-29:
+Full suite: 426 passed, 0 failed, 0 skipped (same two dependency warnings).
+Twelve additional cases verify independent per-server selection, exact server
+attribution in evidence and wallet logs, one payment across duplicate selections,
+confirmation binding and rejection of malformed or unsupported server/user pairs.
+Ruff checks and formatting pass (87 Python files).
+Chromium with the site's Bootstrap 5.3.0 stylesheet verifies separate server
+cards, independent checkboxes/counts, cross-server deduplication, preview cancel
+and apply, dark table background/light text, HTML-like names rendered as text,
+mobile width and denied junior access. Zero pageerror events.
+Production installation has not been performed from this cloud environment.

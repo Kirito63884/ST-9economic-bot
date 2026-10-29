@@ -160,10 +160,44 @@ def make_router(
         if not set(server_ids) <= by_server.keys():
             raise HTTPException(409, "История серверов изменилась. Повторите поиск.")
         selected = set(body["user_ids"])
+        choices = body.get("server_selections")
+        if "server_selections" in body:
+            if not isinstance(choices, dict) or set(choices) != set(server_ids):
+                raise HTTPException(
+                    400, "Выбор игроков должен соответствовать выбранным серверам."
+                )
+            for ids in choices.values():
+                if (
+                    not isinstance(ids, list)
+                    or not 1 <= len(ids) <= 1000
+                    or any(type(uid) is not int or uid <= 0 for uid in ids)
+                ):
+                    raise HTTPException(400, "Неверный список игроков сервера.")
+            if set().union(*(set(ids) for ids in choices.values())) != selected:
+                raise HTTPException(
+                    400, "Общий список игроков не совпадает с выбором по серверам."
+                )
+        servers = []
+        for sid in sorted(set(server_ids)):
+            server = by_server[sid]
+            ids = set(choices[sid]) if choices is not None else selected
+            if choices is not None and not ids <= {
+                m["user_id"] for m in server["members"]
+            }:
+                raise HTTPException(
+                    409,
+                    "Для игрока нет истории на выбранном сервере и в указанное время.",
+                )
+            servers.append(
+                {
+                    **server,
+                    "members": [m for m in server["members"] if m["user_id"] in ids],
+                }
+            )
         members = {
             member["user_id"]: member
-            for sid in set(server_ids)
-            for member in by_server[sid]["members"]
+            for server in servers
+            for member in server["members"]
         }
         if not selected <= members.keys():
             raise HTTPException(
@@ -172,7 +206,6 @@ def make_router(
         if any(not members[uid]["can_select"] for uid in selected):
             raise HTTPException(403, "Нельзя изменять баланс владельца.")
         users = db.query(User).filter(User.id.in_(selected)).order_by(User.id).all()
-        servers = [by_server[sid] for sid in sorted(set(server_ids))]
         label = (
             moment.replace(tzinfo=timezone.utc)
             .astimezone(MOSCOW)

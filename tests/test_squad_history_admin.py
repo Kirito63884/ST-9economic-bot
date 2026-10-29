@@ -315,3 +315,79 @@ def test_concurrent_confirmation_only_pays_once(admin_client):
     assert wallet(102) == 1012.34
     with SessionLocal() as db:
         assert db.query(GameHistory).count() == 2
+
+
+def test_independent_server_selection_is_preserved_in_evidence_and_logs(admin_client):
+    add_session(server="200")
+    add_session(OTHER, server="200")
+    data = {
+        **payload(),
+        "server_ids": ["100", "200"],
+        "server_selections": {"100": [102], "200": [103]},
+    }
+    plan = prepare(admin_client, data)
+    assert plan["changed"] == 2
+    result = confirm(admin_client, plan, data)
+    assert result.status_code == 200, result.text
+    evidence = result.json()["evidence"]
+    assert {s["server_id"]: [m["user_id"] for m in s["members"]] for s in evidence} == {
+        "100": [102],
+        "200": [103],
+    }
+    with SessionLocal() as db:
+        logs = {log.user_id: log.details for log in db.query(GameHistory)}
+        assert "Сервер 100" in logs[102] and "Сервер 200" not in logs[102]
+        assert "Сервер 200" in logs[103] and "Сервер 100" not in logs[103]
+
+
+def test_same_user_selected_on_two_servers_gets_one_payment(admin_client):
+    add_session(server="200")
+    data = {
+        **payload(),
+        "server_ids": ["100", "200"],
+        "user_ids": [102],
+        "server_selections": {"100": [102], "200": [102]},
+    }
+    plan = prepare(admin_client, data)
+    assert plan["changed"] == 1 and plan["total_delta"] == 12.34
+    assert confirm(admin_client, plan, data).status_code == 200
+    assert wallet(102) == 1012.34 and wallet(103) == 1000
+    with SessionLocal() as db:
+        assert db.query(GameHistory).count() == 1
+
+
+def test_server_selection_cannot_be_changed_after_preview(admin_client):
+    add_session(server="200")
+    add_session(OTHER, server="200")
+    data = {
+        **payload(),
+        "server_ids": ["100", "200"],
+        "server_selections": {"100": [102], "200": [103]},
+    }
+    plan = prepare(admin_client, data)
+    changed = {**data, "server_selections": {"100": [103], "200": [102]}}
+    assert confirm(admin_client, plan, changed).status_code == 409
+    assert wallet(102) == 1000 and wallet(103) == 1000
+
+
+@pytest.mark.parametrize(
+    "choices,status",
+    [
+        (None, 400),
+        ([], 400),
+        ({}, 400),
+        ({"200": [102, 103]}, 400),
+        ({"100": []}, 400),
+        ({"100": "102"}, 400),
+        ({"100": [True]}, 400),
+        ({"100": [102]}, 400),
+        ({"100": [101, 103]}, 409),
+    ],
+)
+def test_invalid_per_server_selection_is_rejected(admin_client, choices, status):
+    data = {**payload(), "server_selections": choices}
+    if choices == {"100": [101, 103]}:
+        data["user_ids"] = [101, 103]
+    response = admin_client.post(history.GRANT_PATH, json={**data, "preview": True})
+    assert response.status_code == status, response.text
+    assert wallet(102) == 1000
