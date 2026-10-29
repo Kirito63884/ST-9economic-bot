@@ -44,7 +44,8 @@
   let pointer = null,
     charge = 0,
     power = 0.55,
-    disposed = false;
+    disposed = false,
+    closed = false;
   let lastRenderKey = null;
   let lastUiPaint = 0,
     heardShot = null,
@@ -257,6 +258,12 @@
       players.length !== state.rules.max_players ||
       !players.every((p) => p.ready);
     $("rematch").hidden = !(finished && state.creator === state.your_id);
+    $("leave").disabled = busy;
+    $("closeTable").hidden = !state.can_close_table;
+    $("closeTable").disabled = busy || !state.can_close;
+    $("closeTable").title = state.can_close
+      ? "Расформировать стол для всех участников"
+      : "Сначала завершите партию";
     $("ready").disabled = busy;
     $("rematch").disabled = busy;
     $("overlayEyebrow").textContent = ready
@@ -389,13 +396,23 @@
     }
   }
   async function load(force = false) {
-    if (polling || (busy && !force) || disposed) return;
+    if (polling || (busy && !force) || disposed || closed) return;
     polling = true;
     try {
       const known = state?.last_shot?.frames?.length ? state.last_shot.id : 0;
       accept(await api(base + "/state?known_shot=" + known));
     } catch (failure) {
-      if (failure.status === 403) {
+      if (failure.status === 404) {
+        closed = true;
+        state = null;
+        cancelPointer();
+        clearInterval(pollTimer);
+        $("game").hidden = true;
+        $("joinPanel").hidden = true;
+        error(
+          "Стол расформирован или закрыт. Откройте «Все столы», чтобы начать новую игру.",
+        );
+      } else if (failure.status === 403) {
         try {
           const preview = await api(base + "/preview");
           $("joinPanel").hidden = false;
@@ -505,7 +522,9 @@
               : call && called === null
                 ? "Закажите лузу для восьмёрки"
                 : charge > 0
-                  ? "Отпустите для удара"
+                  ? pointer?.touch
+                    ? "Сила выбрана · нажмите «Ударить»"
+                    : "Отпустите для удара"
                   : "Ваш ход";
     $("aimHelp").textContent =
       waiting && can
@@ -513,7 +532,7 @@
         : call && called === null && can
           ? "Нажмите на одну из шести луз или выберите её в списке."
           : can
-            ? "Нажмите и ведите для прицела. Оттяните назад и отпустите для удара."
+            ? "Наведите кий. Потяните его за битком, чтобы выбрать силу. На телефоне нажмите «Ударить»."
             : playing()
               ? "Следите за столом. Управление включится на вашем ходу."
               : "Готовность и новая партия — в центре стола.";
@@ -630,6 +649,10 @@
   canvas.addEventListener("contextmenu", (event) => event.preventDefault());
   canvas.addEventListener("pointerdown", (event) => {
     if (!canControl() || ![0, 2].includes(event.button)) return;
+    if (event.isPrimary === false) {
+      cancelPointer();
+      return;
+    }
     event.preventDefault();
     enableAudio();
     canvas.focus({ preventScroll: true });
@@ -654,15 +677,28 @@
         error("Выберите точку внутри сукна, не в лузе и не на другом шаре");
       return;
     }
-    const a = pointAngle(point);
-    // A new click acquires the direction; subsequent motion can rotate or pull back.
-    angle = a;
+    if (pointer) cancelPointer();
+    const c = cue(),
+      dx = point.x - c.x,
+      dy = point.y - c.y;
+    const behind = dx * Math.cos(angle) + dy * Math.sin(angle);
+    const sideways = Math.abs(-dx * Math.sin(angle) + dy * Math.cos(angle));
+    const pull =
+      event.button === 0 && behind < -28 && behind > -330 && sideways < 25;
+    const touch = event.pointerType === "touch";
+    // Grabbing the visible cue preserves the shot angle. Touch aiming also
+    // preserves it on contact and uses one fixed angular anchor for the gesture.
+    if (!pull && !touch && event.button !== 2) angle = pointAngle(point);
     pointer = {
       id: event.pointerId,
       origin: point,
-      angle: a,
-      lastAngle: a,
-      button: event.button,
+      angle,
+      anchor: pointAngle(point),
+      screenX: event.clientX,
+      screenY: event.clientY,
+      touch,
+      mode: pull ? "pull" : "aim",
+      moved: false,
     };
     charge = 0;
     canvas.setPointerCapture(event.pointerId);
@@ -677,38 +713,45 @@
     }
     if (!pointer || event.pointerId !== pointer.id) return;
     event.preventDefault();
-    const dx = point.x - pointer.origin.x,
-      dy = point.y - pointer.origin.y;
-    const along = -(
-      dx * Math.cos(pointer.angle) +
-      dy * Math.sin(pointer.angle)
-    );
-    const side = Math.abs(
-      -dx * Math.sin(pointer.angle) + dy * Math.cos(pointer.angle),
-    );
     if (
-      pointer.button === 0 &&
-      along > 12 &&
-      side < Math.max(25, along * 0.65)
-    ) {
-      charge = clamp(along / 165, 0.05, 1);
-      setPower(charge);
-    } else if (!charge) {
-      const next = pointAngle(point);
-      angle = normalize(
-        angle + normalize(next - pointer.lastAngle) * sensitivity,
+      Math.hypot(
+        event.clientX - pointer.screenX,
+        event.clientY - pointer.screenY,
+      ) > 6
+    )
+      pointer.moved = true;
+    if (!pointer.moved) return;
+    if (pointer.mode === "pull") {
+      const along = -(
+        (point.x - pointer.origin.x) * Math.cos(pointer.angle) +
+        (point.y - pointer.origin.y) * Math.sin(pointer.angle)
       );
-      pointer.lastAngle = next;
-      if (side > 25 || along < -10) {
-        pointer.origin = point;
-        pointer.angle = angle;
-      }
+      charge = along > 8 ? clamp(along / 165, 0.05, 1) : 0;
+      setPower(charge || 0.05);
+      // Sideways finger noise never rotates the cue during the pull.
+      angle = pointer.angle;
+    } else {
+      const c = cue();
+      if (Math.hypot(point.x - c.x, point.y - c.y) > 45)
+        angle = normalize(
+          pointer.angle +
+            normalize(pointAngle(point) - pointer.anchor) * sensitivity,
+        );
     }
   });
   canvas.addEventListener("pointerup", (event) => {
     if (!pointer || pointer.id !== event.pointerId) return;
-    const fire = charge > 0 && canControl();
+    const touch = pointer.touch;
+    const fire =
+      !touch && pointer.mode === "pull" && charge > 0 && canControl();
+    if (touch && pointer.mode === "aim" && !pointer.moved && canControl()) {
+      const point = renderer.point(event),
+        c = cue();
+      if (Math.hypot(point.x - c.x, point.y - c.y) > 45)
+        angle = pointAngle(point);
+    }
     cancelPointer();
+    // Releasing a finger only saves aim/power; mobile shots require the button.
     if (fire) sendShot();
   });
   canvas.addEventListener("pointercancel", cancelPointer);
@@ -791,6 +834,32 @@
       return;
     if (await action("leave")) location.href = "/games/billiards/lobby";
   });
+  $("closeTable").addEventListener("click", async () => {
+    if (
+      busy ||
+      !state.can_close ||
+      !confirm("Расформировать стол для всех участников? Балансы сохранятся.")
+    )
+      return;
+    busy = true;
+    paintPanels();
+    try {
+      await api(
+        "/api/game-tables/billiards/" + encodeURIComponent(tid) + "/close",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version: state.close_version }),
+        },
+      );
+      location.href = "/games/billiards/lobby";
+    } catch (failure) {
+      error(failure.message);
+      busy = false;
+      await load();
+      paintPanels();
+    }
+  });
   $("copy").addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(location.href);
@@ -828,7 +897,10 @@
   });
   window.addEventListener("resize", () => {
     clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => renderer.resize(), 80);
+    resizeTimer = setTimeout(() => {
+      cancelPointer();
+      renderer.resize();
+    }, 80);
   });
   document.addEventListener("visibilitychange", () => {
     cancelPointer();
@@ -840,7 +912,7 @@
   });
   window.addEventListener("pageshow", (event) => {
     if (event.persisted) {
-      disposed = false;
+      ((disposed = false), (closed = false));
       location.reload();
     }
   });

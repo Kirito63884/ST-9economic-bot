@@ -263,6 +263,7 @@ class BilliardsTable:
         self.players = []
         self.phase = "waiting"
         self.created_at = self.updated_at = time.time()
+        self.last_player_activity = self.created_at
         self.revision = 0
         self.match_number = 0
         self.match = None
@@ -284,6 +285,9 @@ class BilliardsTable:
         table = cls.__new__(cls)
         table.__dict__.update(copy.deepcopy(data))
         table.rules = settings(table.rules)
+        from table_lifecycle import initialise
+
+        initialise(table)
         table.__dict__.setdefault("last_shot", None)
         table.__dict__.setdefault("groups", {})
         return table

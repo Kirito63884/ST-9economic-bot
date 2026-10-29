@@ -290,3 +290,27 @@ Playable pool lounge and 8-ball rebuild, 2026-10-29:
 - Ruff E9/F, JavaScript syntax, shell syntax and git whitespace checks pass.
   No production bets, payments or Discord actions executed. Foony access was denied
   by the cloud domain policy; no external game source code or artwork was imported.
+
+Visible table controls, stable mobile input and eight-hour expiry, 2026-10-29:
+- Final full suite: 598 passed, two existing dependency warnings.
+- Seventeen new lifecycle cases cover the exact eight-hour boundary for all three
+  table games, GET/failed-CSRF/stale-action activity exclusion, successful player
+  action renewal, durable legacy initialization and timer/restart independence.
+  Real SQLite wallet cases verify unfinished Durak/pool and poker-pot refunds once,
+  finished pool and poker payouts/history preservation, corrupt-bank and missing
+  recipient retention/rollback. Owner/foreign-user/version/CSRF enforcement for
+  closure of all three games and active-game closure denial also pass.
+- Chromium with real mouse and CDP touch: the visible cue is grabbed behind the
+  white ball without reversing the angle; pull changes power and Escape cancels.
+  Portrait aiming and cue pull do not shoot on touch release. Added sideways finger
+  noise leaves the fixed shot angle unchanged; the explicit button sends that
+  angle/power. Visible exit forfeits, owner lobby and match-screen close work,
+  active close is disabled and another participant sees closure. No mobile page
+  overflow, no hidden-details dependency and zero pageerror events.
+- Four isolated current-worker installer paths pass: success, copy failure,
+  component preflight failure and HTTP-health failure, with private backup,
+  file restoration/new-file removal and untouched .env/database/collector files.
+- Ruff E9/F, JavaScript parse, shell syntax and git whitespace checks pass.
+  No production game balances or Discord messages changed from this environment.
+- Four additional installer paths pass with older assembly-policy files, verifying
+  conditional web+bot restart and rollback; current-policy installs remain web-only.

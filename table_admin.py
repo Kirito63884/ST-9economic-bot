@@ -30,11 +30,16 @@ def version(game, table):
     return hashlib.sha256(json.dumps(values).encode()).hexdigest()[:24]
 
 
-def management(game, table, allowed):
+def management(game, table, allowed, uid=None):
+    creator = table.creator_id if game == "poker" else table.creator
+    may_close = bool(allowed or (uid is not None and uid == creator))
     return {
         "can_manage": bool(allowed),
         "can_delete": bool(allowed and removable(game, table)),
         "delete_version": version(game, table) if allowed else None,
+        "can_close_table": may_close,
+        "can_close": bool(may_close and removable(game, table)),
+        "close_version": version(game, table) if may_close else None,
     }
 
 
@@ -54,6 +59,54 @@ def make_router(
     if log_game is None:
         log_game, billiards = billiards, None
     router = APIRouter()
+
+    @router.post("/api/game-tables/{game}/{tid}/close")
+    async def close_table(
+        game: str,
+        tid: str,
+        request: Request,
+        user=Depends(get_user),
+        db=Depends(get_db),
+    ):
+        if not user:
+            raise HTTPException(401, "Войдите в профиль")
+        games = {"poker": poker, "durak": durak.tables}
+        if billiards is not None:
+            games["billiards"] = billiards.tables
+        if game not in games:
+            raise HTTPException(400, "Неизвестная игра")
+        table = games[game].get(tid)
+        if table is None:
+            return {"ok": True, "deleted": False, "message": "Стол уже расформирован"}
+        rights = management(
+            game, table, bool(user.is_admin and may_manage(user)), user.id
+        )
+        if not rights["can_close_table"]:
+            raise HTTPException(
+                403, "Расформировать стол может его создатель или главный администратор"
+            )
+        if not rights["can_close"]:
+            raise HTTPException(
+                409,
+                "Сначала завершите партию. Для выхода во время игры используйте сдачу",
+            )
+        data = await read_body(request)
+        if data.get("version") != rights["close_version"]:
+            raise HTTPException(
+                409,
+                "Состояние стола изменилось. Обновите его и подтвердите расформирование снова",
+            )
+        games[game].pop(tid)
+        if game == "poker":
+            requests.pop(tid, None)
+        log_game(
+            db, user.id, "admin", "table_closed", 0, f"Расформирован стол {game}: {tid}"
+        )
+        return {
+            "ok": True,
+            "deleted": True,
+            "message": "Стол расформирован. Балансы сохранены",
+        }
 
     def require_chief(user=Depends(get_user)):
         if not user or not user.is_admin or not may_manage(user):

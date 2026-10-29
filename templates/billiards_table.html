@@ -110,6 +110,10 @@
         <div class="pool-bottom-bar">
           <span id="connection" class="pool-connection">Подключаемся…</span>
           <div class="pool-actions">
+            <button id="leave" class="pool-btn danger">Выйти со стола</button>
+            <button id="closeTable" class="pool-btn danger" hidden>
+              Расформировать стол
+            </button>
             <button id="reposition" class="pool-btn" hidden>
               Переставить биток</button
             ><button id="sound" class="pool-btn" aria-pressed="false">
@@ -123,9 +127,12 @@
           <summary>Правила и управление</summary>
           <div class="pool-muted">
             <p>
-              <b>Направление:</b> нажмите на стол и ведите мышью или пальцем.
-              Оттяните от места нажатия назад вдоль кия и отпустите для удара.
-              Можно отдельно выбрать силу ползунком и нажать «Ударить».
+              <b>Направление:</b> нажмите на сукно или ведите по нему для
+              наведения. Для силы захватите видимую часть кия за битком и
+              потяните назад. Во время оттяжки направление зафиксировано. Мышью
+              отпускание выполняет удар. На телефоне отпускание только сохраняет
+              силу и прицел: ударьте отдельной кнопкой. Силу также можно выбрать
+              ползунком.
             </p>
             <p>
               <b>Точность:</b> стрелки ← → поворачивают кий, Shift уменьшает
@@ -187,7 +194,6 @@
                 →</button
               ><small>Точная доводка угла</small>
             </div>
-            <button id="leave" class="pool-btn danger">Покинуть стол</button>
           </div>
         </details>
       </div>

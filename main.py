@@ -70,6 +70,11 @@ from database import (
 )
 from poker_history import archive_hand, visible_hand, anonymize_player
 from table_admin import management as table_management
+from table_lifecycle import (
+    initialise as initialise_table,
+    request_activity,
+    expire_poker,
+)
 from durak import DurakError
 from durak_routes import DurakService, build_router as build_durak_router
 from billiards import BilliardsError
@@ -334,6 +339,10 @@ async def durable_request(request: Request, call_next):
             if response.status_code >= 400:
                 raise RejectedResponse(response)
             uid = request.session.get("user_id")
+            request_activity(
+                request.method, request.url.path, uid,
+                poker_tables, durak_service, billiards_service,
+            )
             if uid:
                 user = (
                     db.query(User)
@@ -3794,6 +3803,7 @@ class PokerTable:
         self.current_bet = 0.0
         self.dealer_position = 0
         self.last_action_time = time.time()
+        self.last_player_activity = self.last_action_time
         self.created_at = datetime.now()
         self.chat_messages = []
         self.hand_number = 0
@@ -4356,7 +4366,7 @@ async def list_tables(user=Depends(get_user)):
         tables.append(
             {
                 "id": table_id,
-                **table_management("poker", table, is_super_admin(user)),
+                **table_management("poker", table, is_super_admin(user), user.id),
                 "creator": next(
                     (
                         p["display_name"]
@@ -4468,6 +4478,7 @@ async def get_table_state(table_id: str, user=Depends(get_user)):
     is_creator = user.id == table.creator_id
     state = {
         "active": True,
+        **table_management("poker", table, is_super_admin(user), user.id),
         "table_id": table_id,
         "phase": table.phase,
         "players": [],
@@ -4783,40 +4794,54 @@ async def leave_table(
     return {"ok": True}
 
 
+def tick_poker_table(table_id, db):
+    table = poker_tables.get(table_id)
+    if not table or expire_poker(
+        poker_tables, table_requests, table_id, db, sync_table_balances
+    ):
+        return
+    refresh_table_balances(db, table)
+    if not table.players:
+        poker_tables.pop(table_id, None)
+        table_requests.pop(table_id, None)
+        return
+    if table.reset_after_showdown():
+        connected = [p for p in table.players if p["connected"]]
+        if not connected:
+            poker_tables.pop(table_id, None)
+            table_requests.pop(table_id, None)
+            return
+        if not any(p["user_id"] == table.creator_id for p in connected):
+            table.creator_id = connected[0]["user_id"]
+    if table.phase in ("waiting", "showdown"):
+        return
+    idx = table.current_turn
+    player = table.players[idx]
+    if player["folded"] or player["all_in"]:
+        table.next_turn()
+    elif time.time() - table.last_action_time >= POKER_TURN_TIMEOUT:
+        table.record_action(player, "timeout")
+        player["folded"] = True
+        player["cards"] = []
+        table.add_chat(f"⏱️ {player['display_name']} автофолд")
+        table.next_turn(idx)
+    sync_table_balances(db, table)
+
+
 async def poker_timeout_checker():
     while True:
         await asyncio.sleep(1)
         try:
-            async with transaction(serialize_runtime, restore_runtime) as db:
-                for table_id, table in list(poker_tables.items()):
-                    refresh_table_balances(db, table)
-                    if not table.players:
-                        poker_tables.pop(table_id, None)
-                        table_requests.pop(table_id, None)
-                        continue
-                    if table.reset_after_showdown():
-                        connected = [p for p in table.players if p["connected"]]
-                        if not connected:
-                            poker_tables.pop(table_id, None)
-                            table_requests.pop(table_id, None)
-                            continue
-                        if not any(p["user_id"] == table.creator_id for p in connected):
-                            table.creator_id = connected[0]["user_id"]
-                    if table.phase in ("waiting", "showdown"):
-                        continue
-                    idx = table.current_turn
-                    player = table.players[idx]
-                    if player["folded"] or player["all_in"]:
-                        table.next_turn()
-                    elif time.time() - table.last_action_time >= POKER_TURN_TIMEOUT:
-                        table.record_action(player, "timeout")
-                        player["folded"] = True
-                        player["cards"] = []
-                        table.add_chat(f"⏱️ {player['display_name']} автофолд")
-                        table.next_turn(idx)
-                    sync_table_balances(db, table)
+            async with transaction(serialize_runtime, restore_runtime):
+                ids = list(poker_tables)
+            for table_id in ids:
+                try:
+                    async with transaction(serialize_runtime, restore_runtime) as db:
+                        tick_poker_table(table_id, db)
+                except Exception:
+                    logger.exception("Failed to settle poker table %s", table_id)
         except Exception:
-            logger.exception("Poker timeout checker failed")
+            logger.exception("Failed to read poker tables")
 
 
 def serialize_runtime():
@@ -4864,6 +4889,7 @@ def restore_runtime(payload):
         }.items():
             table.__dict__.setdefault(key, value)
         table.created_at = datetime.fromisoformat(attributes["created_at"])
+        initialise_table(table)
         poker_tables[tid] = table
     gap = max(0.0, time.time() - data.get("last_tick", time.time()))
     if gap > 5:

@@ -1,7 +1,6 @@
 """Billiards HTTP API and wallet settlement."""
 
 import secrets
-import time
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -136,16 +135,14 @@ class BilliardsService:
                 self.tables.pop(tid, None)
 
     def tick_table(self, tid, db):
-        table = self.tables.get(tid)
-        if not table:
+        from table_lifecycle import expire_match
+
+        if expire_match(self, tid, db, "billiards"):
             return
-        table.timeout()
-        self.settle(table, db)
-        now = time.time()
-        if table.phase in ("waiting", "finished") and now - table.updated_at > (
-            86400 if table.phase == "waiting" else 7200
-        ):
-            self.tables.pop(tid, None)
+        table = self.tables.get(tid)
+        if table:
+            table.timeout()
+            self.settle(table, db)
 
     def restore(self, values, pause=0):
         self.tables.clear()
@@ -181,6 +178,11 @@ def revision(table, value):
 def build_router(service, get_user, get_db, templates, may_manage=lambda user: False):
     router = APIRouter()
 
+    def view(table, user, db):
+        data = service.state(table, user, db)
+        data.update(management("billiards", table, may_manage(user), user.id))
+        return data
+
     @router.get("/games/billiards")
     @router.get("/games/billiards/lobby")
     async def lobby(request: Request, user=Depends(get_user)):
@@ -215,7 +217,7 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
             "tables": [
                 {
                     "id": t.id,
-                    **management("billiards", t, may_manage(user)),
+                    **management("billiards", t, may_manage(user), user.id),
                     "creator": next(
                         (p["name"] for p in t.players if p["id"] == t.creator),
                         "Создатель",
@@ -286,7 +288,7 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
         db=Depends(get_db),
     ):
         require(user)
-        data = service.state(service.member(tid, user.id), user, db)
+        data = view(service.member(tid, user.id), user, db)
         shot = data.get("last_shot")
         if shot and shot["id"] == known_shot:
             # Frames are immutable for this shot. Omit the duplicate payload,
@@ -308,7 +310,7 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
             raise BilliardsError("Недостаточно бишопкоинов для ставки")
         table.player(user.id)["ready"] = data["ready"]
         table.touch()
-        return service.state(table, user, db)
+        return view(table, user, db)
 
     @router.post("/api/billiards/table/{tid}/settings")
     async def change_settings(
@@ -321,7 +323,7 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
         if table.creator != user.id:
             raise BilliardsError("Настройки меняет создатель стола", 403)
         table.change_settings(data.get("rules"))
-        return service.state(table, user, db)
+        return view(table, user, db)
 
     @router.post("/api/billiards/table/{tid}/start")
     async def start(
@@ -334,7 +336,7 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
         if table.creator != user.id:
             raise BilliardsError("Партию запускает создатель стола", 403)
         service.start(table, db)
-        return service.state(table, user, db)
+        return view(table, user, db)
 
     @router.post("/api/billiards/table/{tid}/shoot")
     async def shoot(
@@ -355,7 +357,7 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
             data.get("called_pocket"),
         )
         service.settle(table, db)
-        return service.state(table, user, db)
+        return view(table, user, db)
 
     @router.post("/api/billiards/table/{tid}/leave")
     async def leave(
@@ -382,6 +384,6 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
         if table.creator != user.id:
             raise BilliardsError("Новую партию создаёт создатель стола", 403)
         table.rematch()
-        return service.state(table, user, db)
+        return view(table, user, db)
 
     return router

@@ -124,15 +124,14 @@ class DurakService:
                 self.tables.pop(tid, None)
 
     def tick_table(self, tid, db):
-        now = time.time()
+        from table_lifecycle import expire_match
+
+        if expire_match(self, tid, db, "durak"):
+            return
         table = self.tables.get(tid)
         if table:
-            table.tick(now)
+            table.tick()
             self.settle(table, db)
-            if table.phase in ("waiting", "finished") and now - table.updated_at > (
-                86400 if table.phase == "waiting" else 7200
-            ):
-                self.tables.pop(tid, None)
 
     def restore(self, values, pause=0):
         self.tables.clear()
@@ -167,6 +166,11 @@ def revision(table, value):
 
 def build_router(service, get_user, get_db, templates, may_manage=lambda user: False):
     router = APIRouter()
+
+    def view(table, user, db):
+        data = service.state(table, user, db)
+        data.update(management("durak", table, may_manage(user), user.id))
+        return data
 
     @router.get("/games/durak")
     @router.get("/games/durak/lobby")
@@ -207,7 +211,7 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
             "tables": [
                 {
                     "id": t.id,
-                    **management("durak", t, may_manage(user)),
+                    **management("durak", t, may_manage(user), user.id),
                     "creator": next(
                         (p["name"] for p in t.players if p["id"] == t.creator),
                         "Создатель",
@@ -271,7 +275,7 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
     @router.get("/api/durak/table/{tid}/state")
     async def state(tid: str, user=Depends(get_user), db=Depends(get_db)):
         require(user)
-        return service.state(service.member(tid, user.id), user, db)
+        return view(service.member(tid, user.id), user, db)
 
     @router.post("/api/durak/table/{tid}/ready")
     async def ready(
@@ -287,7 +291,7 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
             raise DurakError("Недостаточно бишопкоинов для взноса")
         table.player(user.id)["ready"] = data["ready"]
         table.touch()
-        return service.state(table, user, db)
+        return view(table, user, db)
 
     @router.post("/api/durak/table/{tid}/settings")
     async def rules(
@@ -300,7 +304,7 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
         if table.creator != user.id:
             raise DurakError("Настройки меняет создатель стола", 403)
         table.change_settings(data.get("rules"))
-        return service.state(table, user, db)
+        return view(table, user, db)
 
     @router.post("/api/durak/table/{tid}/start")
     async def start(
@@ -313,7 +317,7 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
         if table.creator != user.id:
             raise DurakError("Партию запускает создатель стола", 403)
         service.start(table, db)
-        return service.state(table, user, db)
+        return view(table, user, db)
 
     @router.post("/api/durak/table/{tid}/action")
     async def action(
@@ -327,7 +331,7 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
             raise DurakError("Время хода истекло. Обновите состояние стола", 409)
         table.action(user.id, data.get("kind"), data.get("card"), data.get("target"))
         service.settle(table, db)
-        return service.state(table, user, db)
+        return view(table, user, db)
 
     @router.post("/api/durak/table/{tid}/leave")
     async def leave(
@@ -354,6 +358,6 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
         if table.creator != user.id:
             raise DurakError("Новую партию создаёт создатель стола", 403)
         table.rematch()
-        return service.state(table, user, db)
+        return view(table, user, db)
 
     return router

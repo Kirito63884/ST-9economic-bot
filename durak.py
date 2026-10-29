@@ -129,6 +129,7 @@ class DurakTable:
         self.players = []
         self.phase = "waiting"
         self.created_at = self.updated_at = time.time()
+        self.last_player_activity = self.created_at
         self.revision = 0
         self.match_number = 0
         self.match = None
@@ -155,6 +156,9 @@ class DurakTable:
         table.__dict__.update(copy.deepcopy(data))
         # Old saved tables inherit the new options without changing their rules.
         table.rules = settings(table.rules)
+        from table_lifecycle import initialise
+
+        initialise(table)
         table.__dict__.setdefault("last_play", None)
         return table
 
