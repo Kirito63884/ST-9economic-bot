@@ -972,9 +972,13 @@ register_roster_sync(bot)
 from discord_roster import register_roster_publication
 
 register_roster_publication(bot)
+from group_analytics import GroupRosterSnapshot  # noqa: F401
 from discord_specialties import register_specialties
 
 register_specialties(bot)
+from assembly_reports import register_assembly_reports
+
+register_assembly_reports(bot)
 # ST9_SQUAD_BOT_END
 
 # === Запуск ===

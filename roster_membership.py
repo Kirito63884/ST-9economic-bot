@@ -331,6 +331,9 @@ def sync_snapshot(db, roles, members, required_role_id=None, now=None):
         1 for row in db.query(RosterMembership).filter_by(status="cargo200")
     )
     health.last_error = None
+    from group_analytics import capture_groups
+
+    capture_groups(db, normalized, participant, cargo, now)
     return {
         "members": health.member_count,
         "created": created,

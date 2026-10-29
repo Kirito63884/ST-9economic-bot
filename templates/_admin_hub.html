@@ -1,221 +1,303 @@
 <section id="panel-hub" role="tabpanel" aria-labelledby="tab-hub" hidden>
-    <style>
-        .hub-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 18px
-        }
+  <style>
+    .hub-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 18px;
+    }
 
-        .hub-wide {
-            grid-column: 1/-1
-        }
+    .hub-wide {
+      grid-column: 1/-1;
+    }
 
-        .hub-counts {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 10px
-        }
+    .hub-counts {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
 
-        .hub-count {
-            border: 1px solid var(--line);
-            border-radius: 10px;
-            padding: 13px;
-            background: #111927
-        }
+    .hub-count {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 13px;
+      background: #111927;
+    }
 
-        .hub-count strong {
-            font-size: 24px;
-            display: block
-        }
+    .hub-count strong {
+      font-size: 24px;
+      display: block;
+    }
 
-        .hub-list {
-            max-height: 420px;
-            overflow: auto
-        }
+    .hub-list {
+      max-height: 420px;
+      overflow: auto;
+    }
 
-        .hub-row {
-            padding: 12px 0;
-            border-bottom: 1px solid var(--line);
-            display: flex;
-            gap: 12px;
-            align-items: flex-start
-        }
+    .hub-row {
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
 
-        .hub-row:last-child {
-            border: 0
-        }
+    .hub-row:last-child {
+      border: 0;
+    }
 
-        .hub-row>div {
-            flex: 1;
-            min-width: 0
-        }
+    .hub-row > div {
+      flex: 1;
+      min-width: 0;
+    }
 
-        .hub-tools {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap
-        }
+    .hub-tools {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
 
-        .hub-bad {
-            color: #ff9aaa
-        }
+    .hub-bad {
+      color: #ff9aaa;
+    }
 
-        .hub-good {
-            color: var(--green)
-        }
+    .hub-good {
+      color: var(--green);
+    }
 
-        @media(max-width:850px) {
-            .hub-grid {
-                grid-template-columns: 1fr
-            }
+    @media (max-width: 850px) {
+      .hub-grid {
+        grid-template-columns: 1fr;
+      }
 
-            .hub-wide {
-                grid-column: auto
-            }
+      .hub-wide {
+        grid-column: auto;
+      }
 
-            .hub-counts {
-                grid-template-columns: 1fr 1fr
-            }
-        }
+      .hub-counts {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
 
-        @media(max-width:560px) {
-            .hub-counts {
-                grid-template-columns: 1fr
-            }
+    @media (max-width: 560px) {
+      .hub-counts {
+        grid-template-columns: 1fr;
+      }
 
-            .hub-tools {
-                position: sticky;
-                bottom: 0;
-                background: #181e2bf2;
-                padding: 10px 0;
-                z-index: 2
-            }
+      .hub-tools {
+        position: sticky;
+        bottom: 0;
+        background: #181e2bf2;
+        padding: 10px 0;
+        z-index: 2;
+      }
 
-            .hub-row {
-                flex-direction: column
-            }
+      .hub-row {
+        flex-direction: column;
+      }
 
-            .hub-row .btn {
-                width: 100%
-            }
-        }
-    </style>
-    <div class="section-card">
-        <div class="section-heading">
-            <div>
-                <h2>Требует внимания</h2>
-                <p>Ошибки, неподтверждённые решения и неполные профили в одном месте.</p>
-            </div>
-            <button class="btn btn-primary btn-sm" onclick="loadAdminHub(true)">Обновить</button>
-        </div>
-        <div id="hubAttention" class="hub-counts">
-            <div class="online-empty">Загрузка…</div>
-        </div>
+      .hub-row .btn {
+        width: 100%;
+      }
+    }
+  </style>
+  <div id="medalAdminAlert" class="medal-notice" role="status" hidden></div>
+  {% include "_statistics_freshness.html" %}
+  <div class="section-card">
+    <div class="section-heading">
+      <div>
+        <h2>Требует внимания</h2>
+        <p>
+          Ошибки, неподтверждённые решения и неполные профили в одном месте.
+        </p>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="loadAdminHub(true)">
+        Обновить
+      </button>
     </div>
-    <div class="hub-grid">
-        {% include "_distinction_reviews.html" %}
-        <div class="section-card hub-wide">
-            <div class="section-heading">
-                <div>
-                    <h2>Предпросмотр недельных наград</h2>
-                    <p>Недельные медали ждут подтверждения главного администратора. Для знаков отличия действует отдельная очередь выше: решение старшего или главного администратора либо автовыдача через 24 часа. Один игрок может получить все подходящие разные награды за неделю без общего лимита. Каждая награда показывается отдельно. Исключённый кандидат не получит роль, выплату и объявление.</p>
-                </div>
-                <div class="hub-tools">
-                    <input id="hubAwardWeek"
-                           class="form-control"
-                           type="date"
-                           style="max-width:180px"><button class="btn" onclick="loadAwardPreview()">Показать</button>
-                </div>
-            </div>
-            <div id="hubAwardPreview" class="hub-list">
-                <div class="online-empty">Выберите неделю.</div>
-            </div>
-            {% if is_super %}
-            <div class="hub-tools mt-3">
-                <button class="btn btn-primary"
-                        id="hubApproveWeek"
-                        onclick="approveAwardWeek()"
-                        disabled>Подтвердить недельные медали</button>
-            </div>
-            {% endif %}
-        </div>
-        <div class="section-card">
-            <div class="section-heading">
-                <div>
-                    <h2>Ручные награды</h2>
-                    <p>Заявка содержит ссылку на откат и комментарий. Ручные знаки проходят очередь с лимитом 24 часа; медали — прежнее подтверждение главного администратора.</p>
-                </div>
-            </div>
-            <div class="stack">
-                <select id="hubManualUser" class="form-select">
-                    <option value="">Игрок</option>
-                    {% for u in users %}
-                    <option value="{{ u.id }}">{{ u.display_name or u.username }}</option>
-                    {% endfor %}
-                </select><select id="hubManualMedal" class="form-select"></select><input id="hubManualUrl"
-       class="form-control"
-       placeholder="Ссылка на откат (необязательно)"><textarea id="hubManualComment"
-          class="notes-cell"
-          maxlength="2000"
-          placeholder="Почему нужно выдать награду"></textarea><button class="btn btn-primary" onclick="createManualAward()">Добавить заявку</button>
-            </div>
-            <div id="hubManualList" class="hub-list mt-3"></div>
-        </div>
-        <div class="section-card">
-            <div class="section-heading">
-                <div>
-                    <h2>Апелляции по сборам</h2>
-                    <p>Одобренная апелляция автоматически возвращает списанные коины.</p>
-                </div>
-            </div>
-            <div id="hubAppeals" class="hub-list">
-                <div class="online-empty">Загрузка…</div>
-            </div>
-        </div>
-        <div class="section-card">
-            <div class="section-heading">
-                <div>
-                    <h2>Недельный отчёт</h2>
-                    <p>Награды, посещаемость, штрафы и ожидающие решения.</p>
-                </div>
-                <button class="btn" onclick="loadWeeklyReport()">Обновить</button>
-            </div>
-            <div id="hubWeeklyReport" class="editor-info">Загрузка…</div>
-        </div>
-        <div class="section-card">
-            <div class="section-heading">
-                <div>
-                    <h2>Выгрузка данных</h2>
-                    <p>CSV открывается в Excel. Формулы из пользовательских полей обезвреживаются.</p>
-                </div>
-            </div>
-            <div class="hub-tools"><a class="btn" href="/api/admin/export/users">Игроки</a><a class="btn" href="/api/admin/export/awards">Награды</a><a class="btn" href="/api/admin/export/assembly">Сборы</a><a class="btn" href="/api/admin/export/audit">История операций</a></div>
-        </div>
-        <div class="section-card hub-wide">
-            <div class="section-heading">
-                <div>
-                    <h2>Действия администраторов</h2>
-                    <p>Решения по наградам, апелляциям и недельным проверкам. Изменения баланса, Steam ID и прав остаются в общем журнале.</p>
-                </div>
-                <a class="btn" href="/admin/logs">Открыть общий журнал</a>
-            </div>
-            <div id="hubActions" class="hub-list">
-                <div class="online-empty">Загрузка…</div>
-            </div>
-        </div>
-        <div class="section-card hub-wide">
-            <div class="section-heading">
-                <div>
-                    <h2>Быстрые проверки</h2>
-                    <p>Используются существующие безопасные инструменты админки.</p>
-                </div>
-            </div>
-            <div class="hub-tools">
-                <button class="btn" onclick="switchTab('assembly',true)">Календарь сборов</button><button class="btn"
-        onclick="switchTab('automation',true);setTimeout(previewAwardReconciliation,100)">Сверить с Discord</button>{% if is_senior_or_super %}<button class="btn" onclick="switchTab('backups',true)">Резервные копии</button>{% endif %}
-            </div>
-        </div>
+    <div id="hubAttention" class="hub-counts">
+      <div class="online-empty">Загрузка…</div>
     </div>
+  </div>
+  <div class="section-card hub-wide">
+    <div class="section-heading">
+      <div>
+        <h2>Быстрые проверки</h2>
+        <p>Используются существующие безопасные инструменты админки.</p>
+      </div>
+    </div>
+    <div class="hub-tools">
+      <button class="btn" onclick="switchTab('assembly', true)">
+        Календарь сборов</button
+      ><button
+        class="btn"
+        onclick="
+          switchTab('automation', true);
+          setTimeout(previewAwardReconciliation, 100);
+        "
+      >
+        Сверить с Discord</button
+      >{% if is_senior_or_super %}<button
+        class="btn"
+        onclick="switchTab('backups', true)"
+      >
+        Резервные копии</button
+      >{% endif %}
+    </div>
+  </div>
+</section>
+<section
+  id="panel-award-review"
+  role="tabpanel"
+  aria-labelledby="tab-award-review"
+  hidden
+>
+  {% include "_distinction_reviews.html" %}
+  <div class="section-card hub-wide">
+    <div class="section-heading">
+      <div>
+        <h2>Предпросмотр недельных наград</h2>
+        <p>
+          Недельные медали ждут подтверждения главного администратора. Для
+          знаков отличия действует отдельная очередь выше: решение старшего или
+          главного администратора либо автовыдача через 24 часа. Один игрок
+          может получить все подходящие разные награды за неделю без общего
+          лимита. Каждая награда показывается отдельно. Исключённый кандидат не
+          получит роль, выплату и объявление.
+        </p>
+      </div>
+      <div class="hub-tools">
+        <input
+          id="hubAwardWeek"
+          class="form-control"
+          type="date"
+          style="max-width: 180px"
+        /><button class="btn" onclick="loadAwardPreview()">Показать</button>
+      </div>
+    </div>
+    <div id="hubAwardPreview" class="hub-list">
+      <div class="online-empty">Выберите неделю.</div>
+    </div>
+    {% if is_super %}
+    <div class="hub-tools mt-3">
+      <button
+        class="btn btn-primary"
+        id="hubApproveWeek"
+        onclick="approveAwardWeek()"
+        disabled
+      >
+        Подтвердить недельные медали
+      </button>
+    </div>
+    {% endif %}
+  </div>
+</section>
+<section
+  id="panel-manual-awards"
+  role="tabpanel"
+  aria-labelledby="tab-manual-awards"
+  hidden
+>
+  <div class="section-card">
+    <div class="section-heading">
+      <div>
+        <h2>Ручные награды</h2>
+        <p>
+          Заявка содержит ссылку на откат и комментарий. Ручные знаки проходят
+          очередь с лимитом 24 часа; медали — прежнее подтверждение главного
+          администратора.
+        </p>
+      </div>
+    </div>
+    <div class="stack">
+      <select id="hubManualUser" class="form-select">
+        <option value="">Игрок</option>
+        {% for u in users %}
+        <option value="{{ u.id }}">{{ u.display_name or u.username }}</option>
+        {% endfor %}</select
+      ><select id="hubManualMedal" class="form-select"></select
+      ><input
+        id="hubManualUrl"
+        class="form-control"
+        placeholder="Ссылка на откат (необязательно)"
+      /><textarea
+        id="hubManualComment"
+        class="notes-cell"
+        maxlength="2000"
+        placeholder="Почему нужно выдать награду"
+      ></textarea
+      ><button class="btn btn-primary" onclick="createManualAward()">
+        Добавить заявку
+      </button>
+    </div>
+    <div id="hubManualList" class="hub-list mt-3"></div>
+  </div>
+</section>
+<section
+  id="panel-appeals"
+  role="tabpanel"
+  aria-labelledby="tab-appeals"
+  hidden
+>
+  <div class="section-card">
+    <div class="section-heading">
+      <div>
+        <h2>Апелляции по сборам</h2>
+        <p>Одобренная апелляция автоматически возвращает списанные коины.</p>
+      </div>
+    </div>
+    <div id="hubAppeals" class="hub-list">
+      <div class="online-empty">Загрузка…</div>
+    </div>
+  </div>
+</section>
+<section
+  id="panel-admin-reports"
+  role="tabpanel"
+  aria-labelledby="tab-admin-reports"
+  hidden
+>
+  <div class="section-card">
+    <div class="section-heading">
+      <div>
+        <h2>Недельный отчёт</h2>
+        <p>Награды, посещаемость, штрафы и ожидающие решения.</p>
+      </div>
+      <button class="btn" onclick="loadWeeklyReport()">Обновить</button>
+    </div>
+    <div id="hubWeeklyReport" class="editor-info">Загрузка…</div>
+  </div>
+  <div class="section-card">
+    <div class="section-heading">
+      <div>
+        <h2>Выгрузка данных</h2>
+        <p>
+          CSV открывается в Excel. Формулы из пользовательских полей
+          обезвреживаются.
+        </p>
+      </div>
+    </div>
+    <div class="hub-tools">
+      <a class="btn" href="/api/admin/export/users">Игроки</a
+      ><a class="btn" href="/api/admin/export/awards">Награды</a
+      ><a class="btn" href="/api/admin/export/assembly">Сборы</a
+      ><a class="btn" href="/api/admin/export/audit">История операций</a>
+    </div>
+  </div>
+  <div class="section-card hub-wide">
+    <div class="section-heading">
+      <div>
+        <h2>Действия администраторов</h2>
+        <p>
+          Решения по наградам, апелляциям и недельным проверкам. Изменения
+          баланса, Steam ID и прав остаются в общем журнале.
+        </p>
+      </div>
+      <a class="btn" href="/admin/logs">Открыть общий журнал</a>
+    </div>
+    <div id="hubActions" class="hub-list">
+      <div class="online-empty">Загрузка…</div>
+    </div>
+  </div>
 </section>
 <script>
 let hubLoaded = false,

@@ -41,6 +41,8 @@ def test_rendered_scripts_parse(make_user, login_as):
     routes = [
         "/",
         "/profile",
+        "/wallet",
+        "/statistics",
         "/admin",
         "/admin/logs",
         "/games",

@@ -956,107 +956,7 @@
                          data-st-panel-group="profile"
                          class="st-profile-history"
                          hidden>
-                    <div class="profile-card">
-                        <div class="st-section-heading">
-                            <h2>История операций</h2>
-                            <a href="/games/poker/history"
-                               class="btn btn-outline-light btn-sm">Раздачи покера →</a>
-                        </div>
-                        <p>Последние 50 записей · время UTC · суммы в БК.</p>
-                        <label for="historySearch" class="form-label">Поиск по истории</label><input id="historySearch"
-       class="form-control st-history-search mb-3"
-       placeholder="Игра, результат или описание…"
-       oninput="filterHistory()">
-                        <p class="st-history-empty" id="historyEmpty">Подходящих записей нет.</p>
-                        {% if not history %}
-                        <div class="empty-state">
-                            <i class="fas fa-inbox"></i>
-                            <h4>История пуста</h4>
-                            <p>Сыграйте первую игру!</p>
-                        </div>
-                        {% else %}
-                        <div class="table-responsive">
-                            <table class="history-table mb-0">
-                                <thead>
-                                    <tr>
-                                        <th>Тип</th>
-                                        <th>Результат</th>
-                                        <th>Сумма, БК</th>
-                                        <th>Детали</th>
-                                        <th>Время</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for h in history %}
-                                    <tr>
-                                        <td>
-                                            {% if h.game_type == "blackjack" %}
-                                            <span class="game-badge badge-blackjack">♠️ Блэкджек</span>
-                                            {% elif h.game_type == "roulette" %}
-                                            <span class="game-badge badge-roulette">🎡 Рулетка</span>
-                                            {% elif h.game_type == "durak" %}<span class="game-badge badge-poker">🂡 Дурак</span>
-                                            {% elif h.game_type == "poker" %}
-                                            <span class="game-badge badge-poker">🃏 Покер</span>
-                                            {% elif h.game_type == "crash" %}
-                                            <span class="game-badge badge-crash">📈 Crash</span>
-                                            {% elif h.game_type == "daily" %}
-                                            <span class="game-badge badge-daily">🎁 Бонус</span>
-                                            {% elif h.game_type == "admin" %}
-                                            <span class="game-badge badge-admin">🔧 Админ</span>
-                                            {% else %}
-                                            <span class="game-badge badge-default">{{ h.game_type }}</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if h.game_type == "admin" %}
-                                            {% if h.result == "admin_adjustment" %}
-                                            {% if h.amount > 0 %}
-                                            <span class="result-badge result-admin">📈 Начисление</span>
-                                            {% elif h.amount < 0 %}
-                                            <span class="result-badge result-admin">📉 Списание</span>
-                                            {% else %}
-                                            <span class="result-badge result-admin">➡️</span>
-                                            {% endif %}
-                                            {% elif h.result == "name_change" %}
-                                            <span class="result-badge result-admin">✏️ Смена ника</span>
-                                            {% elif h.result == "role_change" %}
-                                            <span class="result-badge result-admin">👑 Права</span>
-                                            {% elif h.result == "user_deleted" %}
-                                            <span class="result-badge result-admin">🗑 Удаление</span>
-                                            {% elif h.result == "note_updated" %}
-                                            <span class="result-badge result-admin">📝 Заметка</span>
-                                            {% elif h.result == "note_cleared" %}
-                                            <span class="result-badge result-admin">🗑 Заметка удалена</span>
-                                            {% else %}
-                                            <span class="result-badge result-admin">{{ h.result }}</span>
-                                            {% endif %}
-                                            {% elif h.game_type == "daily" %}
-                                            <span class="result-badge result-bonus">🎁 Бонус</span>
-                                            {% elif h.result == "won" %}
-                                            <span class="result-badge result-won">✅ Победа</span>
-                                            {% elif h.result == "lost" %}
-                                            <span class="result-badge result-lost">❌ Проигрыш</span>
-                                            {% elif h.result == "push" %}
-                                            <span class="result-badge result-push">🤝 Ничья</span>
-                                            {% else %}
-                                            <span class="result-badge result-admin">{{ h.result }}</span>
-                                            {% endif %}
-                                        </td>
-                                        <td class="{% if h.amount > 0 %}amount-pos{% elif h.amount < 0 %}amount-neg{% else %}amount-zero{% endif %}">
-                                            {% if is_money_log(h) %}{{ '%+.2f'|format(h.amount) }}{% endif %}
-                                        </td>
-                                        <td>
-                                            <div class="details-text"
-                                                 title="{{ log_details(h) or '—' }}">{{ log_details(h) or '—' }}</div>
-                                        </td>
-                                        <td class="text-muted-custom small">{{ h.created_at.strftime("%d.%m %H:%M") if h.created_at else '' }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
-                        {% endif %}
-                    </div>
+{% include "_wallet_history.html" %}
                 </section>
             </div>
         </main>
@@ -1187,15 +1087,7 @@ profileForm.addEventListener("submit", async (e) => {
     }
 });
 
-function filterHistory() {
-    const query = document.getElementById("historySearch").value.toLowerCase().trim();
-    let count = 0;
-    document.querySelectorAll(".history-table tbody tr").forEach((row) => {
-        row.hidden = !row.textContent.toLowerCase().includes(query);
-        if (!row.hidden) count++;
-    });
-    document.getElementById("historyEmpty").style.display = count ? "none" : "block";
-}
+
 if (new URLSearchParams(location.search).get("updated") === "1")
     STUI.notice("Профиль сохранён", "success");
 

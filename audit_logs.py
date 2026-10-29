@@ -49,6 +49,8 @@ LABELS = {
     "medal_awarded": "Награда получена",
     "medal_revoked": "Награда снята",
     "award_reward": "Начисление за награду",
+    "assembly_penalty": "Штраф за сбор",
+    "assembly_refund": "Возврат за сбор",
 }
 TYPES = {
     "blackjack": "Блэкджек",

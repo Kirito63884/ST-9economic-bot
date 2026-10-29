@@ -1,0 +1,116 @@
+<section
+  id="panel-wallet-questions"
+  role="tabpanel"
+  aria-labelledby="tab-wallet-questions"
+  hidden
+>
+  <div class="section-card">
+    <div class="section-heading">
+      <div>
+        <h2>Вопросы по операциям</h2>
+        <p>
+          Ответы видны игроку в его истории бишопкоинов. Ответ сам по себе не
+          изменяет баланс.
+        </p>
+      </div>
+      <button class="btn" type="button" onclick="loadWalletQuestions()">
+        Обновить
+      </button>
+    </div>
+    <label for="walletQuestionFilter" class="form-label">Статус</label
+    ><select id="walletQuestionFilter" class="form-select">
+      <option value="pending">Ожидают ответа</option>
+      <option value="answered">С ответом</option>
+    </select>
+    <p id="walletQuestionsStatus" class="hint" role="status"></p>
+    <div id="walletQuestionsList"></div>
+  </div>
+</section>
+<script>
+  (() => {
+    const $ = (id) => document.getElementById(id),
+      node = (tag, text, cls) => {
+        const n = document.createElement(tag);
+        if (text !== undefined) n.textContent = text;
+        if (cls) n.className = cls;
+        return n;
+      };
+    let version = 0;
+    window.loadWalletQuestions = async () => {
+      const current = ++version;
+      $("walletQuestionsStatus").textContent = "Загружаем обращения…";
+      try {
+        const r = await adminFetch(
+            "/api/admin/wallet/questions?status=" +
+              $("walletQuestionFilter").value,
+            { cache: "no-store" },
+          ),
+          data = await r.json();
+        if (!r.ok) throw Error(data.detail || "Ошибка загрузки");
+        if (current !== version) return;
+        $("walletQuestionsList").replaceChildren();
+        $("walletQuestionsStatus").textContent =
+          `Найдено: ${data.items.length}. Показаны последние 200 обращений.`;
+        for (const item of data.items) {
+          const card = node("div", undefined, "section-card");
+          card.append(
+            node("h3", `${item.name} · операция #${item.operation_id}`),
+          );
+          if (item.operation)
+            card.append(
+              node(
+                "p",
+                `${item.operation.amount} БК · ${item.operation.details || item.operation.label}`,
+              ),
+            );
+          card.append(node("p", "Вопрос: " + item.reason));
+          if (item.status === "answered")
+            card.append(node("p", "Ответ: " + item.answer));
+          else {
+            const form = node("form"),
+              label = node("label", "Ответ игроку", "form-label"),
+              text = node("textarea", undefined, "form-control"),
+              button = node("button", "Отправить ответ", "btn btn-primary"),
+              status = node("p", undefined, "hint");
+            text.id = `wallet-answer-${item.id}`;
+            label.htmlFor = text.id;
+            text.required = true;
+            text.minLength = 3;
+            text.maxLength = 2000;
+            button.type = "submit";
+            form.append(label, text, button, status);
+            form.addEventListener("submit", async (e) => {
+              e.preventDefault();
+              button.disabled = true;
+              try {
+                const response = await adminFetch(
+                    `/api/admin/wallet/questions/${item.id}/answer`,
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ answer: text.value }),
+                    },
+                  ),
+                  result = await response.json();
+                if (!response.ok)
+                  throw Error(result.detail || "Не удалось ответить");
+                window.loadWalletQuestions();
+              } catch (error) {
+                status.textContent = error.message;
+                button.disabled = false;
+              }
+            });
+            card.append(form);
+          }
+          $("walletQuestionsList").append(card);
+        }
+      } catch (error) {
+        if (current === version)
+          $("walletQuestionsStatus").textContent = error.message;
+      }
+    };
+    $("walletQuestionFilter").addEventListener("change", () =>
+      window.loadWalletQuestions(),
+    );
+  })();
+</script>

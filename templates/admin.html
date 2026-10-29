@@ -250,7 +250,7 @@
 
             .app-shell {
                 display: grid;
-                grid-template-columns: 218px minmax(0, 1fr);
+                grid-template-columns: 264px minmax(0, 1fr);
                 min-height: 100vh
             }
 
@@ -302,6 +302,7 @@
                 flex-shrink: 0
             }
 
+            .nav-group-label { padding:16px 10px 3px; font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
             .side-nav {
                 display: flex;
                 flex-direction: column;
@@ -1557,6 +1558,7 @@
                 }
 
                 .nav-label,
+                .nav-group-label,
                 .sidebar-bottom {
                     display: none
                 }
@@ -1897,6 +1899,16 @@
             }
         </style>
         <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=st9-1">
+        <style>
+            .admin-nav-toggle { display:none; }
+            @media (max-width:760px) {
+                .admin-nav-toggle { display:block; margin-top:12px; width:100%; }
+                .sidebar .side-nav { display:none; }
+                .sidebar[data-menu-open] .side-nav { display:flex; flex-direction:column; max-height:60vh; overflow-y:auto; overflow-x:hidden; }
+                .sidebar[data-menu-open] .nav-group-label { display:block; }
+                .sidebar[data-menu-open] .nav-item { white-space:normal; text-align:left; }
+            }
+        </style>
         {% include "_medals_style.html" %}
     </head>
     <body>
@@ -1912,134 +1924,292 @@
             <aside class="sidebar">
                 <a class="brand" href="/admin"><span class="brand-icon">ST9</span><span>Strike Team 9<small>Бишопкоины · управление</small></span></a>
                 <div class="eyebrow nav-label">Рабочая область</div>
-                <nav class="side-nav" role="tablist" aria-label="Разделы админки">
-                    {% if may_view_statistics(user) %}
-                    <a class="nav-item" href="/statistics"><span class="nav-icon">◷</span>Статистика источников</a>
-                    {% endif %}
-                    <button class="nav-item"
-                            id="tab-players"
-                            role="tab"
-                            aria-controls="panel-players"
-                            aria-selected="true"
-                            onclick="switchTab('players')"><span class="nav-icon">◉</span>Игроки<span class="nav-count">{{ users|length }}</span></button>
-                    <button class="nav-item"
-                            id="tab-hub"
-                            role="tab"
-                            aria-controls="panel-hub"
-                            aria-selected="false"
-                            tabindex="-1"
-                            onclick="switchTab('hub')"><span class="nav-icon">!</span>Требует внимания</button>
-                    <button class="nav-item"
-                            id="tab-debt"
-                            role="tab"
-                            aria-controls="panel-debt"
-                            aria-selected="false"
-                            tabindex="-1"
-                            onclick="switchTab('debt')"><span class="nav-icon">−</span>Баланс ниже −1500<span class="nav-count" id="debtNavCount">{{ users|selectattr('balance', 'lt', -1500)|list|length }}</span></button>
-                    <button class="nav-item"
-                            id="tab-discord"
-                            role="tab"
-                            aria-controls="panel-discord"
-                            aria-selected="false"
-                            tabindex="-1"
-                            onclick="switchTab('discord')"><span class="nav-icon">◎</span>Участники Discord</button>
-                    <button class="nav-item"
-                            id="tab-medals"
-                            role="tab"
-                            aria-controls="panel-medals"
-                            aria-selected="false"
-                            tabindex="-1"
-                            onclick="switchTab('medals')"><span class="nav-icon">✦</span>Награды</button>
-                    <button class="nav-item"
-                            id="tab-rules"
-                            role="tab"
-                            aria-controls="panel-rules"
-                            aria-selected="false"
-                            tabindex="-1"
-                            onclick="switchTab('rules')"><span class="nav-icon">?</span>Вопросы по правилам<span class="nav-count">{{ server_rule_questions|length }}</span></button>
-                    <button class="nav-item"
-                            id="tab-online"
-                            role="tab"
-                            aria-controls="panel-online"
-                            aria-selected="false"
-                            tabindex="-1"
-                            onclick="switchTab('online')"><span class="nav-icon">●</span>Онлайн</button>
-                    {% if is_senior_or_super %}
-                    <button class="nav-item" id="tab-groups" role="tab"
-                            aria-controls="panel-groups" aria-selected="false" tabindex="-1"
-                            onclick="switchTab('groups')"><span class="nav-icon">▥</span>Группы</button>
-                    {% endif %}
-                    <details class="nav-more" id="adminMore">
-                        <summary><span class="nav-icon">•••</span>Ещё</summary>
-                        <div class="nav-more-items">
-                            <button class="nav-item"
-                                    id="tab-operations"
-                                    role="tab"
-                                    aria-controls="panel-operations"
-                                    aria-selected="false"
-                                    tabindex="-1"
-                                    onclick="switchTab('operations')"><span class="nav-icon">⇄</span>Операции</button>
-                            {% if is_super %}<button class="nav-item"
-        id="tab-access"
-        role="tab"
-        aria-controls="panel-access"
-        aria-selected="false"
-        tabindex="-1"
-        onclick="switchTab('access')"><span class="nav-icon">⌁</span>Вход по ссылке</button>{% endif %}
-                            {% if is_senior_or_super %}<button class="nav-item"
-        id="tab-backups"
-        role="tab"
-        aria-controls="panel-backups"
-        aria-selected="false"
-        tabindex="-1"
-        onclick="switchTab('backups')"><span class="nav-icon">◫</span>Резервные копии</button>{% endif %}
-                            {% if user.is_admin %}<button class="nav-item"
-        id="tab-squad"
-        role="tab"
-        aria-controls="panel-squad"
-        aria-selected="false"
-        tabindex="-1"
-        onclick="switchTab('squad')"><span class="nav-icon">▦</span>Squad · онлайн</button>{% endif %}
-                            {% if is_super %}<button class="nav-item"
-        id="tab-tables"
-        role="tab"
-        aria-controls="panel-tables"
-        aria-selected="false"
-        tabindex="-1"
-        onclick="switchTab('tables')"><span class="nav-icon">♠</span>Столы</button>{% endif %}
-                            <button class="nav-item"
-                                    id="tab-assembly"
-                                    role="tab"
-                                    aria-controls="panel-assembly"
-                                    aria-selected="false"
-                                    tabindex="-1"
-                                    onclick="switchTab('assembly')"><span class="nav-icon">◷</span>Субботний сбор</button>
-                            <button class="nav-item"
-                                    id="tab-automation"
-                                    role="tab"
-                                    aria-controls="panel-automation"
-                                    aria-selected="false"
-                                    tabindex="-1"
-                                    onclick="switchTab('automation')"><span class="nav-icon">⚙</span>Автоматизация</button>
-                            <button class="nav-item"
-                                    id="tab-cargo"
-                                    role="tab"
-                                    aria-controls="panel-cargo"
-                                    aria-selected="false"
-                                    tabindex="-1"
-                                    onclick="switchTab('cargo')"><span class="nav-icon">⊘</span>Груз 200<span class="nav-count">{{ cargo_users|length }}</span></button>
-                            <button class="nav-item"
-                                    id="tab-archive"
-                                    role="tab"
-                                    aria-controls="panel-archive"
-                                    aria-selected="false"
-                                    tabindex="-1"
-                                    onclick="switchTab('archive')"><span class="nav-icon">▤</span>Архив<span class="nav-count">{{ archived_users|length }}</span></button>
-                            <a class="nav-item"
-                               href="/admin/logs"><span class="nav-icon">≡</span>Общие логи</a>
-                        </div>
-                    </details>
-                </nav>
+<button type="button" class="btn admin-nav-toggle" id="adminNavToggle" aria-expanded="false" aria-controls="adminSectionNav">Разделы админки</button>
+<nav
+  id="adminSectionNav"
+  class="side-nav"
+  role="tablist"
+  aria-label="Разделы админки"
+>
+  <div class="nav-group-label">Обзор</div>
+  <button
+    class="nav-item"
+    id="tab-hub"
+    role="tab"
+    aria-controls="panel-hub"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('hub')"
+  >
+    <span class="nav-icon">!</span>Требует внимания
+  </button>
+  <button
+    class="nav-item"
+    id="tab-players"
+    role="tab"
+    aria-controls="panel-players"
+    aria-selected="true"
+    tabindex="0"
+    onclick="switchTab('players')"
+  >
+    <span class="nav-icon">◉</span>Игроки
+  </button>
+  <button
+    class="nav-item"
+    id="tab-discord"
+    role="tab"
+    aria-controls="panel-discord"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('discord')"
+  >
+    <span class="nav-icon">◎</span>Участники Discord
+  </button>
+  <div class="nav-group-label">Группы и активность</div>
+  {% if is_senior_or_super %}<button
+    class="nav-item"
+    id="tab-groups"
+    role="tab"
+    aria-controls="panel-groups"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('groups')"
+  >
+    <span class="nav-icon">▥</span>Группы · история онлайна</button
+  >{% endif %} {% if is_senior_or_super %}<button
+    class="nav-item"
+    id="tab-group-monthly"
+    role="tab"
+    aria-controls="panel-group-monthly"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('group-monthly')"
+  >
+    <span class="nav-icon">▤</span>Группы · статистика месяца</button
+  >{% endif %}
+  <button
+    class="nav-item"
+    id="tab-online"
+    role="tab"
+    aria-controls="panel-online"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('online')"
+  >
+    <span class="nav-icon">●</span>Онлайн сайта
+  </button>
+  {% if user.is_admin %}<button
+    class="nav-item"
+    id="tab-squad"
+    role="tab"
+    aria-controls="panel-squad"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('squad')"
+  >
+    <span class="nav-icon">▦</span>Игровые серверы · онлайн</button
+  >{% endif %}
+  <div class="nav-group-label">Сборы</div>
+  {% if is_senior_or_super %}<button
+    class="nav-item"
+    id="tab-assembly-summary"
+    role="tab"
+    aria-controls="panel-assembly-summary"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('assembly-summary')"
+  >
+    <span class="nav-icon">◷</span>Итоги сборов по группам</button
+  >{% endif %}
+  <button
+    class="nav-item"
+    id="tab-assembly"
+    role="tab"
+    aria-controls="panel-assembly"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('assembly')"
+  >
+    <span class="nav-icon">▣</span>Учёт сборов и рапорты
+  </button>
+  <button
+    class="nav-item"
+    id="tab-appeals"
+    role="tab"
+    aria-controls="panel-appeals"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('appeals')"
+  >
+    <span class="nav-icon">↶</span>Апелляции по сборам
+  </button>
+  <div class="nav-group-label">Награды</div>
+  <button
+    class="nav-item"
+    id="tab-medals"
+    role="tab"
+    aria-controls="panel-medals"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('medals')"
+  >
+    <span class="nav-icon">✦</span>Медали и знаки отличия
+  </button>
+  <button
+    class="nav-item"
+    id="tab-award-review"
+    role="tab"
+    aria-controls="panel-award-review"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('award-review')"
+  >
+    <span class="nav-icon">✓</span>Подтверждение наград
+  </button>
+  <button
+    class="nav-item"
+    id="tab-manual-awards"
+    role="tab"
+    aria-controls="panel-manual-awards"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('manual-awards')"
+  >
+    <span class="nav-icon">+</span>Ручные заявки на награды
+  </button>
+  <div class="nav-group-label">Финансы</div>
+  <button
+    class="nav-item"
+    id="tab-operations"
+    role="tab"
+    aria-controls="panel-operations"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('operations')"
+  >
+    <span class="nav-icon">⇄</span>Начисления и списания
+  </button>
+  <button
+    class="nav-item"
+    id="tab-wallet-questions"
+    role="tab"
+    aria-controls="panel-wallet-questions"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('wallet-questions')"
+  >
+    <span class="nav-icon">?</span>Вопросы по операциям
+  </button>
+  <button
+    class="nav-item"
+    id="tab-debt"
+    role="tab"
+    aria-controls="panel-debt"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('debt')"
+  >
+    <span class="nav-icon">−</span>Баланс ниже −1500<span
+      class="nav-count"
+      id="debtNavCount"
+      >{{ users|selectattr('balance', 'lt', -1500)|list|length }}</span
+    >
+  </button>
+  <div class="nav-group-label">Проверки и отчёты</div>
+  <button
+    class="nav-item"
+    id="tab-rules"
+    role="tab"
+    aria-controls="panel-rules"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('rules')"
+  >
+    <span class="nav-icon">?</span>Тесты по правилам
+  </button>
+  <button
+    class="nav-item"
+    id="tab-admin-reports"
+    role="tab"
+    aria-controls="panel-admin-reports"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('admin-reports')"
+  >
+    <span class="nav-icon">⇩</span>Отчёты и экспорт
+  </button>
+  <a class="nav-item" href="/admin/logs"
+    ><span class="nav-icon">≡</span>Журнал операций</a
+  >
+  {% if may_view_statistics(user) %}<a class="nav-item" href="/statistics"
+    ><span class="nav-icon">◴</span>Загрузка статистики</a
+  >{% endif %}
+  <div class="nav-group-label">Управление</div>
+  <button
+    class="nav-item"
+    id="tab-automation"
+    role="tab"
+    aria-controls="panel-automation"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('automation')"
+  >
+    <span class="nav-icon">⚙</span>Настройки автоматизации
+  </button>
+  {% if is_super %}<button
+    class="nav-item"
+    id="tab-access"
+    role="tab"
+    aria-controls="panel-access"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('access')"
+  >
+    <span class="nav-icon">⌁</span>Вход по ссылке</button
+  >{% endif %} {% if is_senior_or_super %}<button
+    class="nav-item"
+    id="tab-backups"
+    role="tab"
+    aria-controls="panel-backups"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('backups')"
+  >
+    <span class="nav-icon">◫</span>Резервные копии</button
+  >{% endif %} {% if is_super %}<button
+    class="nav-item"
+    id="tab-tables"
+    role="tab"
+    aria-controls="panel-tables"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('tables')"
+  >
+    <span class="nav-icon">♠</span>Игровые столы</button
+  >{% endif %}
+  <button
+    class="nav-item"
+    id="tab-cargo"
+    role="tab"
+    aria-controls="panel-cargo"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('cargo')"
+  >
+    <span class="nav-icon">⊘</span>Груз 200
+  </button>
+  <button
+    class="nav-item"
+    id="tab-archive"
+    role="tab"
+    aria-controls="panel-archive"
+    aria-selected="false"
+    tabindex="-1"
+    onclick="switchTab('archive')"
+  >
+    <span class="nav-icon">▤</span>Архив профилей
+  </button>
+</nav>
                 <div class="sidebar-bottom">
                     <div class="user-name">{{ user.display_name or user.username }}</div>
                     <div class="small muted mt-1">{% if is_owner %}Владелец{% elif is_super %}Главный администратор{% elif user.is_senior_admin %}Старший администратор{% else %}Младший администратор{% endif %}</div>
@@ -2047,12 +2217,11 @@
                 </div>
             </aside>
             <main class="main">
-                <div id="medalAdminAlert" class="medal-notice" role="status" hidden></div>
                 <header class="page-header">
                     <div>
                         <div class="eyebrow mb-2">Strike Team 9</div>
-                        <h1>Управление</h1>
-                        <p>Игроки, балансы и доступ к сайту</p>
+                        <h1 id="adminPageTitle">Игроки</h1>
+                        <p id="adminPageDescription">Профили участников, балансы и доступ к сайту</p>
                     </div>
                     <div class="header-actions">
                         <button id="dirtyIndicator"
@@ -2061,7 +2230,7 @@
                                 hidden></button><a class="btn btn-sm" href="/">На сайт ↗</a>
                     </div>
                 </header>
-                {% include "_statistics_freshness.html" %}
+                <section id="panel-players" role="tabpanel" aria-labelledby="tab-players">
                 <div class="stats">
                     <div class="stat-card">
                         <div class="stat-label">Активные игроки</div>
@@ -2084,7 +2253,7 @@
                         <div class="stat-caption">Постоянно / временно</div>
                     </div>
                 </div>
-                <section id="panel-players" role="tabpanel" aria-labelledby="tab-players">
+
                     <div class="section-card list-card">
                         <div class="list-header">
                             <h2>Игроки</h2>
@@ -2642,6 +2811,8 @@
                 {% include "_admin_tables.html" %}
                 {% include "_admin_squad.html" %}
                 {% include "_admin_groups.html" %}
+{% include "_admin_group_reports.html" %}
+{% include "_admin_wallet_questions.html" %}
                 {% include "_admin_hub.html" %}
                 {% include "_admin_backups.html" %}
                 {% include "_admin_medals.html" %}
@@ -2947,6 +3118,11 @@ async function adminFetch(url, options = {}) {
     }
 }
 
+document.getElementById("adminNavToggle").addEventListener("click", () => {
+    const sidebar = document.querySelector(".sidebar");
+    const open = sidebar.toggleAttribute("data-menu-open");
+    document.getElementById("adminNavToggle").setAttribute("aria-expanded", String(open));
+});
 function switchTab(name, focus = false) {
     if (!document.getElementById("panel-" + name)) return;
     document
@@ -2964,9 +3140,25 @@ function switchTab(name, focus = false) {
         loadAssemblyReports();
     }
     if (name === "automation") loadAutomation();
-    if (name === "hub") loadAdminHub();
+    if (["hub", "award-review", "manual-awards", "appeals", "admin-reports"].includes(name)) loadAdminHub();
+    if (name === "group-monthly") window.loadMonthlyGroups();
+    if (name === "assembly-summary") window.loadAssemblySummary();
+    if (name === "wallet-questions") window.loadWalletQuestions();
     if (name === "groups") window.loadClanGroups();
     const selectedTab = document.getElementById("tab-" + name);
+    if (selectedTab) {
+        const caption = selectedTab.cloneNode(true);
+        caption.querySelectorAll(".nav-icon,.nav-count").forEach(el => el.remove());
+        document.getElementById("adminPageTitle").textContent = caption.textContent.trim();
+        document.getElementById("adminPageDescription").textContent = {
+            players: "Профили участников, балансы и доступ к сайту",
+            "group-monthly": "Игровая активность, сборы и наблюдаемые изменения состава",
+            "assembly-summary": "Присутствие и рапорты по группам · суббота, 19:00–22:00 МСК",
+            "wallet-questions": "Обращения участников по финансовым операциям",
+            "award-review": "Подтверждение медалей и знаков отличия",
+            "manual-awards": "Заявки на награды с основаниями и доказательствами",
+        }[name] || "Strike Team 9 · администрирование";
+    }
     const selectedMore = selectedTab?.closest("details");
     const moreMenu = document.getElementById("adminMore");
     if (selectedMore) selectedMore.open = true;
@@ -2983,6 +3175,10 @@ function switchTab(name, focus = false) {
     else url.searchParams.set("section", name);
     history.replaceState(null, "", url);
     if (focus) document.getElementById("tab-" + name).focus();
+    if (!focus && matchMedia("(max-width:760px)").matches) {
+        document.querySelector(".sidebar").removeAttribute("data-menu-open");
+        document.getElementById("adminNavToggle").setAttribute("aria-expanded", "false");
+    }
 }
 document.querySelectorAll("[role=tablist]").forEach((tablist) =>
     tablist.addEventListener("keydown", (event) => {

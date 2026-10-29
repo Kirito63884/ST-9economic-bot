@@ -128,6 +128,9 @@ from rule_tests import (
     can_manage_tests,
 )
 
+from group_analytics import GroupRosterSnapshot  # noqa: F401
+from wallet_history import make_router as make_wallet_router
+
 # === FastAPI ===
 SECRET_KEY = SECRET_KEY or initialize_database()
 if os.getenv("SECRET_KEY"):
@@ -1103,20 +1106,12 @@ async def profile_page(
 ):
     if not user:
         return RedirectResponse("/login")
-    history = (
-        db.query(GameHistory)
-        .filter(GameHistory.user_id == user.id)
-        .order_by(GameHistory.created_at.desc())
-        .limit(50)
-        .all()
-    )
     return templates.TemplateResponse(
         request=request,
         name="profile.html",
         context={
             "user": user,
             "display_name": user.display_name or user.username,
-            "history": history,
             "medals": visible_awards(db, user.discord_id),
             "rule_tests": player_summaries(db, user.id),
         },
@@ -5010,3 +5005,5 @@ app.add_middleware(SecurityHeadersMiddleware)
 from distinction_reviews import make_router as make_distinction_review_router
 
 app.include_router(make_distinction_review_router(get_user, get_db))
+
+app.include_router(make_wallet_router(get_user, get_db, templates))

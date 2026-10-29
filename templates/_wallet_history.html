@@ -1,0 +1,317 @@
+<style>
+  .wallet-history {
+    color: #e7edf7;
+    background: #172131;
+    border: 1px solid #34445f;
+    border-radius: 14px;
+    padding: 22px;
+  }
+  .wallet-history h2,
+  .wallet-history h3 {
+    color: #e7edf7;
+  }
+  .wallet-history p,
+  .wallet-history small {
+    color: #b5c3d8;
+  }
+  .wallet-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: end;
+    margin: 18px 0;
+  }
+  .wallet-filters label {
+    display: block;
+    font-size: 13px;
+    color: #b5c3d8;
+  }
+  .wallet-history input,
+  .wallet-history select,
+  .wallet-history textarea {
+    color: #e7edf7;
+    background: #111927;
+    border: 1px solid #526683;
+    border-radius: 8px;
+    padding: 10px;
+    max-width: 100%;
+  }
+  .wallet-history button,
+  .wallet-history a.wallet-button {
+    background: #29466e;
+    color: #edf3ff;
+    padding: 10px 14px;
+    border: 1px solid #526683;
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .wallet-history button:disabled {
+    opacity: 0.55;
+    cursor: wait;
+  }
+  .wallet-scroll {
+    overflow-x: auto;
+  }
+  .wallet-history table {
+    width: 100%;
+    min-width: 680px;
+    border-collapse: collapse;
+  }
+  .wallet-history td,
+  .wallet-history th {
+    padding: 13px;
+    border-bottom: 1px solid #34445f;
+    vertical-align: top;
+    text-align: left;
+    color: #e7edf7;
+    background: #172131;
+  }
+  .wallet-history td p {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    margin: 6px 0;
+    max-width: 460px;
+  }
+  .wallet-history dialog {
+    background: #172131;
+    color: #e7edf7;
+    border: 1px solid #526683;
+    border-radius: 12px;
+    padding: 22px;
+    width: min(520px, 95vw);
+  }
+  .wallet-history dialog::backdrop {
+    background: #000a;
+  }
+  .wallet-history dialog textarea {
+    width: 100%;
+    min-height: 140px;
+  }
+  .wallet-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+  }
+</style>
+<div class="wallet-history" id="walletHistory">
+  <h2>История бишопкоинов</h2>
+  <p>
+    Все сохранённые финансовые операции вашего аккаунта. Время — Москва (UTC+3).
+    Можно задать вопрос администрации по конкретной записи.
+  </p>
+  <form id="walletFilters" class="wallet-filters">
+    <div>
+      <label for="walletCategory">Основание</label
+      ><select id="walletCategory" name="category">
+        <option value="">Все операции</option>
+        <option value="awards">Награды</option>
+        <option value="assemblies">Сборы · штрафы и возвраты</option>
+        <option value="admin">Начисления и списания</option>
+        <option value="bonus">Бонусы</option>
+        <option value="games">Игры</option>
+      </select>
+    </div>
+    <div>
+      <label for="walletDirection">Направление</label
+      ><select id="walletDirection" name="direction">
+        <option value="">Все</option>
+        <option value="positive">Начисления</option>
+        <option value="negative">Списания</option>
+      </select>
+    </div>
+    <div>
+      <label for="walletFrom">С даты</label
+      ><input id="walletFrom" type="date" name="date_from" />
+    </div>
+    <div>
+      <label for="walletTo">По дату включительно</label
+      ><input id="walletTo" type="date" name="date_to" />
+    </div>
+    <div>
+      <label for="walletSearch">Поиск по основанию</label
+      ><input
+        id="walletSearch"
+        name="q"
+        maxlength="200"
+        placeholder="Например, название награды"
+      />
+    </div>
+    <button type="submit">Показать</button>
+  </form>
+  <p id="walletStatus" role="status" aria-live="polite"></p>
+  <p id="walletTotals"></p>
+  <div class="wallet-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Операция · МСК</th>
+          <th>Тип</th>
+          <th>Сумма, БК</th>
+          <th>Основание и обращение</th>
+        </tr>
+      </thead>
+      <tbody id="walletRows"></tbody>
+    </table>
+  </div>
+  <button id="walletMore" type="button" hidden>Показать ещё</button>
+  <p>
+    <a href="/appeals">Апелляции по штрафам за сборы</a> ·
+    <a href="/games/poker/history">История покера</a>
+  </p>
+  <dialog id="walletQuestionDialog" aria-labelledby="walletQuestionTitle">
+    <form id="walletQuestionForm">
+      <h3 id="walletQuestionTitle">Вопрос по операции</h3>
+      <p id="walletQuestionOperation"></p>
+      <label for="walletQuestionReason">Что нужно проверить?</label
+      ><textarea
+        id="walletQuestionReason"
+        minlength="3"
+        maxlength="2000"
+        required
+      ></textarea>
+      <p>
+        Обращение не изменяет баланс автоматически. Ответ появится у этой
+        операции.
+      </p>
+      <p id="walletQuestionStatus" role="status"></p>
+      <div class="wallet-actions">
+        <button type="submit" id="walletQuestionSend">Отправить</button
+        ><button type="button" id="walletQuestionCancel">Отмена</button>
+      </div>
+    </form>
+  </dialog>
+</div>
+<script>
+  (() => {
+    const $ = (id) => document.getElementById(id),
+      node = (tag, text) => {
+        const n = document.createElement(tag);
+        if (text !== undefined) n.textContent = text;
+        return n;
+      };
+    const money = new Intl.NumberFormat("ru-RU", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const date = new Intl.DateTimeFormat("ru-RU", {
+      timeZone: "Europe/Moscow",
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+    let next = null,
+      version = 0,
+      busy = false,
+      operation = null;
+    async function json(url, options = {}) {
+      const response = await fetch(url, {
+          ...options,
+          cache: "no-store",
+          signal: AbortSignal.timeout(15000),
+        }),
+        data = await response.json();
+      if (!response.ok)
+        throw Error(
+          typeof data.detail === "string"
+            ? data.detail
+            : "Не удалось выполнить запрос",
+        );
+      return data;
+    }
+    function entry(row) {
+      const tr = node("tr"),
+        info = node("td");
+      tr.append(
+        node("td", `#${row.id} · ${date.format(new Date(row.created_at))}`),
+        node("td", `${row.kind} · ${row.label}`),
+        node("td", `${row.amount > 0 ? "+" : ""}${money.format(row.amount)}`),
+      );
+      info.append(
+        node("p", row.details || "Основание в старой записи не указано"),
+      );
+      if (row.question) {
+        info.append(node("p", `Ваш вопрос: ${row.question.reason}`));
+        info.append(
+          node(
+            "p",
+            row.question.status === "answered"
+              ? `Ответ администрации: ${row.question.answer}`
+              : "Обращение ожидает ответа администрации.",
+          ),
+        );
+      } else {
+        const button = node("button", "Задать вопрос");
+        button.type = "button";
+        button.addEventListener("click", () => {
+          operation = row.id;
+          $("walletQuestionOperation").textContent =
+            `Операция #${row.id} · ${money.format(row.amount)} БК`;
+          $("walletQuestionReason").value = "";
+          $("walletQuestionStatus").textContent = "";
+          $("walletQuestionDialog").showModal();
+        });
+        info.append(button);
+      }
+      tr.append(info);
+      return tr;
+    }
+    async function load(append = false) {
+      if (busy) return;
+      busy = true;
+      const current = ++version;
+      $("walletStatus").textContent = "Загружаем операции…";
+      $("walletMore").disabled = true;
+      const query = new URLSearchParams(new FormData($("walletFilters")));
+      if (append && next) query.set("before", next);
+      try {
+        const data = await json("/api/wallet/history?" + query);
+        if (current !== version) return;
+        if (!append) $("walletRows").replaceChildren();
+        data.entries.forEach((row) => $("walletRows").append(entry(row)));
+        next = data.next_before;
+        $("walletMore").hidden = !next;
+        $("walletTotals").textContent =
+          `По выбранным фильтрам: ${data.summary.count} операций. Начислено: ${money.format(data.summary.credited)} БК; списано: ${money.format(-data.summary.debited)} БК. Текущий баланс: ${money.format(data.balance)} БК.`;
+        $("walletStatus").textContent = data.summary.count
+          ? ""
+          : "Подходящих операций нет.";
+      } catch (e) {
+        $("walletStatus").textContent = e.message;
+      } finally {
+        busy = false;
+        $("walletMore").disabled = false;
+      }
+    }
+    $("walletFilters").addEventListener("submit", (e) => {
+      e.preventDefault();
+      next = null;
+      load();
+    });
+    $("walletMore").addEventListener("click", () => load(true));
+    $("walletQuestionCancel").addEventListener("click", () =>
+      $("walletQuestionDialog").close(),
+    );
+    $("walletQuestionForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      $("walletQuestionSend").disabled = true;
+      try {
+        await json("/api/wallet/questions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            operation_id: operation,
+            reason: $("walletQuestionReason").value,
+          }),
+        });
+        $("walletQuestionDialog").close();
+        next = null;
+        await load();
+      } catch (error) {
+        $("walletQuestionStatus").textContent = error.message;
+      } finally {
+        $("walletQuestionSend").disabled = false;
+      }
+    });
+    load();
+  })();
+</script>

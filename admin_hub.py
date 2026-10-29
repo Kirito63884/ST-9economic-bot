@@ -303,19 +303,19 @@ def make_router(get_user, get_db, is_super_admin):
                 "key": "awards",
                 "label": "Недели ожидают проверки наград",
                 "count": reviews,
-                "section": "hub",
+                "section": "award-review",
             },
             {
                 "key": "manual",
                 "label": "Ручные награды ожидают решения",
                 "count": manual,
-                "section": "hub",
+                "section": "manual-awards",
             },
             {
                 "key": "appeals",
                 "label": "Апелляции ожидают решения",
                 "count": appeals,
-                "section": "hub",
+                "section": "appeals",
             },
             {
                 "key": "fines",
@@ -324,6 +324,16 @@ def make_router(get_user, get_db, is_super_admin):
                 "section": "assembly",
             },
         ]
+        from wallet_history import WalletQuestion
+
+        items.append(
+            {
+                "key": "wallet_questions",
+                "label": "Вопросы по финансовым операциям",
+                "count": db.query(WalletQuestion).filter_by(status="pending").count(),
+                "section": "wallet-questions",
+            }
+        )
         return {
             "total": sum(i["count"] for i in items),
             "items": items,

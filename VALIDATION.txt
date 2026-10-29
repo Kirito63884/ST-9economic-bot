@@ -189,3 +189,26 @@ Original Discord specialty icons, 2026-10-29:
   files pass. All six isolated installer success/rollback scenarios pass.
 - Live Discord icon assets, emoji capacity and rendering require deployment-side
   validation; no production Discord messages or emoji were changed locally.
+
+Admin workspace, monthly groups, wallet history and assembly reports, 2026-10-29:
+- Full isolated suite: 538 passed, 0 failed/skipped; same two dependency warnings.
+- 13 new behavioral tests cover Moscow month/date boundaries, union of overlapping
+  observed sessions, open-session limits, unknown historical roster, report-aware
+  attendance, training/Cargo cohort capture, private financial pagination, foreign
+  operation denial, CSRF, idempotent questions, answers without wallet changes,
+  input bounds, source-progress projection and private Discord report recovery.
+- Rendered JavaScript checks include /wallet and /statistics; final markup checks
+  and access-policy suite pass after formatting the sidebar and separated panels.
+- Chromium with isolated SQLite and synthetic sessions, America/New_York browser
+  timezone: monthly totals, literal hostile names, assembly categories, separate
+  award/manual/appeal/report/financial sections, live progress, 50+6 ledger pages,
+  real browser CSRF question/answer flow, profile history and 390px mobile menu.
+  Junior group-statistics access denied; zero pageerror events, no page overflow.
+- Four isolated installer paths pass: success, copy failure, schema-preparation
+  failure and HTTP-health failure. Selected files roll back; new files are removed;
+  .env, working SQLite, specialty code and collector code remain byte-identical.
+  Only website and Discord bot services are touched.
+- Actual SQLAlchemy raw-connection SQLite backup API and PRAGMA quick_check were
+  exercised against the isolated browser database, including the two new tables.
+- Ruff E9/F and shell syntax checks pass. Live Discord delivery to the user-selected
+  channel requires server deployment; no production messages were sent locally.

@@ -1,0 +1,361 @@
+{% if is_senior_or_super %}
+<style>
+  .report-filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    align-items: end;
+    margin: 18px 0;
+  }
+  .report-filters label {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--muted);
+  }
+  .report-filters select,
+  .report-filters input {
+    max-width: 100%;
+    background: #111927;
+    color: var(--text);
+    border: 1px solid var(--line);
+    padding: 10px;
+    border-radius: 8px;
+  }
+  .report-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 650px;
+  }
+  .report-table td,
+  .report-table th {
+    padding: 12px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    color: var(--text);
+  }
+  .report-scroll {
+    overflow-x: auto;
+  }
+  .report-metrics {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
+    margin: 18px 0;
+  }
+  .report-metric {
+    background: #111927;
+    border: 1px solid var(--line);
+    padding: 14px;
+    border-radius: 10px;
+  }
+  .report-metric strong {
+    display: block;
+    font-size: 24px;
+  }
+  .assembly-categories {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 12px;
+  }
+  .assembly-category {
+    padding: 14px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #111927;
+  }
+  .assembly-category li {
+    padding: 4px 0;
+    overflow-wrap: anywhere;
+  }
+</style>
+<section
+  id="panel-group-monthly"
+  role="tabpanel"
+  aria-labelledby="tab-group-monthly"
+  hidden
+>
+  <div class="section-card">
+    <h2>Статистика групп за месяц</h2>
+    <p>
+      Игровая активность, посещаемость сборов и наблюдаемые изменения состава.
+    </p>
+    <form id="monthlyGroupForm" class="report-filters">
+      <div>
+        <label for="monthlyGroup">Группа</label
+        ><select id="monthlyGroup" required></select>
+      </div>
+      <div>
+        <label for="monthlyMonth">Месяц · МСК</label
+        ><input id="monthlyMonth" type="month" required />
+      </div>
+      <button class="btn btn-primary" type="submit">Показать месяц</button>
+    </form>
+    <p id="monthlyStatus" class="hint" role="status"></p>
+    <div id="monthlyResult"></div>
+  </div>
+</section>
+<section
+  id="panel-assembly-summary"
+  role="tabpanel"
+  aria-labelledby="tab-assembly-summary"
+  hidden
+>
+  <div class="section-card">
+    <h2>Итоги субботнего сбора по группам</h2>
+    <p>
+      Суббота, 19:00–22:00 МСК. Здесь нет автоматических списаний или
+      начислений.
+    </p>
+    <form id="assemblySummaryForm" class="report-filters">
+      <div>
+        <label for="assemblySummaryDate">Дата завершённого сбора · МСК</label
+        ><input id="assemblySummaryDate" type="date" />
+      </div>
+      <button class="btn btn-primary" type="submit">Показать сбор</button>
+    </form>
+    <p id="assemblySummaryStatus" class="hint" role="status"></p>
+    <div id="assemblySummaryResult"></div>
+  </div>
+</section>
+<script>
+  (() => {
+    const $ = (id) => document.getElementById(id);
+    const date = new Intl.DateTimeFormat("ru-RU", {
+      timeZone: "Europe/Moscow",
+      dateStyle: "short",
+      timeStyle: "short",
+    });
+    const stamp = (value) =>
+      value ? date.format(new Date(value)) + " МСК" : "нет данных";
+    const labels = {
+      present: "Присутствовали",
+      absent_with_report: "Отсутствовали с рапортом",
+      absent_without_report: "Отсутствовали без рапорта",
+      unknown: "Недостаточно данных",
+      exempted: "Освобождены",
+    };
+    const node = (tag, text, cls) => {
+      const n = document.createElement(tag);
+      if (text !== undefined) n.textContent = text;
+      if (cls) n.className = cls;
+      return n;
+    };
+    function table(headers, rows) {
+      const wrap = node("div", undefined, "report-scroll"),
+        t = node("table", undefined, "report-table"),
+        head = node("thead"),
+        tr = node("tr"),
+        body = node("tbody");
+      headers.forEach((v) => tr.append(node("th", v)));
+      head.append(tr);
+      rows.forEach((row) => {
+        const r = node("tr");
+        row.forEach((v) => r.append(node("td", v)));
+        body.append(r);
+      });
+      t.append(head, body);
+      wrap.append(t);
+      return wrap;
+    }
+    function metrics(values) {
+      const root = node("div", undefined, "report-metrics");
+      values.forEach(([label, value]) => {
+        const item = node("div", undefined, "report-metric");
+        item.append(node("strong", value), node("span", label));
+        root.append(item);
+      });
+      return root;
+    }
+    async function get(url) {
+      const r = await adminFetch(url, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(20000),
+        }),
+        d = await r.json();
+      if (!r.ok)
+        throw Error(
+          typeof d.detail === "string"
+            ? d.detail
+            : "Не удалось получить данные",
+        );
+      return d;
+    }
+    let monthlyVersion = 0,
+      summaryVersion = 0,
+      catalogLoaded = false;
+    window.loadMonthlyGroups = async () => {
+      if (catalogLoaded) return;
+      $("monthlyStatus").textContent = "Загружаем группы…";
+      try {
+        const data = await get("/api/admin/groups");
+        $("monthlyGroup").replaceChildren(
+          ...data.groups.map((g) => {
+            const o = node("option", g.name);
+            o.value = g.id;
+            return o;
+          }),
+        );
+        const parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Europe/Moscow",
+          year: "numeric",
+          month: "2-digit",
+        }).formatToParts(new Date());
+        $("monthlyMonth").value =
+          parts.find((p) => p.type === "year").value +
+          "-" +
+          parts.find((p) => p.type === "month").value;
+        catalogLoaded = true;
+        await monthly();
+      } catch (e) {
+        $("monthlyStatus").textContent = e.message;
+      }
+    };
+    async function monthly() {
+      const version = ++monthlyVersion;
+      $("monthlyStatus").textContent =
+        "Считаем месяц по сохранённым наблюдениям…";
+      $("monthlyResult").replaceChildren();
+      try {
+        const data = await get(
+          `/api/admin/groups/${encodeURIComponent($("monthlyGroup").value)}/monthly?month=${encodeURIComponent($("monthlyMonth").value)}`,
+        );
+        if (version !== monthlyVersion) return;
+        const root = $("monthlyResult");
+        $("monthlyStatus").textContent = data.notice;
+        root.append(
+          metrics([
+            ["Участников сейчас", data.members_count],
+            ["Замечены в игре", data.observed_members],
+            ["Наблюдалось часов", data.observed_hours],
+            [
+              "Посещаемость · известные случаи",
+              data.attendance_percent === null
+                ? "нет данных"
+                : data.attendance_percent + "%",
+            ],
+          ]),
+        );
+        root.append(node("p", `Процент рассчитан по ${data.attendance_known_cases} подтверждённым случаям, без рапортов и неизвестных статусов. Сборов с неполными данными: ${data.incomplete_assemblies} из ${data.assemblies.length}.`, "hint"));
+      const roster = data.roster;
+        root.append(node("h3", "Изменения состава Discord"));
+        root.append(
+          node(
+            "p",
+            roster.available
+              ? `Наблюдения: ${stamp(roster.started_at)} — ${stamp(roster.ended_at)}. Состав: ${roster.start_count} → ${roster.end_count}; вступили: ${roster.joined}; вышли: ${roster.left}. ${roster.has_month_start ? "Есть наблюдение около начала месяца." : "Начало месяца не сохранено: изменения показаны с первого наблюдения."}`
+              : "История состава за этот месяц ещё не записана.",
+            "hint",
+          ),
+        );
+        root.append(node("h3", "Игровая активность по серверам"));
+        root.append(
+          table(
+            ["Сервер", "Игроков", "Наблюдалось часов"],
+            data.servers.map((s) => [s.name, s.members_count, s.hours]),
+          ),
+        );
+        root.append(node("h3", "Сборы за месяц"));
+        root.append(
+          table(
+            [
+              "Дата",
+              "Были",
+              "С рапортом",
+              "Без рапорта",
+              "Неизвестно",
+              "Полнота",
+            ],
+            data.assemblies.map((a) => [
+              a.date,
+              a.counts.present,
+              a.counts.absent_with_report,
+              a.counts.absent_without_report,
+              a.counts.unknown,
+              a.membership_complete && a.reports_ready
+                ? "Состав и рапорты сохранены"
+                : "Есть пробелы в данных",
+            ]),
+          ),
+        );
+        root.append(node("h3", "Участники текущей группы"));
+        root.append(
+          table(
+            [
+              "Игрок",
+              "Часы игры",
+              "Были на сборе",
+              "С рапортом",
+              "Без рапорта",
+              "Неизвестно",
+            ],
+            data.members.map((m) => [
+              m.name,
+              !m.steam_linked
+                ? "Steam не привязан"
+                : m.observed
+                  ? m.hours
+                  : "Нет наблюдений",
+              m.attendance.present,
+              m.attendance.absent_with_report,
+              m.attendance.absent_without_report,
+              m.attendance.unknown,
+            ]),
+          ),
+        );
+      } catch (e) {
+        if (version === monthlyVersion)
+          $("monthlyStatus").textContent = e.message;
+      }
+    }
+    window.loadAssemblySummary = async () => {
+      const version = ++summaryVersion;
+      $("assemblySummaryStatus").textContent = "Проверяем сохранённые итоги…";
+      $("assemblySummaryResult").replaceChildren();
+      try {
+        const chosen = $("assemblySummaryDate").value;
+        const data = await get(
+          "/api/admin/assemblies/summary" +
+            (chosen ? "?date=" + encodeURIComponent(chosen) : ""),
+        );
+        if (version !== summaryVersion) return;
+        $("assemblySummaryDate").value = data.date;
+        $("assemblySummaryStatus").textContent =
+          `${data.date}, 19:00–22:00 МСК. ${data.reports_ready ? "Рапорты проверены." : "Проверка рапортов не завершена."} ${data.membership_complete ? "Есть сохранённый состав на момент сбора." : "Состав на дату неполный: показаны только доказанно состоявшие тогда в Discord участники."} Группы — по текущему составу Discord. При неполных данных отсутствие не утверждается.`;
+        const root = $("assemblySummaryResult");
+        root.append(
+          metrics(Object.entries(labels).map(([k, v]) => [v, data.counts[k]])),
+        );
+        for (const group of data.groups) {
+          if (!group.members.length) continue;
+          const block = node("div", undefined, "section-card"),
+            grid = node("div", undefined, "assembly-categories");
+          block.append(node("h3", group.name));
+          for (const [key, label] of Object.entries(labels)) {
+            const rows = group.members.filter((m) => m.status === key),
+              card = node("div", undefined, "assembly-category"),
+              list = node("ul");
+            card.append(node("h4", `${label} · ${rows.length}`));
+            rows.forEach((m) => list.append(node("li", m.name)));
+            if (!rows.length) list.append(node("li", "—"));
+            card.append(list);
+            grid.append(card);
+          }
+          block.append(grid);
+          root.append(block);
+        }
+      } catch (e) {
+        if (version === summaryVersion)
+          $("assemblySummaryStatus").textContent = e.message;
+      }
+    };
+    $("monthlyGroupForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      monthly();
+    });
+    $("assemblySummaryForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      window.loadAssemblySummary();
+    });
+  })();
+</script>
+{% endif %}

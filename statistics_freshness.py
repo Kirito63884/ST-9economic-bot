@@ -1,13 +1,14 @@
 """Read-only source freshness: successful data and latest attempts are distinct."""
 
 import json
+import math
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from database import PROJECT_DIR
 
+from database import PROJECT_DIR
 from protocol_award_exports import ProtocolAwardExport, ProtocolExportHealth
 from protocol_clan_source import ProtocolClanStats
 from squad_routes import load_snapshot
@@ -33,6 +34,55 @@ def freshness(stamp, now, ttl):
         "age_seconds": max(0, int(age)),
         "state": "fresh" if 0 <= age <= ttl else "stale",
     }
+
+
+def collection_progress(monitor, now):
+    """Expose bounded operational fields, keeping successful freshness separate."""
+    try:
+        data = json.loads(monitor.payload) if monitor else {}
+        if not isinstance(data, dict):
+            data = {}
+    except (TypeError, ValueError):
+        data = {}
+
+    def counter(key):
+        value = data.get(key)
+        return min(value, 10**9) if type(value) is int and value >= 0 else 0
+
+    total = counter("profiles_total")
+    done = min(counter("profiles_done"), total)
+    result = {
+        "status": data.get("status", "pending"),
+        "phase": data.get("phase", "idle"),
+        "profiles_total": total,
+        "profiles_done": done,
+        "profiles_failed": min(counter("profiles_failed"), done),
+        "profile_percent": round(100 * done / total, 1) if total else None,
+        "current_profile_index": counter("current_profile_index") or None,
+        "current_match": counter("current_match") or None,
+        "archive_failed": len(data.get("archive_failed", []))
+        if isinstance(data.get("archive_failed"), list)
+        else 0,
+        "last_error": str(data.get("last_error") or "")[:500],
+        "cycle_started_at": data.get("cycle_started_at"),
+        "state_updated_at": monitor.updated_at.isoformat() + "Z" if monitor else None,
+        "checked_at": data.get("checked_at"),
+        "pause_seconds": None,
+    }
+    if monitor:
+        age = max(0, now - monitor.updated_at.replace(tzinfo=timezone.utc).timestamp())
+        result["state_age_seconds"] = int(age)
+    try:
+        from medals_source import RATE_LIMIT_PATH, REQUEST_INTERVAL
+
+        last = float(RATE_LIMIT_PATH.read_text().strip())
+        if math.isfinite(last):
+            result["pause_seconds"] = min(
+                86400, max(0, math.ceil(last + REQUEST_INTERVAL - now))
+            )
+    except (OSError, ValueError):
+        pass
+    return result
 
 
 def source_status(db, now=None):
@@ -69,15 +119,16 @@ def source_status(db, now=None):
                 "status": health.status if health else "pending",
             }
         )
-    from medals import MedalMonitor, MedalBotHealth
+    from medals import MedalBotHealth, MedalMonitor
 
     monitor = db.get(MedalMonitor, 1)
-    data = json.loads(monitor.payload) if monitor else {}
+    data = collection_progress(monitor, now)
     sources.append(
         {
             "name": "SQSTAT · статистика матчей",
             **freshness(data.get("checked_at"), now, 3600),
             "status": data.get("status", "pending"),
+            "progress": data,
         }
     )
     voice = db.get(MedalBotHealth, 1)

@@ -116,8 +116,24 @@ def assembly_membership(event, check, start, end, matching_window, assessments):
     return expected, observed, complete
 
 
-def assembly_summary(db, users, now):
+def assembly_summary(db, users, now, event_date=None):
     day, start, end = latest_assembly(now)
+    if event_date is not None:
+        try:
+            parsed = datetime.strptime(event_date, "%Y-%m-%d").date()
+            if parsed.isoformat() != event_date or parsed.weekday() != 5:
+                raise ValueError
+            start = (
+                datetime.combine(parsed, time(19), MOSCOW)
+                .astimezone(timezone.utc)
+                .replace(tzinfo=None)
+            )
+            end = start + timedelta(hours=3)
+            if end > now:
+                raise ValueError
+            day = event_date
+        except (ValueError, TypeError):
+            raise HTTPException(400, "Выберите завершённый субботний сбор.")
     event = db.get(AssemblyWindow, day)
     check = db.get(AssemblyReportCheck, day)
     matching_window = bool(event and event.starts_at == start and event.ends_at == end)
@@ -352,9 +368,55 @@ def make_router(get_user, get_db, may_manage, can_edit_user):
 
     @router.get("/api/admin/groups/{group_id}/assembly")
     async def assembly(
-        group_id: str, response: Response, admin=Depends(senior), db=Depends(get_db)
+        group_id: str,
+        response: Response,
+        date: str | None = None,
+        admin=Depends(senior),
+        db=Depends(get_db),
     ):
         response.headers["Cache-Control"] = "private, no-store"
-        return assembly_summary(db, choose(db, group_id), utcnow())
+        return assembly_summary(db, choose(db, group_id), utcnow(), event_date=date)
+
+    @router.get("/api/admin/groups/{group_id}/monthly")
+    async def monthly(
+        group_id: str,
+        month: str,
+        response: Response,
+        admin=Depends(senior),
+        db=Depends(get_db),
+    ):
+        from group_analytics import monthly_statistics
+
+        response.headers["Cache-Control"] = "private, no-store"
+        return monthly_statistics(db, choose(db, group_id), group_id, month, utcnow())
+
+    @router.get("/api/admin/assemblies/summary")
+    async def assembly_overview(
+        response: Response,
+        date: str | None = None,
+        admin=Depends(senior),
+        db=Depends(get_db),
+    ):
+        users, roles = current_roster(db)
+        now = utcnow()
+        response.headers["Cache-Control"] = "private, no-store"
+        result = assembly_summary(db, users, now, event_date=date)
+        indexed = {u.id: str(u.discord_id) for u in users}
+        result["groups"] = [
+            {
+                "id": key,
+                "name": name,
+                "members": [
+                    row
+                    for row in result["members"]
+                    if key
+                    in roles.get(indexed[row["user_id"]], {"group_ids": ["unknown"]})[
+                        "group_ids"
+                    ]
+                ],
+            }
+            for key, name in group_catalog()
+        ]
+        return result
 
     return router
