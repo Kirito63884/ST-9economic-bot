@@ -1,0 +1,364 @@
+<div class="section-card" id="sqHistoryCard">
+  <div class="section-heading">
+    <div>
+      <h2>Кто был онлайн · история</h2>
+      <p>
+        Выберите дату и время по Москве, затем сервер и участников для
+        начисления.
+      </p>
+    </div>
+  </div>
+  <p class="hint">
+    Показаны участники с привязанным Steam ID, для которых сохранён интервал
+    подключения на выбранное время. История может быть неполной: отсутствие
+    игрока в списке не означает, что он был офлайн. Между проверками возможны
+    короткие разрывы подключения. Участие в матче само по себе здесь не
+    используется как подтверждение онлайна.
+  </p>
+  <fieldset id="sqHistoryFields" class="sq-history-fields">
+    <div class="sq-admin-actions">
+      <div>
+        <label class="form-label" for="sqHistoryAt"
+          >Дата и время · Москва (UTC+3)</label
+        >
+        <input
+          id="sqHistoryAt"
+          class="form-control"
+          type="datetime-local"
+          step="1"
+          required
+        />
+      </div>
+      <button id="sqHistorySearch" class="btn btn-primary" type="button">
+        Показать онлайн
+      </button>
+    </div>
+    <div id="sqHistoryResults" hidden>
+      <p id="sqHistoryCoverage" class="hint"></p>
+      <label class="form-label" for="sqHistoryServer">Сервер</label>
+      <select id="sqHistoryServer" class="form-select"></select>
+      <div class="action-row mt-3">
+        <label
+          ><input id="sqHistorySelectAll" type="checkbox" /> Выбрать всех
+          доступных</label
+        >
+        <span id="sqHistorySelected" class="hint">Игроки не выбраны.</span>
+      </div>
+      <div class="sq-history-table-wrap">
+        <table class="table sq-history-table">
+          <thead>
+            <tr>
+              <th scope="col">Выбрать</th>
+              <th scope="col">Игрок</th>
+              <th scope="col">Сервер и сохранённый интервал · МСК</th>
+            </tr>
+          </thead>
+          <tbody id="sqHistoryMembers"></tbody>
+        </table>
+      </div>
+      <div class="sq-admin-actions">
+        <div>
+          <label class="form-label" for="sqHistoryAmount"
+            >Каждому выбранному, БК</label
+          >
+          <input
+            id="sqHistoryAmount"
+            class="form-control"
+            type="text"
+            inputmode="decimal"
+            autocomplete="off"
+            placeholder="Например, 100.00"
+          />
+        </div>
+        <div class="sq-history-reason">
+          <label class="form-label" for="sqHistoryReason"
+            >Причина начисления</label
+          >
+          <input
+            id="sqHistoryReason"
+            class="form-control"
+            type="text"
+            minlength="3"
+            maxlength="500"
+            placeholder="Например, участие в сборе"
+          />
+        </div>
+        <button
+          id="sqHistoryGrant"
+          class="btn btn-primary"
+          type="button"
+          disabled
+        >
+          Предварительный просмотр начисления
+        </button>
+      </div>
+      <p class="hint">
+        Один игрок получает одну выплату, даже если встречается на нескольких
+        серверах. Перед начислением будут показаны получатели, время, причина и
+        изменения балансов. Уже выполненное начисление не запрещает отдельное
+        новое начисление за тот же момент.
+      </p>
+    </div>
+  </fieldset>
+  <p id="sqHistoryStatus" class="hint" role="status" aria-live="polite">
+    Выберите время и нажмите «Показать онлайн».
+  </p>
+</div>
+<style>
+  .sq-history-fields {
+    border: 0;
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+  }
+  .sq-history-table-wrap {
+    overflow-x: auto;
+    margin: 16px 0;
+  }
+  .sq-history-table {
+    width: 100%;
+    min-width: 460px;
+  }
+  .sq-history-table td {
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+  .sq-history-reason {
+    flex: 1;
+    min-width: 180px;
+  }
+  .sq-history-interval {
+    display: block;
+    color: var(--muted);
+    font-size: 12px;
+  }
+</style>
+<script>
+  (() => {
+    const $ = (id) => document.getElementById(id);
+    const dateInput = $("sqHistoryAt");
+    const serverFilter = $("sqHistoryServer");
+    const selectAll = $("sqHistorySelectAll");
+    const grantButton = $("sqHistoryGrant");
+    const status = $("sqHistoryStatus");
+    const selected = new Set();
+    const dates = new Intl.DateTimeFormat("ru-RU", {
+      timeZone: "Europe/Moscow",
+      dateStyle: "short",
+      timeStyle: "medium",
+    });
+    const localDate = (value) =>
+      new Intl.DateTimeFormat("sv-SE", {
+        timeZone: "Europe/Moscow",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hourCycle: "h23",
+      })
+        .format(value)
+        .replace(" ", "T");
+    const formatDate = (value) =>
+      value ? dates.format(new Date(value)) : "нет данных";
+    const element = (tag, text, className) => {
+      const node = document.createElement(tag);
+      if (text !== undefined) node.textContent = text;
+      if (className) node.className = className;
+      return node;
+    };
+    let roster = null;
+    let busy = false;
+    dateInput.value = localDate(new Date(Date.now() - 60000));
+    dateInput.max = localDate(new Date());
+    dateInput.addEventListener(
+      "focus",
+      () => (dateInput.max = localDate(new Date())),
+    );
+
+    function visibleMembers() {
+      const members = new Map();
+      for (const server of roster?.servers || []) {
+        if (serverFilter.value && server.id !== serverFilter.value) continue;
+        for (const member of server.members) {
+          if (!members.has(member.user_id))
+            members.set(member.user_id, { ...member, servers: [] });
+          members.get(member.user_id).servers.push({ ...server, member });
+        }
+      }
+      return [...members.values()].sort(
+        (a, b) => a.name.localeCompare(b.name, "ru") || a.user_id - b.user_id,
+      );
+    }
+
+    function updateSelection() {
+      const available = visibleMembers().filter((member) => member.can_select);
+      selectAll.disabled = !available.length;
+      selectAll.checked =
+        available.length > 0 &&
+        available.every((member) => selected.has(member.user_id));
+      selectAll.indeterminate = selected.size > 0 && !selectAll.checked;
+      $("sqHistorySelected").textContent = `Выбрано игроков: ${selected.size}.`;
+      const amount = $("sqHistoryAmount").value.trim().replace(",", ".");
+      const reason = $("sqHistoryReason").value.trim();
+      grantButton.disabled =
+        busy ||
+        !selected.size ||
+        !/^[0-9]{1,13}(?:\.[0-9]{1,2})?$/.test(amount) ||
+        Number(amount) <= 0 ||
+        Number(amount) > 1e12 ||
+        reason.length < 3 ||
+        reason.length > 500;
+    }
+
+    function renderMembers() {
+      const body = $("sqHistoryMembers");
+      body.replaceChildren();
+      for (const member of visibleMembers()) {
+        const row = document.createElement("tr");
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.checked = selected.has(member.user_id);
+        checkbox.disabled = !member.can_select;
+        checkbox.setAttribute("aria-label", `Выбрать: ${member.name}`);
+        checkbox.addEventListener("change", () => {
+          if (checkbox.checked) selected.add(member.user_id);
+          else selected.delete(member.user_id);
+          updateSelection();
+        });
+        row.insertCell().append(checkbox);
+        const name = row.insertCell();
+        name.append(element("span", member.name));
+        if (!member.can_select)
+          name.append(
+            element("small", "Баланс владельца защищён", "sq-history-interval"),
+          );
+        const evidence = row.insertCell();
+        for (const server of member.servers) {
+          evidence.append(element("div", server.name));
+          const last =
+            server.member.ended_at &&
+            server.member.ended_at < server.member.last_seen_at
+              ? server.member.ended_at
+              : server.member.last_seen_at;
+          evidence.append(
+            element(
+              "small",
+              `${formatDate(server.member.started_at)} — ${formatDate(last)}`,
+              "sq-history-interval",
+            ),
+          );
+        }
+        body.append(row);
+      }
+      updateSelection();
+    }
+
+    function setBusy(value) {
+      busy = value;
+      $("sqHistoryFields").disabled = value;
+      updateSelection();
+    }
+
+    dateInput.addEventListener("input", () => {
+      roster = null;
+      selected.clear();
+      $("sqHistoryResults").hidden = true;
+      status.textContent =
+        "Время изменено. Нажмите «Показать онлайн» для нового поиска.";
+      updateSelection();
+    });
+    serverFilter.addEventListener("change", () => {
+      selected.clear();
+      renderMembers();
+    });
+    selectAll.addEventListener("change", () => {
+      selected.clear();
+      if (selectAll.checked)
+        for (const member of visibleMembers())
+          if (member.can_select) selected.add(member.user_id);
+      renderMembers();
+    });
+    for (const id of ["sqHistoryAmount", "sqHistoryReason"])
+      $(id).addEventListener("input", updateSelection);
+
+    $("sqHistorySearch").addEventListener("click", async () => {
+      if (busy || !dateInput.reportValidity()) return;
+      roster = null;
+      selected.clear();
+      $("sqHistoryResults").hidden = true;
+      setBusy(true);
+      status.textContent = "Проверяем сохранённую историю…";
+      try {
+        const query = new URLSearchParams({ at: dateInput.value + "+03:00" });
+        const response = await fetch("/api/admin/squad/history?" + query, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(20000),
+        });
+        const data = await response.json();
+        if (!response.ok)
+          throw new Error(
+            typeof data.detail === "string"
+              ? data.detail
+              : "Не удалось загрузить историю.",
+          );
+        roster = data;
+        serverFilter.replaceChildren(new Option("Все найденные серверы", ""));
+        for (const server of data.servers)
+          serverFilter.add(new Option(server.name, server.id));
+        $("sqHistoryCoverage").textContent =
+          `Самая ранняя сохранённая сессия: ${formatDate(data.history_from)}. Последнее наблюдение: ${formatDate(data.history_through)}. Между этими датами возможны пропуски.`;
+        $("sqHistoryResults").hidden = false;
+        renderMembers();
+        status.textContent = data.members_count
+          ? `На ${formatDate(data.at)} МСК найдены интервалы подключения: ${data.members_count} игроков, серверов: ${data.servers.length}.`
+          : `На ${formatDate(data.at)} МСК нет сохранённых интервалов подключения участников. Это не подтверждает отсутствие игроков онлайн.`;
+      } catch (error) {
+        status.textContent = error.message;
+      } finally {
+        setBusy(false);
+      }
+    });
+
+    grantButton.addEventListener("click", async () => {
+      if (busy || grantButton.disabled || !roster) return;
+      const servers = roster.servers.filter(
+        (server) =>
+          (!serverFilter.value || server.id === serverFilter.value) &&
+          server.members.some((member) => selected.has(member.user_id)),
+      );
+      const payload = {
+        at: roster.at,
+        server_ids: servers.map((server) => server.id),
+        user_ids: [...selected],
+        amount: $("sqHistoryAmount").value.trim().replace(",", "."),
+        reason: $("sqHistoryReason").value.trim(),
+      };
+      setBusy(true);
+      try {
+        const response = await adminFetch("/api/admin/squad/history/grant", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json();
+        if (!response.ok)
+          throw new Error(
+            typeof data.detail === "string"
+              ? data.detail
+              : "Начисление не выполнено.",
+          );
+        selected.clear();
+        renderMembers();
+        status.textContent =
+          data.message +
+          " Время онлайна, серверы и причина сохранены в истории балансов.";
+      } catch (error) {
+        status.textContent = error.message;
+      } finally {
+        setBusy(false);
+      }
+    });
+  })();
+</script>

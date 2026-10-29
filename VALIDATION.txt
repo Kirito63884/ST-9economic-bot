@@ -53,3 +53,21 @@ Migration from a copied SQLite schema without distinction_reviews creates the
 new table and preserves users, balances and already issued awards.
 Live Protocol authentication and real Discord role delivery remain unverified
 from this cloud environment; their existing integrations are retained.
+
+Historical online lookup and reviewed credits, 2026-10-29:
+Full suite: 414 passed, 0 failed, 0 skipped (same two dependency warnings).
+34 new cases cover senior/chief/owner access, denied roles, Moscow/UTC conversion,
+interval bounds, stale open sessions, missing coverage, deduplication, protected
+owner wallets, preview rollback, amount/balance limits, changed evidence/Steam ID,
+archival/demotion, actor binding, expiry, CSRF and concurrent confirmation.
+Ruff checks pass; 87 Python files satisfy formatting checks.
+Chromium against a synthetic local SQLite database: historical lookup in a
+non-Moscow browser timezone, server filter, unique selections, literal HTML-like
+names, preview cancellation and confirmed credit, date-change invalidation,
+missing-history state, 390px mobile layout and junior-admin panel exclusion.
+Zero pageerror events.
+Installer shell syntax checked. A sandboxed deployment simulation with stubbed
+service/network/ownership commands verified six-file installation and automatic
+file rollback after an HTTP failure; synthetic database/settings were preserved.
+Real production deployment, systemd restart and actual history coverage on the
+user's server are not verified from this cloud environment.

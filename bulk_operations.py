@@ -51,6 +51,7 @@ def validate_request(path, body):
         "/admin/mass-adjust": "user_ids",
         "/admin/mass-adjust-steam": "steam_ids",
         "/admin/import": "users",
+        "/api/admin/squad/history/grant": "user_ids",
     }[path]
     entries = body.get(key)
     if not isinstance(entries, list) or not 1 <= len(entries) <= 1000:
@@ -171,6 +172,7 @@ def bulk_preview(handler):
                     "rows": changes,
                     "invalid": result.get("invalid", []),
                     "not_found": result.get("not_found", []),
+                    "context": result.get("context"),
                 },
                 headers={"Cache-Control": "no-store"},
             )

@@ -4908,6 +4908,20 @@ app.include_router(
 )
 # ST9_SQUAD_END
 
+from squad_history_admin import make_router as make_squad_history_router
+
+app.include_router(
+    make_squad_history_router(
+        get_user,
+        get_db,
+        is_senior_or_super,
+        can_edit_user,
+        read_json_object,
+        log_game,
+        MAX_BALANCE,
+    )
+)
+
 # ST9_SQUAD_SCHEDULER_BEGIN
 from squad_scheduler import schedule_checker
 

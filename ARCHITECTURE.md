@@ -87,6 +87,10 @@ award_exports выдаёт новые знаки только первому м�
 ## Остальные подсистемы
 
 - `squad_monitor.py`, `sqstat_online.py`, `squad_play_history.py`: мониторинг и история.
+- `squad_history_admin.py`: просмотр сохранённых подключений на момент времени
+  для главных/старших администраторов; начисления через `bulk_operations.py`.
+  Интерфейс — `templates/_admin_squad_history.html`, инструкция установки и
+  ограничения покрытия — `SQUAD_HISTORY_UPDATE.md`.
 - `squad_routes.py`, `squad_scheduler.py`: онлайн и начисления по расписанию.
 - `assembly_attendance.py`, `assembly_export.py`: сборы, проверки и штрафы.
 - `automation_control.py`, `automation_admin.py`: настройки, исключения и статусы.

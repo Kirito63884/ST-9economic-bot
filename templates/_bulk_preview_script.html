@@ -4,6 +4,7 @@ const ST9Bulk = (() => {
         "/admin/mass-adjust",
         "/admin/mass-adjust-steam",
         "/admin/import",
+        "/api/admin/squad/history/grant",
     ]);
     function review(plan) {
         return new Promise((resolve) => {
@@ -17,6 +18,9 @@ const ST9Bulk = (() => {
             const note = document.createElement("p");
             note.textContent =
                 "Пока ничего не сохранено. Подтверждение действует 5 минут. При изменении данных потребуется новый просмотр.";
+            const context = document.createElement("p");
+            context.hidden = !plan.context;
+            context.textContent = plan.context || "";
             const table = document.createElement("table");
             table.className = "table table-dark";
             const header = table.createTHead().insertRow();
@@ -68,7 +72,7 @@ const ST9Bulk = (() => {
                 },
                 { once: true },
             );
-            dialog.append(heading, summary, note, table, warnings, cancel, apply);
+            dialog.append(heading, context, summary, note, table, warnings, cancel, apply);
             document.body.append(dialog);
             dialog.showModal();
         });
