@@ -651,7 +651,10 @@ def closed_sqstat_weeks(db, now, only_week=None):
             not isinstance(doc, dict)
             or doc.get("week") != row.week
             or doc.get("complete") is not True
-            or doc.get("source") != "https://prot.p.sqstat.ru/"
+            # Keep previously verified archives valid across SQSTAT's official
+            # domain migration; new scans use the canonical host directly.
+            or doc.get("source")
+            not in ("https://prot.sqstat.ru/", "https://prot.p.sqstat.ru/")
             or type(doc.get("match_count")) is not int
             or doc["match_count"] <= 0
             or not isinstance(doc.get("ranks"), dict)

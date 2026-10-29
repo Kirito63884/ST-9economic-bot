@@ -129,3 +129,22 @@ Installer simulation verified full installation/rollback and groups-view mode:
 only three website files change, all other code/settings/data stay intact and
 Discord bot services are not stopped or started in groups-view mode.
 Production installation remains a separate user-run step.
+
+SQSTAT canonical-domain migration, 2026-10-29:
+Production diagnostics supplied by the user show HTTP 301 from
+https://prot.p.sqstat.ru/ to https://prot.sqstat.ru/ and the old loader's
+Unexpected SQSTAT redirect failure before the archive index is read.
+Requests and the PHPSESID challenge cookie now use the canonical host directly.
+Unexpected automatic redirects remain blocked; the shared 60-second request
+gate and retry behaviour are preserved. New weekly aggregates identify the new
+source; verified archives from either exact HTTPS origin remain accepted.
+Website match links use the new host. No existing data/evidence are rewritten.
+Full suite: 488 passed, 0 failed, 0 skipped; two unchanged dependency warnings.
+New tests verify canonical URLs, cookie attachment, request/challenge pacing,
+redirect/origin rejection and old/new archive-source compatibility.
+Ruff lint and formatting checks pass. Rendered frontend JavaScript checks pass.
+Installer sqstat-source mode simulated with stubbed system/network commands:
+five selected files installed, other files/settings/data preserved; rollback
+after failed HTTP health restores originals. Only web/statistics services restart.
+The new host's live page parsing and completion of a production collection cycle
+remain to be verified after the user installs this update.

@@ -460,7 +460,7 @@ def sqstat_games_for(db, steam_id, limit=100):
         except (ValueError, TypeError, KeyError, AttributeError):
             continue
     return [
-        {**g, "url": "https://prot.p.sqstat.ru/game/" + str(g["match_id"])}
+        {**g, "url": "https://prot.sqstat.ru/game/" + str(g["match_id"])}
         for g in sorted(result.values(), key=lambda g: g["match_id"], reverse=True)[
             :limit
         ]

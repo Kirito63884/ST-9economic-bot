@@ -24,6 +24,7 @@ from medals import (
     week_bounds,
 )
 from medals_source import (
+    BASE,
     SQSTAT,
     SourceUnavailable,
     BrokenMatchPage,
@@ -84,7 +85,7 @@ def weekly(documents, week, complete=False):
         "cmd_safe": safe["cmd"],
         "wins_safe": safe["wins"],
         "match_count": len(selected),
-        "source": "https://prot.p.sqstat.ru/",
+        "source": BASE + "/",
         "ranks": {key: ranks(values) for key, values in metrics.items()},
         "names": names,
         "unresolved": unresolved,

@@ -3122,7 +3122,7 @@ async function loadSquadHistory(uid, force = false, silent = false) {
         const matches = (data.matches || [])
             .map(
                 (item) =>
-                    `<div class="squad-history-row"><div class="squad-history-head"><span class="squad-history-server">${escapeHtml(item.layer || "Матч №" + item.match_id)}</span><span class="muted">${item.result === "win" ? "Победа" : item.result === "loss" ? "Поражение" : "Результат не подтверждён"}</span></div><div class="squad-history-time">${item.server_name ? escapeHtml(item.server_name) + " · " : ""}${item.ended_at ? "Матч завершён " + squadMoment(item.ended_at) : "Время матча ещё не загружено"} · <a href="https://prot.p.sqstat.ru/game/${Number(item.match_id)}" target="_blank" rel="noopener noreferrer">SQSTAT · матч №${Number(item.match_id)}</a></div></div>`,
+                    `<div class="squad-history-row"><div class="squad-history-head"><span class="squad-history-server">${escapeHtml(item.layer || "Матч №" + item.match_id)}</span><span class="muted">${item.result === "win" ? "Победа" : item.result === "loss" ? "Поражение" : "Результат не подтверждён"}</span></div><div class="squad-history-time">${item.server_name ? escapeHtml(item.server_name) + " · " : ""}${item.ended_at ? "Матч завершён " + squadMoment(item.ended_at) : "Время матча ещё не загружено"} · <a href="https://prot.sqstat.ru/game/${Number(item.match_id)}" target="_blank" rel="noopener noreferrer">SQSTAT · матч №${Number(item.match_id)}</a></div></div>`,
             )
             .join("");
         const reserve = matches

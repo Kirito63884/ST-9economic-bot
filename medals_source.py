@@ -12,6 +12,7 @@ from collections import Counter
 from datetime import datetime, timedelta, timezone
 from http.cookiejar import CookieJar, Cookie
 from urllib.error import HTTPError
+from urllib.parse import urlsplit
 from urllib.request import (
     build_opener,
     HTTPCookieProcessor,
@@ -20,7 +21,7 @@ from urllib.request import (
 )
 from medals import MOSCOW
 
-BASE = "https://prot.p.sqstat.ru"
+BASE = "https://prot.sqstat.ru"
 LIMIT = 8_000_000
 REQUEST_INTERVAL = 60
 RATE_LIMIT_PATH = Path(__file__).resolve().parent / "squad-data" / "sqstat-request.lock"
@@ -178,7 +179,7 @@ class SQSTAT:
                         cookie[1],
                         None,
                         False,
-                        "prot.p.sqstat.ru",
+                        urlsplit(BASE).hostname,
                         True,
                         False,
                         "/",
