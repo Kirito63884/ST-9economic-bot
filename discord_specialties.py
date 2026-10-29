@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
@@ -17,15 +18,15 @@ from runtime import metadata_transaction
 CHANNEL_ID = 1448264624242819093
 PANEL_MARKER = "st9:specialties:v1"
 SPECIALTIES = (
-    ("rifleman", "Стрелок", "🎯", 0),
-    ("medic", "Медик", "🩺", 0),
-    ("machine_gunner", "Пулемётчик", "🔫", 0),
-    ("grenadier", "Гренадер", "💥", 0),
-    ("anti_tank", "Гранатомётчик", "🚀", 1),
-    ("sapper", "Сапёр", "💣", 2),
-    ("marksman", "Марксман", "🔭", 2),
-    ("mechanic", "Механик", "⚙️", 2),
-    ("pilot", "Пилот", "🚁", 2),
+    ("rifleman", "Стрелок", 0),
+    ("medic", "Медик", 0),
+    ("machine_gunner", "Пулемётчик", 0),
+    ("grenadier", "Гренадер", 0),
+    ("anti_tank", "Гранатомётчик", 1),
+    ("sapper", "Сапёр", 2),
+    ("marksman", "Марксман", 2),
+    ("mechanic", "Механик", 2),
+    ("pilot", "Пилот", 2),
 )
 # Permissions that a self-service specialty must never confer.
 PRIVILEGED = discord.Permissions(
@@ -139,6 +140,145 @@ def panel_embed():
     return embed
 
 
+def legacy_button_icons(messages, guild_emojis, bot_id):
+    """Read images from a complete old panel; custom IDs never define role access."""
+    labels = {normalized_name(label): key for key, label, *_ in SPECIALTIES}
+    for message in messages:
+        if (
+            message.author.id == bot_id
+            or not getattr(message.author, "bot", False)
+            or not any(
+                normalized_name(embed.title or "")
+                == normalized_name("Учётная специальность")
+                or normalized_name((embed.description or "").split("\n", 1)[0])
+                == normalized_name("Учётная специальность")
+                for embed in message.embeds
+            )
+        ):
+            continue
+        found = {}
+        for row in getattr(message, "components", []):
+            for button in getattr(row, "children", []):
+                key = labels.get(normalized_name(getattr(button, "label", "") or ""))
+                emoji = getattr(button, "emoji", None)
+                if key and emoji:
+                    if emoji.id is None:
+                        found[key] = emoji
+                    else:
+                        found[key] = guild_emojis.get(emoji.id, emoji)
+        if len(found) == len(SPECIALTIES):
+            return found
+    return {}
+
+
+async def copy_image_emoji(guild, bot_member, available, key, source_id, read_image):
+    """Content-addressed names avoid another upload after reconnect or a crash."""
+    digest = hashlib.sha256(str(source_id).encode()).hexdigest()[:10]
+    name = f"st9sp_{key[:12]}_{digest}"
+    matches = [emoji for emoji in available.values() if emoji.name == name]
+    if matches:
+        return min(matches, key=lambda emoji: emoji.id)
+    permissions = bot_member.guild_permissions
+    if not (permissions.create_expressions or permissions.manage_expressions):
+        raise SpecialtyError(
+            "боту нужно право «Создавать выражения» для копирования значков"
+        )
+    image = await read_image()
+    if len(image) > 256 * 1024:
+        raise SpecialtyError("изображение значка превышает лимит Discord")
+    emoji = await guild.create_custom_emoji(
+        name=name,
+        image=image,
+        reason=f"Значок кнопки специальности {key}",
+    )
+    available[emoji.id] = emoji
+    return emoji
+
+
+async def specialty_icons(bot, guild, roles, mapping, bot_member, messages, saved=None):
+    """Use role icons or original panel images, never arbitrary substitute symbols."""
+    available = {
+        emoji.id: emoji for emoji in await guild.fetch_emojis() if emoji.available
+    }
+    legacy = legacy_button_icons(messages, available, bot_member.id)
+    result = {}
+    for key, role_id in mapping.items():
+        role = roles[role_id]
+        unicode_icon = getattr(role, "unicode_emoji", None)
+        asset = getattr(role, "icon", None)
+        if unicode_icon:
+            result[key] = discord.PartialEmoji(name=unicode_icon)
+            continue
+        if asset:
+            try:
+                result[key] = await copy_image_emoji(
+                    guild,
+                    bot_member,
+                    available,
+                    key,
+                    "role:" + asset.key,
+                    asset.with_static_format("png").with_size(64).read,
+                )
+                continue
+            except (discord.HTTPException, SpecialtyError) as exc:
+                logger.warning(
+                    "Cannot copy specialty role icon: role=%s reason=%s", role.id, exc
+                )
+        original = legacy.get(key)
+        if original:
+            if original.id is None or original.id in available:
+                result[key] = original
+                continue
+            # ProBot-owned emoji cannot be sent by another application. Copy its
+            # original CDN image to a server emoji instead of inventing a symbol.
+            try:
+                permissions = bot_member.guild_permissions
+                if not (
+                    permissions.create_expressions or permissions.manage_expressions
+                ):
+                    raise SpecialtyError("нет права скопировать значок старой панели")
+                source = discord.PartialEmoji.from_str(str(original), client=bot)
+                result[key] = await copy_image_emoji(
+                    guild,
+                    bot_member,
+                    available,
+                    key,
+                    f"emoji:{original.id}",
+                    source.read,
+                )
+                continue
+            except (discord.HTTPException, SpecialtyError) as exc:
+                logger.warning(
+                    "Cannot copy old specialty icon: role=%s reason=%s", role.id, exc
+                )
+        previous = (saved or {}).get(key)
+        if isinstance(previous, dict):
+            if previous.get("id") and int(previous["id"]) in available:
+                result[key] = available[int(previous["id"])]
+                continue
+            if not previous.get("id") and previous.get("name"):
+                result[key] = discord.PartialEmoji(name=previous["name"])
+                continue
+        names = {
+            normalized_name(role.name),
+            normalized_name(key),
+            normalized_name(next(item[1] for item in SPECIALTIES if item[0] == key)),
+        }
+        matches = [
+            emoji
+            for emoji in available.values()
+            if normalized_name(emoji.name) in names
+        ]
+        if len(matches) == 1:
+            result[key] = matches[0]
+        else:
+            logger.warning(
+                "Specialty icon not found: role=%s; button has no substitute icon",
+                role.id,
+            )
+    return result
+
+
 class SpecialtyButton(discord.ui.Button):
     def __init__(self, panel, key, label, emoji, row):
         super().__init__(
@@ -155,10 +295,12 @@ class SpecialtyButton(discord.ui.Button):
 
 
 class SpecialtyView(discord.ui.View):
-    def __init__(self, panel):
+    def __init__(self, panel, emojis=None):
         super().__init__(timeout=None)
-        for key, label, emoji, row in SPECIALTIES:
-            self.add_item(SpecialtyButton(panel, key, label, emoji, row))
+        for key, label, row in SPECIALTIES:
+            self.add_item(
+                SpecialtyButton(panel, key, label, (emojis or {}).get(key), row)
+            )
 
 
 class SpecialtyPanel:
@@ -233,29 +375,50 @@ class SpecialtyPanel:
                     raise SpecialtyError(
                         "Сохранённое сообщение не принадлежит этому боту."
                     )
-            if message is None:
+            history = []
+            need_legacy = any(
+                not (state or {}).get("button_emojis", {}).get(key) for key in mapping
+            )
+            if message is None or need_legacy:
                 # Recover a successful send interrupted before its ID reached SQLite.
                 async def find_panel():
-                    return [
-                        m
-                        async for m in channel.history(limit=None)
-                        if self.owned(m)
-                        and any(e.footer.text == PANEL_MARKER for e in m.embeds)
-                    ]
+                    return [m async for m in channel.history(limit=None)]
 
-                found = await asyncio.wait_for(find_panel(), timeout=60)
+                history = await asyncio.wait_for(find_panel(), timeout=60)
+                found = [
+                    m
+                    for m in history
+                    if self.owned(m)
+                    and any(e.footer.text == PANEL_MARKER for e in m.embeds)
+                ]
                 if len(found) > 1:
                     raise SpecialtyError(
                         "Найдены несколько панелей этого бота; автоматическая публикация остановлена."
                     )
-                message = found[0] if found else None
+                if message is None:
+                    message = found[0] if found else None
+            emojis = await specialty_icons(
+                self.bot,
+                guild,
+                by_id,
+                mapping,
+                bot_member,
+                history,
+                (state or {}).get("button_emojis"),
+            )
             state = {
                 "guild_id": self.guild_id,
                 "roles": mapping,
+                "button_emojis": {
+                    key: discord.PartialEmoji(
+                        name=emoji.name, id=emoji.id, animated=emoji.animated
+                    ).to_dict()
+                    for key, emoji in emojis.items()
+                },
                 "message_id": str(message.id) if message else None,
             }
             await self.save_state(state)
-            view = SpecialtyView(self)
+            view = SpecialtyView(self, emojis)
             if message:
                 await message.edit(
                     embed=panel_embed(),

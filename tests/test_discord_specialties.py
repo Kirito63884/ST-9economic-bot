@@ -56,7 +56,7 @@ def clear_state(monkeypatch):
 
 
 def setup_panel():
-    guild = SimpleNamespace(id=1)
+    guild = SimpleNamespace(id=1, fetch_emojis=AsyncMock(return_value=[]))
     available = roles()
     member = SimpleNamespace(id=42, bot=False, roles=[Role(900, "Unrelated")])
 
@@ -328,5 +328,182 @@ def test_missing_roles_prevent_partial_publication():
             await panel.sync_once()
         channel.send.assert_not_awaited()
         assert panel.load_state() is None
+
+    asyncio.run(run())
+
+
+def guild_emoji(guild, eid, name):
+    # Real discord.py Emoji, rather than a mock with invented serialization methods.
+    return discord.Emoji(
+        guild=guild,
+        state=SimpleNamespace(),
+        data={
+            "id": str(eid),
+            "name": name,
+            "roles": [],
+            "animated": False,
+            "available": True,
+        },
+    )
+
+
+def old_panel(emoji_by_key, author_id=500):
+    return SimpleNamespace(
+        id=3000,
+        author=SimpleNamespace(id=author_id, bot=True),
+        webhook_id=None,
+        embeds=[panel_embed()],
+        components=[
+            SimpleNamespace(
+                children=[
+                    SimpleNamespace(
+                        label=label, emoji=emoji_by_key.get(key), custom_id="ignored"
+                    )
+                    for key, label, *_ in SPECIALTIES
+                ]
+            )
+        ],
+    )
+
+
+def test_exact_legacy_icons_replace_substitutes_and_survive_restart():
+    async def run():
+        panel, _, _, _, channel, history = setup_panel()
+        guild = channel.guild
+        originals = {
+            key: guild_emoji(guild, 5000 + i, "original_" + key)
+            for i, (key, *_) in enumerate(SPECIALTIES)
+        }
+        guild.fetch_emojis.return_value = list(originals.values())
+        # A newer own panel with wrong symbols must not shadow the old ProBot panel.
+        wrong = {key: discord.PartialEmoji(name="🎯") for key, *_ in SPECIALTIES}
+        history.extend([old_panel(wrong, author_id=99), old_panel(originals)])
+        history[0].embeds[0].set_footer(text="old-local-fixture")
+        await panel.sync_once()
+        view = channel.send.call_args.kwargs["view"]
+        assert [b.emoji.id for b in view.children] == [e.id for e in originals.values()]
+        assert panel.load_state()["button_emojis"]["medic"]["id"] == 5001
+        history.clear()  # Old message may now be deleted by the administrator.
+        restarted = SpecialtyPanel(panel.bot)
+        await restarted.sync_once()
+        view = channel.fetch_message.return_value.edit.call_args.kwargs["view"]
+        assert [b.emoji.id for b in view.children] == [e.id for e in originals.values()]
+        channel.send.assert_awaited_once()
+
+    asyncio.run(run())
+
+
+def test_unicode_role_icon_wins_over_old_panel():
+    async def run():
+        panel, _, _, available, channel, history = setup_panel()
+        available[1].unicode_emoji = "⚕️"
+        history.append(
+            old_panel({key: discord.PartialEmoji(name="🎯") for key, *_ in SPECIALTIES})
+        )
+        await panel.sync_once()
+        buttons = channel.send.call_args.kwargs["view"].children
+        assert buttons[1].emoji.name == "⚕️"
+        assert buttons[0].emoji.name == "🎯"
+
+    asyncio.run(run())
+
+
+def test_role_image_uploaded_once_and_reused_after_restart():
+    async def run():
+        panel, _, _, available, channel, _ = setup_panel()
+        guild = channel.guild
+        (await guild.fetch_member(99)).guild_permissions.create_expressions = True
+        asset = SimpleNamespace(
+            key="1234567890abcdef", read=AsyncMock(return_value=b"png-image")
+        )
+        asset.with_static_format = lambda _: asset
+        asset.with_size = lambda _: asset
+        available[1].icon = asset
+        created = []
+
+        async def create(**kwargs):
+            emoji = guild_emoji(guild, 9000, kwargs["name"])
+            created.append(emoji)
+            return emoji
+
+        guild.create_custom_emoji = AsyncMock(side_effect=create)
+        guild.fetch_emojis.return_value = created
+        await panel.sync_once()
+        assert channel.send.call_args.kwargs["view"].children[1].emoji.id == 9000
+        assert panel.load_state()["button_emojis"]["medic"]["id"] == 9000
+        assert guild.create_custom_emoji.call_args.kwargs["image"] == b"png-image"
+        await SpecialtyPanel(panel.bot).sync_once()
+        guild.create_custom_emoji.assert_awaited_once()
+        asset.read.assert_awaited_once()
+
+    asyncio.run(run())
+
+
+def test_missing_creation_permission_reuses_legacy_without_role_changes():
+    async def run():
+        panel, _, member, available, channel, history = setup_panel()
+        asset = SimpleNamespace(key="roleasset", read=AsyncMock())
+        asset.with_static_format = lambda _: asset
+        asset.with_size = lambda _: asset
+        available[1].icon = asset
+        history.append(
+            old_panel({key: discord.PartialEmoji(name="◇") for key, *_ in SPECIALTIES})
+        )
+        await panel.sync_once()
+        assert channel.send.call_args.kwargs["view"].children[1].emoji.name == "◇"
+        asset.read.assert_not_awaited()
+        member.add_roles.assert_not_awaited()
+        member.remove_roles.assert_not_awaited()
+
+    asyncio.run(run())
+
+
+def test_unavailable_or_missing_icons_do_not_break_buttons_or_invent_images():
+    async def run():
+        panel, _, _, _, channel, history = setup_panel()
+        # Foreign emoji IDs are not usable just because ProBot once used them.
+        history.append(
+            old_panel(
+                {
+                    key: discord.PartialEmoji(name="foreign", id=99999)
+                    for key, *_ in SPECIALTIES
+                }
+            )
+        )
+        await panel.sync_once()
+        buttons = channel.send.call_args.kwargs["view"].children
+        assert all(button.emoji is None for button in buttons)
+        assert channel.send.call_args.kwargs["view"].is_persistent()
+
+    asyncio.run(run())
+
+
+def test_probot_owned_image_is_copied_from_discord_cdn_for_new_bot():
+    async def run():
+        panel, _, _, _, channel, history = setup_panel()
+        guild = channel.guild
+        (await guild.fetch_member(99)).guild_permissions.create_expressions = True
+        read_cdn = AsyncMock(return_value=b"original-probot-image")
+        panel.bot._connection = SimpleNamespace(
+            http=SimpleNamespace(get_from_cdn=read_cdn)
+        )
+        originals = {key: discord.PartialEmoji(name="◇") for key, *_ in SPECIALTIES}
+        originals["medic"] = discord.PartialEmoji(
+            name="medical", id=1448264873812164629
+        )
+        history.append(old_panel(originals))
+        guild.create_custom_emoji = AsyncMock(
+            return_value=guild_emoji(guild, 88888, "copied_medic")
+        )
+        await panel.sync_once()
+        assert channel.send.call_args.kwargs["view"].children[1].emoji.id == 88888
+        assert (
+            guild.create_custom_emoji.call_args.kwargs["image"]
+            == b"original-probot-image"
+        )
+        assert (
+            read_cdn.call_args.args[0]
+            == "https://cdn.discordapp.com/emojis/1448264873812164629.png"
+        )
 
     asyncio.run(run())

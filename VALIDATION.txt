@@ -176,3 +176,16 @@ Discord specialty panel, 2026-10-29:
   .env, SQLite and medals_monitor.py sentinels remain byte-identical.
 - Live Discord publication not performed from this environment; validate existing
   role names, hierarchy and channel permissions on the deployment server.
+
+Original Discord specialty icons, 2026-10-29:
+- Full isolated suite: 525 passed, 0 failed, 0 skipped; same two dependency warnings.
+- Six additional checks exercise actual discord.py Emoji serialization, original
+  ProBot button matching (excluding the current bot's substitute icons), role
+  Unicode icons, one-time role image upload/reuse, missing creation permission,
+  unavailable sources and copying ProBot-owned image bytes via the Discord SDK.
+- Original button images are matched by labels only; role IDs/custom IDs and role
+  security checks are independent. No roles are changed when refreshing images.
+- Ruff E9/F across the repository and full lint/format checks on changed Python
+  files pass. All six isolated installer success/rollback scenarios pass.
+- Live Discord icon assets, emoji capacity and rendering require deployment-side
+  validation; no production Discord messages or emoji were changed locally.
