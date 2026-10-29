@@ -1,0 +1,25 @@
+name: Задача разработки
+description: Одна согласованная задача для одного разработчика и его помощника
+title: '[Задача] '
+body:
+  - type: textarea
+    id: goal
+    attributes:
+      label: Цель и ожидаемое поведение
+      description: Что должен получить пользователь сайта или бота?
+    validations:
+      required: true
+  - type: textarea
+    id: scope
+    attributes:
+      label: Границы и пересечения
+      description: Затрагиваемые разделы/общие файлы, ограничения и связанные PR.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Критерии готовности
+      description: Какие действия и проверки подтвердят результат?
+    validations:
+      required: true

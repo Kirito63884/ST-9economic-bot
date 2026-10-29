@@ -15,9 +15,14 @@ tests/.test-data/
 
 # Private configuration, sessions and production state
 .env.*
+!.env.example
 *.cookies
 *.sqlite
 *.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
 squad-data/
 *.pem
 *.key

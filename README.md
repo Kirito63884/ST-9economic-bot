@@ -13,6 +13,9 @@
 - [Изменения и установка на сервер](CHANGES_AND_UPDATE.md)
 - [Карта кода](ARCHITECTURE.md)
 - [Результаты проверок](VALIDATION.txt)
+- [Подключение второго разработчика и порядок PR](CONTRIBUTING.md)
+- [Готовый текст для его ChatGPT/Codex](docs/CHATGPT_HANDOFF.md)
+- [Правила для помощников](AGENTS.md) и [контекст проекта](docs/PROJECT_CONTEXT.md)
 
 Рабочие `.env`, базы данных, cookies и данные сервера в репозиторий не включены.
 Зависимости приложения закреплены в `requirements.txt`, тестовые — в
@@ -22,8 +25,7 @@
 python -m venv .venv
 . .venv/bin/activate
 python -m pip install -r requirements-dev.txt
-python -m pytest -q tests
-python -m ruff check . --select E9,F
+bash scripts/check.sh
 ```
 
 Для проверки встроенного JavaScript нужен Node.js. Для реального входа и внешних
