@@ -101,7 +101,7 @@
     }
   </style>
   <div id="medalAdminAlert" class="medal-notice" role="status" hidden></div>
-  {% include "_statistics_freshness.html" %}
+  {% if may_view_statistics(user) %}<div class="section-card"><p>Проверка источников и ход загрузки находятся в отдельном разделе.</p><button type="button" class="btn" onclick="switchTab('statistics')">Загрузка статистики</button></div>{% endif %}
   <div class="section-card">
     <div class="section-heading">
       <div>

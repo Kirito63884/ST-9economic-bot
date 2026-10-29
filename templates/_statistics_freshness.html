@@ -166,9 +166,11 @@
         busy = false;
       }
     }
-    refresh();
+    const visible = () => !root.closest('[role="tabpanel"]')?.hidden;
+    window.loadAdminStatistics = () => { root.open = true; refresh(); };
+    if (visible()) refresh();
     setInterval(() => {
-      if (!document.hidden && root.open) refresh();
+      if (!document.hidden && root.open && visible()) refresh();
     }, 15000);
   })();
 </script>

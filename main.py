@@ -2097,6 +2097,54 @@ async def admin_all_logs(
     )
 
 
+@app.get("/api/admin/audit")
+async def admin_audit_data(
+    q: str = "",
+    game: str = "",
+    outcome: str = "",
+    date_from: str = "",
+    date_to: str = "",
+    before: int | None = None,
+    player_id: str = "",
+    admin=Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """The same audit policy and filters as the standalone journal."""
+    try:
+        selected_player = int(player_id) if player_id else None
+        if selected_player is not None and not 0 < selected_player < 2**63:
+            raise ValueError
+        if before is not None and not 0 < before < 2**63:
+            raise ValueError
+    except ValueError:
+        raise HTTPException(400, "Неверный ID игрока или страницы")
+    context = audit_page_context(
+        db,
+        q=q,
+        game=game,
+        outcome=outcome,
+        date_from=date_from,
+        date_to=date_to,
+        before=before,
+        player_id=selected_player,
+        show_private=bool(is_senior_or_super(admin)),
+    )
+    return JSONResponse(
+        {
+            "entries": context["entries"],
+            "summary": context["summary"],
+            "total_records": context["total_records"],
+            "filters": context["filters"],
+            "next_before": context["history"][-1].id if context["next_url"] else None,
+            "players": [
+                {"id": u.id, "name": u.display_name or u.username}
+                for u in context["log_players"]
+            ],
+        },
+        headers={"Cache-Control": "private, no-store"},
+    )
+
+
 @app.get("/admin/logs/{uid}", response_class=HTMLResponse)
 async def admin_user_logs(
     request: Request,

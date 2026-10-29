@@ -212,3 +212,21 @@ Admin workspace, monthly groups, wallet history and assembly reports, 2026-10-29
   exercised against the isolated browser database, including the two new tables.
 - Ruff E9/F and shell syntax checks pass. Live Discord delivery to the user-selected
   channel requires server deployment; no production messages were sent locally.
+
+Collapsible admin navigation and embedded audit/statistics, 2026-10-29:
+- Full suite: 543 passed, 0 failed/skipped; existing two dependency warnings.
+- Five additional API checks verify anonymous/player denial, junior/senior note
+  visibility and search masking, filtered Moscow-day totals, keyset pagination
+  without duplicates, invalid ID bounds and private/no-store responses.
+- Prior statistics UI assertions now expect an internal tab instead of an external
+  link; the underlying page/API authorization checks are unchanged.
+- Six isolated web-only installer paths cover initial install/upgrade, success,
+  copy failure and HTTP-health failure, real syntax compilation, file restoration
+  and new-template removal. Working database, .env, bot and collector sentinels
+  remain unchanged; only balance-app.service is touched.
+- Chromium functional verification on synthetic sessions and an isolated database:
+  all seven groups fold, account-specific open state survives reload, active group
+  expands, audit filters survive reload and tab switches, history links close the
+  player editor and open the filtered journal, statistics stays in /admin, mobile
+  width 390px has no horizontal page overflow, junior notes are masked and statistics
+  is absent; zero pageerror events. Collector polling stops on hidden panels.

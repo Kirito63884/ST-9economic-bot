@@ -1,0 +1,322 @@
+<style>
+  .admin-audit-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 12px;
+    margin: 18px 0;
+  }
+  .admin-audit-filters > div {
+    min-width: 140px;
+    max-width: 100%;
+  }
+  .admin-audit-filters label {
+    display: block;
+    margin-bottom: 5px;
+    color: var(--muted);
+  }
+  .audit-summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 18px;
+    padding: 15px 0;
+  }
+  .audit-table-scroll {
+    overflow-x: auto;
+  }
+  .audit-table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 760px;
+  }
+  .audit-table th,
+  .audit-table td {
+    padding: 12px;
+    border-bottom: 1px solid var(--line);
+    text-align: left;
+    vertical-align: top;
+  }
+  .audit-table td:last-child {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-width: 440px;
+  }
+  .audit-tools {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+  }
+</style>
+<section id="panel-audit" role="tabpanel" aria-labelledby="tab-audit" hidden>
+  <div class="section-card">
+    <h2>Журнал операций</h2>
+    <p>
+      Финансовые операции и события аккаунтов. Время — Москва. Служебные заметки
+      доступны только старшим и главным администраторам.
+    </p>
+    <form id="adminAuditFilters" class="admin-audit-filters">
+      <div>
+        <label for="auditPlayer">Игрок</label
+        ><select id="auditPlayer" name="player_id" class="form-select">
+          <option value="">Все игроки</option>
+          {% for player in users %}
+          <option value="{{ player.id }}">
+            {{ player.display_name or player.username }}
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label for="auditQuery">Поиск</label
+        ><input
+          id="auditQuery"
+          name="q"
+          class="form-control"
+          maxlength="200"
+          placeholder="Ник, Discord, Steam или основание"
+        />
+      </div>
+      <div>
+        <label for="auditGame">Тип</label
+        ><select id="auditGame" name="game" class="form-select">
+          <option value="">Все типы</option>
+          <option value="admin">Управление</option>
+          <option value="medals">Награды</option>
+          <option value="daily">Бонусы</option>
+          <option value="blackjack">Блэкджек</option>
+          <option value="roulette">Рулетка</option>
+          <option value="poker">Покер</option>
+          <option value="crash">Crash</option>
+          <option value="durak">Дурак</option>
+          <option value="billiards">Бильярд</option>
+        </select>
+      </div>
+      <div>
+        <label for="auditOutcome">Операции</label
+        ><select id="auditOutcome" name="outcome" class="form-select">
+          <option value="">Все записи</option>
+          <option value="positive">Начисления</option>
+          <option value="negative">Списания</option>
+          <option value="zero">Нулевой итог</option>
+          <option value="events">События аккаунтов</option>
+        </select>
+      </div>
+      <div>
+        <label for="auditFrom">С даты · МСК</label
+        ><input
+          id="auditFrom"
+          name="date_from"
+          type="date"
+          class="form-control"
+        />
+      </div>
+      <div>
+        <label for="auditTo">По дату · МСК</label
+        ><input id="auditTo" name="date_to" type="date" class="form-control" />
+      </div>
+      <button class="btn btn-primary" type="submit">Показать</button>
+      <button class="btn" type="reset">Сбросить</button>
+    </form>
+    <p id="adminAuditStatus" class="hint" role="status" aria-live="polite"></p>
+    <div id="adminAuditSummary" class="audit-summary"></div>
+    <div class="audit-table-scroll">
+      <table class="audit-table">
+        <thead>
+          <tr>
+            <th>№ · дата и время МСК</th>
+            <th>Игрок</th>
+            <th>Тип и результат</th>
+            <th>Сумма, БК</th>
+            <th>Основание</th>
+          </tr>
+        </thead>
+        <tbody id="adminAuditRows"></tbody>
+      </table>
+    </div>
+    <div class="audit-tools">
+      <button class="btn" id="adminAuditMore" type="button" hidden>
+        Более ранние записи</button
+      ><button class="btn" id="adminAuditLatest" type="button">
+        К последним
+      </button>
+    </div>
+  </div>
+</section>
+{% if may_view_statistics(user) %}
+<section
+  id="panel-statistics"
+  role="tabpanel"
+  aria-labelledby="tab-statistics"
+  hidden
+>
+  <div class="section-card">
+    <h2>Загрузка статистики</h2>
+    <p>Состояние источников и ход сбора SQSTAT. Обновляется внутри админки.</p>
+    {% set statistics_expanded = true %} {% include '_statistics_freshness.html'
+    %}
+  </div>
+</section>
+{% endif %}
+<script>
+  (() => {
+    const $ = (id) => document.getElementById(id);
+    const form = $("adminAuditFilters");
+    const names = ["q", "game", "outcome", "date_from", "date_to", "player_id"];
+    const money = new Intl.NumberFormat("ru-RU", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    let loaded = false,
+      next = null,
+      request = null,
+      version = 0;
+    function node(tag, text) {
+      const n = document.createElement(tag);
+      if (text !== undefined) n.textContent = text;
+      return n;
+    }
+    function setFilters(values) {
+      for (const name of names) {
+        const field = form.elements.namedItem(name),
+          value = String(values[name] || "");
+        if (
+          name === "player_id" &&
+          value &&
+          ![...field.options].some((o) => o.value === value)
+        ) {
+          const option = node("option", `Игрок #${value}`);
+          option.value = value;
+          field.append(option);
+        }
+        field.value = value;
+      }
+    }
+    function saveUrl(params) {
+      const url = new URL(location.href);
+      for (const name of [...names, "before"])
+        url.searchParams.delete("log_" + name);
+      for (const [name, value] of params)
+        if (value) url.searchParams.set("log_" + name, value);
+      history.replaceState(null, "", url);
+    }
+    async function load(append = false, before = null) {
+      request?.abort();
+      request = new AbortController();
+      const current = ++version;
+      $("adminAuditStatus").textContent = "Загружаем журнал…";
+      $("adminAuditMore").disabled = true;
+      const params = new URLSearchParams(new FormData(form));
+      if (append && next) params.set("before", next);
+      else if (before) params.set("before", before);
+      if (!append) {
+        $("adminAuditRows").replaceChildren();
+        $("adminAuditSummary").replaceChildren();
+      }
+      try {
+        const response = await adminFetch("/api/admin/audit?" + params, {
+          cache: "no-store",
+          signal: request.signal,
+        });
+        const data = await response.json();
+        if (!response.ok)
+          throw Error(
+            typeof data.detail === "string"
+              ? data.detail
+              : "Не удалось загрузить журнал",
+          );
+        if (current !== version) return;
+        const selected = form.elements.namedItem("player_id").value;
+        $("auditPlayer").replaceChildren();
+        const all = node("option", "Все игроки");
+        all.value = "";
+        $("auditPlayer").append(all);
+        for (const player of data.players) {
+          const option = node("option", player.name);
+          option.value = String(player.id);
+          $("auditPlayer").append(option);
+        }
+        setFilters({ ...Object.fromEntries(params), player_id: selected });
+        for (const entry of data.entries) {
+          const row = node("tr");
+          row.append(
+            node("td", `#${entry.id} · ${entry.date} ${entry.time}`),
+            node("td", entry.user_name),
+            node("td", `${entry.kind} · ${entry.label}`),
+            node(
+              "td",
+              entry.financial
+                ? `${entry.amount > 0 ? "+" : ""}${money.format(entry.amount)}`
+                : "—",
+            ),
+            node("td", entry.details || "—"),
+          );
+          $("adminAuditRows").append(row);
+        }
+        $("adminAuditSummary").replaceChildren(
+          node("span", `Найдено записей: ${data.total_records}`),
+          node("span", `Финансовых: ${data.summary.financial_count}`),
+          node("span", `Начислено: ${money.format(data.summary.positive)} БК`),
+          node("span", `Списано: ${money.format(Math.abs(data.summary.negative))} БК`),
+        );
+        next = data.next_before;
+        $("adminAuditMore").hidden = !next;
+        $("adminAuditStatus").textContent = data.entries.length
+          ? `Показано записей: ${$("adminAuditRows").children.length}.`
+          : "Подходящих записей нет.";
+        loaded = true;
+        if (!append) saveUrl(params);
+      } catch (error) {
+        if (current === version && error.name !== "AbortError")
+          $("adminAuditStatus").textContent = error.message;
+      } finally {
+        if (current === version) $("adminAuditMore").disabled = false;
+      }
+    }
+    const initial = new URLSearchParams(location.search),
+      initialValues = {};
+    for (const name of names)
+      initialValues[name] = initial.get("log_" + name) || "";
+    setFilters(initialValues);
+    window.loadAdminAudit = () => {
+      if (!loaded) load(false, initial.get("log_before"));
+    };
+    window.openAdminAudit = (values) => {
+      window.closePlayer?.();
+      setFilters(values);
+      loaded = true;
+      switchTab("audit");
+      load(false, values.before);
+    };
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      load();
+    });
+    form.addEventListener("reset", (event) => {
+      event.preventDefault();
+      setFilters({});
+      load();
+    });
+    $("adminAuditMore").addEventListener("click", () => load(true));
+    $("adminAuditLatest").addEventListener("click", () => load());
+    document.addEventListener("click", (event) => {
+      if (
+        event.button !== 0 ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        event.altKey
+      )
+        return;
+      const link = event.target.closest("a[href]");
+      if (!link || link.target || link.hasAttribute("download")) return;
+      const url = new URL(link.href, location.href),
+        match = url.pathname.match(/^\/admin\/logs(?:\/([1-9][0-9]*))?\/?$/);
+      if (url.origin !== location.origin || !match) return;
+      event.preventDefault();
+      const values = Object.fromEntries(url.searchParams);
+      if (match[1]) values.player_id = match[1];
+      window.openAdminAudit(values);
+    });
+  })();
+</script>

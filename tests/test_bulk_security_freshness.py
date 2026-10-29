@@ -221,7 +221,7 @@ def test_statistics_page_has_expanded_panel_and_navigation(client, make_user, lo
     assert response.text.count('id="statisticsFreshness"') == 1
     assert 'id="statisticsFreshness" open' in response.text
     assert 'href="/statistics"' in client.get("/").text
-    assert 'href="/statistics"' in client.get("/admin").text
+    assert 'id="tab-statistics"' in client.get("/admin").text
 
 
 @pytest.mark.parametrize(
@@ -262,7 +262,7 @@ def test_statistics_access_policy_for_page_api_and_ui(
     assert ('id="statisticsFreshness"' in home) is allowed
     if role.get("is_admin"):
         admin = client.get("/admin").text
-        assert ('href="/statistics"' in admin) is allowed
+        assert ('id="tab-statistics"' in admin) is allowed
         assert ('id="statisticsFreshness"' in admin) is allowed
 
 

@@ -1909,6 +1909,16 @@
                 .sidebar[data-menu-open] .nav-item { white-space:normal; text-align:left; }
             }
         </style>
+        <style>
+            .admin-nav-group { flex-shrink:0; border-bottom:1px solid var(--line); padding:5px 0; }
+            .nav-group-summary { display:flex; align-items:center; gap:8px; padding:11px 9px; cursor:pointer; color:var(--muted); font-size:12px; font-weight:700; list-style:none; }
+            .nav-group-summary::-webkit-details-marker { display:none; }
+            .nav-group-summary::before { content:"▸"; transition:transform .15s; }
+            .admin-nav-group[open] > .nav-group-summary::before { transform:rotate(90deg); }
+            .admin-nav-group:has([aria-selected="true"]) > .nav-group-summary { color:var(--text); }
+            .nav-group-summary:focus-visible { outline:2px solid var(--blue); outline-offset:-2px; }
+            .admin-nav-items { display:flex; flex-direction:column; gap:4px; padding-bottom:8px; }
+        </style>
         {% include "_medals_style.html" %}
     </head>
     <body>
@@ -1930,8 +1940,11 @@
   class="side-nav"
   role="tablist"
   aria-label="Разделы админки"
+  data-user-id="{{ user.id }}"
 >
-  <div class="nav-group-label">Обзор</div>
+<details class="admin-nav-group" data-nav-group="overview" open>
+  <summary class="nav-group-summary">Обзор</summary>
+  <div class="admin-nav-items">
   <button
     class="nav-item"
     id="tab-hub"
@@ -1965,7 +1978,11 @@
   >
     <span class="nav-icon">◎</span>Участники Discord
   </button>
-  <div class="nav-group-label">Группы и активность</div>
+  </div>
+</details>
+<details class="admin-nav-group" data-nav-group="groups">
+  <summary class="nav-group-summary">Группы и активность</summary>
+  <div class="admin-nav-items">
   {% if is_senior_or_super %}<button
     class="nav-item"
     id="tab-groups"
@@ -2009,7 +2026,11 @@
   >
     <span class="nav-icon">▦</span>Игровые серверы · онлайн</button
   >{% endif %}
-  <div class="nav-group-label">Сборы</div>
+  </div>
+</details>
+<details class="admin-nav-group" data-nav-group="assemblies">
+  <summary class="nav-group-summary">Сборы</summary>
+  <div class="admin-nav-items">
   {% if is_senior_or_super %}<button
     class="nav-item"
     id="tab-assembly-summary"
@@ -2043,7 +2064,11 @@
   >
     <span class="nav-icon">↶</span>Апелляции по сборам
   </button>
-  <div class="nav-group-label">Награды</div>
+  </div>
+</details>
+<details class="admin-nav-group" data-nav-group="awards">
+  <summary class="nav-group-summary">Награды</summary>
+  <div class="admin-nav-items">
   <button
     class="nav-item"
     id="tab-medals"
@@ -2077,7 +2102,11 @@
   >
     <span class="nav-icon">+</span>Ручные заявки на награды
   </button>
-  <div class="nav-group-label">Финансы</div>
+  </div>
+</details>
+<details class="admin-nav-group" data-nav-group="finance">
+  <summary class="nav-group-summary">Финансы</summary>
+  <div class="admin-nav-items">
   <button
     class="nav-item"
     id="tab-operations"
@@ -2115,7 +2144,11 @@
       >{{ users|selectattr('balance', 'lt', -1500)|list|length }}</span
     >
   </button>
-  <div class="nav-group-label">Проверки и отчёты</div>
+  </div>
+</details>
+<details class="admin-nav-group" data-nav-group="reports">
+  <summary class="nav-group-summary">Проверки и отчёты</summary>
+  <div class="admin-nav-items">
   <button
     class="nav-item"
     id="tab-rules"
@@ -2138,13 +2171,13 @@
   >
     <span class="nav-icon">⇩</span>Отчёты и экспорт
   </button>
-  <a class="nav-item" href="/admin/logs"
-    ><span class="nav-icon">≡</span>Журнал операций</a
-  >
-  {% if may_view_statistics(user) %}<a class="nav-item" href="/statistics"
-    ><span class="nav-icon">◴</span>Загрузка статистики</a
-  >{% endif %}
-  <div class="nav-group-label">Управление</div>
+  <button class="nav-item" id="tab-audit" role="tab" aria-controls="panel-audit" aria-selected="false" tabindex="-1" onclick="switchTab('audit')"><span class="nav-icon">≡</span>Журнал операций</button>
+  {% if may_view_statistics(user) %}<button class="nav-item" id="tab-statistics" role="tab" aria-controls="panel-statistics" aria-selected="false" tabindex="-1" onclick="switchTab('statistics')"><span class="nav-icon">◴</span>Загрузка статистики</button>{% endif %}
+  </div>
+</details>
+<details class="admin-nav-group" data-nav-group="settings">
+  <summary class="nav-group-summary">Управление</summary>
+  <div class="admin-nav-items">
   <button
     class="nav-item"
     id="tab-automation"
@@ -2209,6 +2242,8 @@
   >
     <span class="nav-icon">▤</span>Архив профилей
   </button>
+  </div>
+</details>
 </nav>
                 <div class="sidebar-bottom">
                     <div class="user-name">{{ user.display_name or user.username }}</div>
@@ -2813,6 +2848,7 @@
                 {% include "_admin_groups.html" %}
 {% include "_admin_group_reports.html" %}
 {% include "_admin_wallet_questions.html" %}
+{% include "_admin_audit.html" %}
                 {% include "_admin_hub.html" %}
                 {% include "_admin_backups.html" %}
                 {% include "_admin_medals.html" %}
@@ -3118,6 +3154,26 @@ async function adminFetch(url, options = {}) {
     }
 }
 
+// Remember open groups per account, without storing filters or personal records.
+(() => {
+    const nav = document.getElementById("adminSectionNav");
+    const groups = [...nav.querySelectorAll("[data-nav-group]")];
+    const key = "st9-admin-nav:" + nav.dataset.userId;
+    try {
+        const saved = JSON.parse(localStorage.getItem(key) || "{}");
+        for (const group of groups)
+            if (typeof saved[group.dataset.navGroup] === "boolean")
+                group.open = saved[group.dataset.navGroup];
+    } catch { /* Browser storage is optional. */ }
+    for (const group of groups) group.addEventListener("toggle", () => {
+        try { localStorage.setItem(key, JSON.stringify(Object.fromEntries(groups.map(item => [item.dataset.navGroup, item.open])))); }
+        catch { /* Native folding still works with storage disabled. */ }
+    });
+    const initialSection = new URLSearchParams(location.search).get("section");
+    const initialTab = initialSection ? document.getElementById("tab-" + initialSection) : null;
+    const active = (initialTab || nav.querySelector('[aria-selected="true"]'))?.closest(".admin-nav-group");
+    if (active) active.open = true;
+})();
 document.getElementById("adminNavToggle").addEventListener("click", () => {
     const sidebar = document.querySelector(".sidebar");
     const open = sidebar.toggleAttribute("data-menu-open");
@@ -3145,6 +3201,8 @@ function switchTab(name, focus = false) {
     if (name === "assembly-summary") window.loadAssemblySummary();
     if (name === "wallet-questions") window.loadWalletQuestions();
     if (name === "groups") window.loadClanGroups();
+    if (name === "audit") window.loadAdminAudit();
+    if (name === "statistics") window.loadAdminStatistics?.();
     const selectedTab = document.getElementById("tab-" + name);
     if (selectedTab) {
         const caption = selectedTab.cloneNode(true);
@@ -3159,10 +3217,8 @@ function switchTab(name, focus = false) {
             "manual-awards": "Заявки на награды с основаниями и доказательствами",
         }[name] || "Strike Team 9 · администрирование";
     }
-    const selectedMore = selectedTab?.closest("details");
-    const moreMenu = document.getElementById("adminMore");
-    if (selectedMore) selectedMore.open = true;
-    else if (moreMenu) moreMenu.open = false;
+    const selectedGroup = selectedTab?.closest(".admin-nav-group");
+    if (selectedGroup) selectedGroup.open = true;
     selectedTab?.scrollIntoView({
         block: "nearest",
         inline: "nearest",
@@ -3184,7 +3240,7 @@ document.querySelectorAll("[role=tablist]").forEach((tablist) =>
     tablist.addEventListener("keydown", (event) => {
         if (!["ArrowLeft", "ArrowRight", "ArrowDown", "ArrowUp", "Home", "End"].includes(event.key))
             return;
-        const tabs = [...document.querySelectorAll("[role=tab]")];
+        const tabs = [...document.querySelectorAll("[role=tab]")].filter(tab => tab.getClientRects().length);
         const current = tabs.indexOf(document.activeElement);
         if (current < 0) return;
         event.preventDefault();
