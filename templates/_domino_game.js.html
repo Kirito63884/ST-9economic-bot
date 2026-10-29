@@ -1,5 +1,5 @@
 /* The browser proposes a move; the server owns hands, stock, turn and payouts.
- * Selecting a tile never plays it: both mouse and touch require an end button. */
+ * A click selects a tile; an explicit end button or a legal drop plays it. */
 (() => {
   const $ = (id) => document.getElementById(id),
     { api, esc, tile, money } = DominoUI;
@@ -14,7 +14,9 @@
     lastSync = 0,
     turnKey = null,
     fit = false,
-    networkMessage = "";
+    networkMessage = "",
+    drag = null,
+    suppressClickUntil = 0;
   const now = () => Date.now() / 1000 + offset;
   const mine = () =>
     state?.phase === "playing" && state.actor === state.your_id;
@@ -50,6 +52,7 @@
   }
   function controls() {
     if (!state) return;
+    if (drag && (!control() || drag.revision !== state.revision)) cancelDrag();
     const can = control(),
       sides = state.legal[selected] || [];
     $("playLeft").disabled = !can || !sides.includes("left");
@@ -91,8 +94,8 @@
                 : state.can_pass
                   ? "Базар пуст и хода нет. Можно пропустить."
                   : selected
-                    ? "Выберите, к какому концу поставить кость."
-                    : "Выберите подсвеченную кость, затем конец цепочки.";
+                    ? "Перетащите кость на нужный конец или нажмите кнопку ниже."
+                    : "Перетащите подсвеченную кость на стол или выберите её и конец цепочки.";
     const seconds = state.deadline
       ? Math.max(0, Math.ceil(state.deadline - now()))
       : 0;
@@ -196,6 +199,8 @@
   function accept(next) {
     if (state && next.revision < state.revision) return;
     const changed = !state || next.revision !== state.revision;
+    // A changed hand/turn must never redirect a gesture already in progress.
+    if (drag && changed) cancelDrag();
     const key = [next.match_number, next.phase, next.actor].join(":");
     if (key !== turnKey) {
       selected = null;
@@ -222,6 +227,7 @@
       accept(await api(base + "/state"));
     } catch (error) {
       if (error.status === 403) {
+        cancelDrag();
         try {
           const data = await api(base + "/preview");
           $("joinPanel").hidden = false;
@@ -234,6 +240,7 @@
           notice(failure.message);
         }
       } else if (error.status === 404) {
+        cancelDrag();
         closed = true;
         state = null;
         clearInterval(pollTimer);
@@ -243,6 +250,7 @@
           "Стол закрыт. Вернитесь в список столов, чтобы начать новую партию.",
         );
       } else {
+        cancelDrag();
         $("connection").classList.add("offline");
         $("connection").textContent = "Переподключаемся…";
         networkMessage = error.message;
@@ -285,7 +293,142 @@
       controls();
     }
   }
+  function cancelDrag() {
+    if (!drag) return;
+    const previous = drag;
+    drag = null;
+    if (previous.active) suppressClickUntil = performance.now() + 500;
+    previous.source.classList.remove("dragging");
+    previous.ghost?.remove();
+    $("dropTargets").hidden = true;
+    for (const id of ["dropLeft", "dropRight"]) $(id).classList.remove("over");
+    if ($("hand").hasPointerCapture(previous.pointerId))
+      $("hand").releasePointerCapture(previous.pointerId);
+  }
+  function dropSide(x, y) {
+    if (!drag?.active || !control() || drag.revision !== state.revision)
+      return null;
+    for (const side of ["left", "right"]) {
+      const zone = $(side === "left" ? "dropLeft" : "dropRight");
+      if (zone.hidden || !state.legal[drag.tile]?.includes(side)) continue;
+      const rect = zone.getBoundingClientRect();
+      if (
+        x >= rect.left &&
+        x <= rect.right &&
+        y >= rect.top &&
+        y <= rect.bottom
+      )
+        return side;
+    }
+    return null;
+  }
+  function moveDrag(event) {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    if (!control() || drag.revision !== state.revision) {
+      cancelDrag();
+      return;
+    }
+    if (!drag.active) {
+      const distance = Math.hypot(
+        event.clientX - drag.x,
+        event.clientY - drag.y,
+      );
+      if (distance < (event.pointerType === "touch" ? 10 : 6)) return;
+      drag.active = true;
+      // Capture only an actual drag; capturing on press retargets simple clicks
+      // to the hand container and would break tile selection.
+      $("hand").setPointerCapture(event.pointerId);
+      selected = drag.tile;
+      // Keep the captured hand mounted: replacing it during a drag loses touch.
+      $("hand")
+        .querySelectorAll("button")
+        .forEach((button) => {
+          const chosen = button === drag.source;
+          button.classList.toggle("selected", chosen);
+          button.setAttribute("aria-pressed", String(chosen));
+        });
+      drag.source.classList.add("dragging");
+      $("selection").textContent = "Выбрана " + selected.replace("-", "–");
+      const holder = document.createElement("div");
+      holder.innerHTML = tile(drag.tile);
+      // Use the tile itself so inherited pip layout and size remain identical.
+      const bone = holder.firstElementChild;
+      bone.classList.add("dm-drag-ghost");
+      bone.setAttribute("aria-hidden", "true");
+      drag.ghost = bone;
+      $("st-content").append(bone);
+      const opening = !state.chain.length;
+      $("dropLeft").hidden = opening;
+      $("dropLeft").textContent =
+        "← Левый конец · " + (state.chain[0]?.left ?? "");
+      $("dropRight").textContent = opening
+        ? "Отпустите кость здесь, чтобы начать цепочку"
+        : "Правый конец · " + state.chain.at(-1).right + " →";
+      for (const [id, side] of [
+        ["dropLeft", "left"],
+        ["dropRight", "right"],
+      ])
+        $(id).classList.toggle(
+          "unavailable",
+          !state.legal[drag.tile]?.includes(side),
+        );
+      $("dropTargets").hidden = false;
+      controls();
+    }
+    if (event.cancelable) event.preventDefault();
+    drag.ghost.style.left = event.clientX + "px";
+    drag.ghost.style.top = event.clientY + "px";
+    const side = dropSide(event.clientX, event.clientY);
+    $("dropLeft").classList.toggle("over", side === "left");
+    $("dropRight").classList.toggle("over", side === "right");
+  }
+  $("hand").addEventListener("pointerdown", (event) => {
+    const source = event.target.closest("button[data-tile]");
+    if (
+      drag ||
+      !event.isPrimary ||
+      event.button !== 0 ||
+      !source ||
+      source.disabled ||
+      !control()
+    )
+      return;
+    suppressClickUntil = 0;
+    drag = {
+      pointerId: event.pointerId,
+      tile: source.dataset.tile,
+      revision: state.revision,
+      source,
+      x: event.clientX,
+      y: event.clientY,
+      active: false,
+      ghost: null,
+    };
+  });
+  window.addEventListener("pointermove", moveDrag);
+  window.addEventListener("pointerup", (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    const side = dropSide(event.clientX, event.clientY),
+      id = drag.tile;
+    cancelDrag();
+    if (side) action("action", { kind: "play", tile: id, side });
+  });
+  for (const type of ["pointercancel", "lostpointercapture"])
+    $("hand").addEventListener(type, (event) => {
+      // Touch initially captures the button implicitly. Transferring capture
+      // to the stable hand emits a bubbled loss on that button, not on the hand.
+      if (event.type === "lostpointercapture" && event.target !== $("hand"))
+        return;
+      if (drag?.pointerId === event.pointerId) cancelDrag();
+    });
+  $("hand").addEventListener("dragstart", (event) => event.preventDefault());
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") cancelDrag();
+  });
+  window.addEventListener("blur", cancelDrag);
+  window.addEventListener("scroll", cancelDrag, true);
   $("hand").addEventListener("click", (event) => {
+    if (event.detail && performance.now() < suppressClickUntil) return;
     const button = event.target.closest("button[data-tile]");
     if (!button || button.disabled || !control()) return;
     selected = button.dataset.tile === selected ? null : button.dataset.tile;
@@ -387,9 +530,11 @@
     if (state && !document.hidden) controls();
   }, 400);
   document.addEventListener("visibilitychange", () => {
+    if (document.hidden) cancelDrag();
     if (!document.hidden) load();
   });
   window.addEventListener("pagehide", () => {
+    cancelDrag();
     clearInterval(pollTimer);
     clearInterval(clockTimer);
   });

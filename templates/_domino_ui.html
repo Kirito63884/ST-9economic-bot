@@ -337,10 +337,63 @@
     color: #ffaca6;
   }
   .dm-board {
+    position: relative;
     min-height: 230px;
     display: grid;
     align-items: center;
     padding: 20px 5px;
+  }
+  .dm-drop-targets {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    gap: 12px;
+    padding: 8px;
+    pointer-events: none;
+  }
+  .dm-drop-zone {
+    flex: 1;
+    min-width: 0;
+    border: 2px dashed #f0d69b;
+    border-radius: 16px;
+    background: #102d38cc;
+    color: #ffe7af;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding: 12px;
+    font-size: 14px;
+    font-weight: 750;
+  }
+  .dm-drop-zone.unavailable {
+    border-color: #96a39b50;
+    color: #bcc6c0;
+    background: #192b2bd9;
+  }
+  .dm-drop-zone.over {
+    border-style: solid;
+    background: #d9bb74ee;
+    color: #243428;
+    box-shadow: inset 0 0 0 3px #fff4c366;
+  }
+  .dm-page .dm-drag-ghost {
+    position: fixed;
+    z-index: 10000;
+    pointer-events: none;
+    opacity: 0.9;
+    margin: 0;
+    will-change: left, top;
+    transform: translate(-50%, -50%) rotate(-8deg);
+  }
+  .dm-hand button.dm-bone.legal:not(:disabled) {
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .dm-hand button.dm-bone.dragging {
+    opacity: 0.3;
+    cursor: grabbing;
   }
   .dm-chain-scroll {
     overflow: auto;

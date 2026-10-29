@@ -344,3 +344,19 @@ Classic double-six draw dominoes, 2026-10-29:
 - Ruff E9/F, JavaScript syntax, shell syntax and git whitespace checks pass.
   No production stakes or Discord actions executed. External Pagat rules access
   was denied by network policy; chosen variant rules are explicit in the UI/docs.
+
+Domino tile drag controls, 2026-10-30:
+- Targeted domino and rendered-script suite: 35 passed. Final rendered table and
+  shared frontend parse checks pass after the pointer-capture changes.
+- Standalone scripts/check_domino_drag.py renders actual game templates and
+  intercepts every request with local API fixtures. Chromium checks exact
+  tile/side/revision payloads once for left, right, either-end and opening drops.
+  An unchanged poll keeps a drag alive. Click, keyboard, small pointer jitter and
+  unplayable bones preserve the explicit selection rules.
+- Invalid/outside drops, Escape, focus/capture loss, pointer cancellation, scrolling,
+  changed turn, expired deadline and failed state requests send no action. Real
+  390px CDP touch events verify tap selection, a single move on legal release,
+  cancelled-touch suppression, stable capture transfer and no horizontal overflow.
+  Zero browser page errors. No working database or live wallets used by this runner.
+- JavaScript syntax, Ruff E9/F, installer shell syntax and git whitespace checks
+  pass. No new production dependencies, server rules or database changes.

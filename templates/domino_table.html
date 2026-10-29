@@ -37,7 +37,7 @@
             ><span id="clock" class="dm-clock"></span><span id="bank"></span
             ><span>Базар: <strong id="stock">0</strong></span>
           </div>
-          <div class="dm-board">
+          <div id="board" class="dm-board">
             <div id="boardEmpty" class="dm-board-empty"></div>
             <div
               id="chainScroll"
@@ -48,13 +48,24 @@
             >
               <div id="chain" class="dm-chain"></div>
             </div>
+            <div
+              id="dropTargets"
+              class="dm-drop-targets"
+              aria-hidden="true"
+              hidden
+            >
+              <div id="dropLeft" class="dm-drop-zone" data-side="left"></div>
+              <div id="dropRight" class="dm-drop-zone" data-side="right"></div>
+            </div>
           </div>
           <div id="ends" class="dm-table-ends" hidden>
             <span class="dm-end">Левый конец <b id="leftEnd"></b></span
             ><span class="dm-end">Правый конец <b id="rightEnd"></b></span>
           </div>
           <div class="dm-controls">
-            <p id="moveHelp">Выберите кость, затем конец цепочки.</p>
+            <p id="moveHelp">
+              Перетащите кость на стол или выберите её и конец цепочки.
+            </p>
             <div class="dm-side-buttons">
               <button id="playLeft" class="dm-btn" disabled>
                 ← Поставить слева</button
