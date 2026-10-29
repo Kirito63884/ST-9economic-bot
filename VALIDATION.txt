@@ -314,3 +314,33 @@ Visible table controls, stable mobile input and eight-hour expiry, 2026-10-29:
   No production game balances or Discord messages changed from this environment.
 - Four additional installer paths pass with older assembly-policy files, verifying
   conditional web+bot restart and rollback; current-policy installs remain web-only.
+
+Classic double-six draw dominoes, 2026-10-29:
+- Full isolated suite: 632 passed. Thirty-four new cases cover 2/3/4-player deals,
+  highest-double/no-double opening, both-end orientation, draw-until-playable,
+  pass restrictions, empty-hand win, blocked-round min/tie, strict settings,
+  late/wrong-turn rejection, timeout forfeits, seat order and creator succession.
+  Sixty seeded complete games preserve all 28 unique bones and connected ends,
+  including serialization/restoration repeatedly during play.
+- Actual HTTP/SQLite checks verify stake timing, odd-cent split and once-only
+  settlement, participant/anonymous/private denial, CSRF and stale replay rejection,
+  private/no-store state, hidden opponent hands/stock, eight-hour refund, owner
+  closure, activity persistence, user detach and shared financial-history labels.
+- Rendered lobby/table JavaScript and private home-activity checks pass. The public
+  private-table activity does not contain the invite ID. Synthetic test UTC setup
+  was updated after the full pass and its targeted privacy/render case passes with
+  only the two existing dependency warnings.
+- Chromium: two real signed sessions create/join/ready/start and play a complete
+  round using tile/end buttons. Selection alone changes no server revision. Hostile
+  names stay literal, bankroll settles once, finished reload and rematch work.
+  At 390px with real touch, a conserved 28-bone position reaches a tied fish with
+  exact three-cent split, owner closes the table, chain wrapping has no horizontal
+  page overflow, and the final CSS displays doubles perpendicular. Admin list
+  integration and zero pageerror events verified.
+- Eight isolated installer paths cover success/copy/preflight/HTTP failure for
+  current versus older assembly-policy files, private backup, file rollback,
+  removal of new modules/templates and untouched .env/database/collector sentinels.
+  Website-only versus conditional website/bot service selection passes.
+- Ruff E9/F, JavaScript syntax, shell syntax and git whitespace checks pass.
+  No production stakes or Discord actions executed. External Pagat rules access
+  was denied by network policy; chosen variant rules are explicit in the UI/docs.

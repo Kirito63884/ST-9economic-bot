@@ -1,0 +1,81 @@
+/* Accessible SVG-free bones: pip positions follow the familiar 3×3 pattern. */
+const DominoUI = (() => {
+  const positions = [
+    [],
+    [4],
+    [0, 8],
+    [0, 4, 8],
+    [0, 2, 6, 8],
+    [0, 2, 4, 6, 8],
+    [0, 2, 3, 5, 6, 8],
+  ];
+  const esc = (v) =>
+    String(v ?? "").replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  const half = (value) =>
+    `<span class="dm-half" aria-hidden="true">${Array.from({ length: 9 }, (_, index) => `<span class="${positions[value].includes(index) ? "dm-pip" : ""}"></span>`).join("")}</span>`;
+  function tile(
+    id,
+    {
+      button = false,
+      selected = false,
+      legal = false,
+      disabled = false,
+      left = null,
+      right = null,
+      horizontal = false,
+    } = {},
+  ) {
+    const pair = id.split("-").map(Number),
+      a = left ?? pair[0],
+      b = right ?? pair[1],
+      tag = button ? "button" : "span";
+    if (
+      !Number.isInteger(a) ||
+      !Number.isInteger(b) ||
+      a < 0 ||
+      b > 6 ||
+      b < 0 ||
+      a > 6
+    )
+      return "";
+    return `<${tag} class="dm-bone ${horizontal ? "horizontal" : ""} ${a === b ? "double" : ""} ${selected ? "selected" : ""} ${legal ? "legal" : ""}" ${button ? `type="button" data-tile="${esc(id)}" aria-pressed="${selected}" ${disabled ? "disabled" : ""}` : 'role="img"'} aria-label="Кость ${a}–${b}${legal ? " · можно ходить" : ""}">${half(a)}${half(b)}</${tag}>`;
+  }
+  async function api(url, options = {}) {
+    const response = await fetch(url, { cache: "no-store", ...options });
+    let data;
+    try {
+      data = await response.json();
+    } catch (_) {
+      throw Error("Сервер не ответил. Повторяем соединение…");
+    }
+    if (!response.ok) {
+      const error = Error(
+        typeof data.detail === "string"
+          ? data.detail
+          : "Не удалось выполнить запрос",
+      );
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  }
+  return {
+    esc,
+    tile,
+    api,
+    money: (cents) =>
+      new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(
+        cents / 100,
+      ) + " БК",
+  };
+})();

@@ -1,0 +1,400 @@
+/* The browser proposes a move; the server owns hands, stock, turn and payouts.
+ * Selecting a tile never plays it: both mouse and touch require an end button. */
+(() => {
+  const $ = (id) => document.getElementById(id),
+    { api, esc, tile, money } = DominoUI;
+  const tid = $("st-content").dataset.tableId,
+    base = "/api/domino/table/" + encodeURIComponent(tid);
+  let state = null,
+    selected = null,
+    busy = false,
+    polling = false,
+    closed = false,
+    offset = 0,
+    lastSync = 0,
+    turnKey = null,
+    fit = false,
+    networkMessage = "";
+  const now = () => Date.now() / 1000 + offset;
+  const mine = () =>
+    state?.phase === "playing" && state.actor === state.your_id;
+  const control = () =>
+    mine() && !busy && now() < state.deadline && Date.now() - lastSync < 5000;
+  function notice(message) {
+    $("error").textContent = message;
+    $("error").hidden = !message;
+  }
+  function hand() {
+    if (!state) return;
+    const focused = document.activeElement?.dataset?.tile;
+    $("hand").innerHTML =
+      state.hand
+        .map((id) =>
+          tile(id, {
+            button: true,
+            legal: Boolean(state.legal[id]),
+            selected: id === selected,
+            disabled: !control() || !state.legal[id],
+          }),
+        )
+        .join("") || '<span class="dm-muted">Костей на руках нет.</span>';
+    if (focused)
+      $("hand")
+        .querySelector(`[data-tile="${CSS.escape(focused)}"]`)
+        ?.focus({ preventScroll: true });
+    $("handCount").textContent = `· ${state.hand.length}`;
+    $("selection").textContent = selected
+      ? "Выбрана " + selected.replace("-", "–")
+      : "";
+    controls();
+  }
+  function controls() {
+    if (!state) return;
+    const can = control(),
+      sides = state.legal[selected] || [];
+    $("playLeft").disabled = !can || !sides.includes("left");
+    $("playRight").disabled = !can || !sides.includes("right");
+    $("playLeft").textContent =
+      "← Слева" + (state.chain.length ? " · " + state.chain[0].left : "");
+    $("playRight").textContent = state.chain.length
+      ? "Справа · " + state.chain.at(-1).right + " →"
+      : "Начать цепочку →";
+    $("draw").hidden = !state.can_draw;
+    $("draw").disabled = !can;
+    $("pass").hidden = !state.can_pass;
+    $("pass").disabled = !can;
+    const me = state.players.find((p) => p.id === state.your_id),
+      active = state.players.filter((p) => !p.left);
+    $("ready").disabled = busy;
+    $("start").disabled =
+      busy ||
+      active.length !== state.rules.max_players ||
+      !active.every((p) => p.ready);
+    $("leave").disabled = busy;
+    $("rematch").disabled = busy;
+    $("close").hidden = !state.can_close_table;
+    $("close").disabled = busy || !state.can_close;
+    $("close").title = state.can_close
+      ? "Расформировать стол для всех"
+      : "Сначала завершите партию";
+    $("moveHelp").textContent =
+      state.phase === "waiting"
+        ? "Подтвердите готовность перед стартом."
+        : state.phase === "finished"
+          ? "Партия завершена. Результат и остатки показаны ниже."
+          : !mine()
+            ? "Сейчас ход соперника. Ваши кости видны только вам."
+            : busy
+              ? "Отправляем действие…"
+              : state.can_draw
+                ? "Нет подходящей кости. Возьмите с базара."
+                : state.can_pass
+                  ? "Базар пуст и хода нет. Можно пропустить."
+                  : selected
+                    ? "Выберите, к какому концу поставить кость."
+                    : "Выберите подсвеченную кость, затем конец цепочки.";
+    const seconds = state.deadline
+      ? Math.max(0, Math.ceil(state.deadline - now()))
+      : 0;
+    $("clock").textContent = state.phase === "playing" ? seconds + " сек." : "";
+    $("clock").classList.toggle(
+      "urgent",
+      state.phase === "playing" && seconds <= 10,
+    );
+    if (me)
+      $("ready").textContent = me.ready ? "Отменить готовность" : "Я готов";
+    // Guard stale buttons even if the network disappears between two polls.
+    $("hand")
+      .querySelectorAll("button")
+      .forEach(
+        (button) =>
+          (button.disabled = !can || !state.legal[button.dataset.tile]),
+      );
+  }
+  function render() {
+    const active = state.players.filter((p) => !p.left);
+    $("players").innerHTML = state.players
+      .map(
+        (player) =>
+          `<article class="dm-seat ${player.id === state.actor ? "turn" : ""} ${player.left ? "left" : ""}"><div class="dm-avatar" aria-hidden="true">${esc(player.name.slice(0, 1).toUpperCase())}</div><div><strong title="${esc(player.name)}">${esc(player.name)}${player.id === state.your_id ? " · ты" : ""}</strong><small>${player.left ? "Сдался" : state.phase === "waiting" ? (player.ready ? "Готов" : "Ожидаем готовности") : player.moves + " ходов"}</small></div><span class="dm-count" aria-label="Костей на руках: ${player.count}">${player.count}</span></article>`,
+      )
+      .join("");
+    $("turn").textContent =
+      state.phase === "waiting"
+        ? "Комната ожидания"
+        : state.phase === "finished"
+          ? "Партия завершена"
+          : mine()
+            ? "Ваш ход"
+            : "Ходит " +
+              (state.players.find((p) => p.id === state.actor)?.name ||
+                "игрок");
+    $("bank").textContent =
+      "Банк " +
+      money(
+        state.match?.bank_cents ??
+          state.rules.entry_cents * state.rules.max_players,
+      );
+    $("stock").textContent = state.stock_count;
+    $("boardEmpty").hidden = state.chain.length > 0;
+    $("chainScroll").hidden = !state.chain.length;
+    $("ends").hidden = !state.chain.length;
+    $("boardEmpty").innerHTML =
+      state.phase === "waiting"
+        ? "<strong>Собираемся за столом.</strong>Пригласите друзей ссылкой сверху. Кости появятся после запуска партии."
+        : state.phase === "playing"
+          ? "<strong>Начинаем цепочку.</strong>Первую кость ставит старший дубль. Она подсвечена на руке начинающего игрока."
+          : "<strong>Хорошая партия.</strong>";
+    const scroll = $("chainScroll"),
+      previous = scroll.scrollLeft;
+    $("chain").innerHTML = state.chain
+      .map((bone) =>
+        tile(bone.id, { horizontal: true, left: bone.left, right: bone.right }),
+      )
+      .join("");
+    scroll.scrollLeft = previous;
+    if (state.last_move?.side === "left") scroll.scrollLeft = 0;
+    if (state.last_move?.side === "right")
+      scroll.scrollLeft = scroll.scrollWidth;
+    if (state.chain.length) {
+      $("leftEnd").textContent = state.chain[0].left;
+      $("rightEnd").textContent = state.chain.at(-1).right;
+    }
+    $("waiting").hidden = state.phase !== "waiting";
+    $("waitingText").textContent =
+      `${active.length}/${state.rules.max_players} игроков. Ставка каждого — ${money(state.rules.entry_cents)}. Взносы спишутся только при запуске. Все участники должны подтвердить готовность.`;
+    $("start").hidden = state.creator !== state.your_id;
+    $("result").hidden = state.phase !== "finished";
+    const result = state.match?.result;
+    if (result) {
+      $("resultTitle").textContent = result.winners.includes(state.your_id)
+        ? result.winners.length > 1
+          ? "Банк разделён"
+          : "Победа!"
+        : "Партия окончена";
+      $("resultReason").textContent = result.reason;
+      $("resultPlayers").innerHTML = result.hands
+        .map(
+          (player) =>
+            `<div class="dm-result-row"><strong>${esc(player.name)}${player.left ? " · сдался" : ""}</strong><span>${player.pips} очк. · получено ${money(result.payouts[String(player.id)] || 0)}</span></div><div class="dm-result-tiles">${player.tiles.map((id) => tile(id)).join("")}</div>`,
+        )
+        .join("");
+    }
+    $("rematch").hidden = state.creator !== state.your_id;
+    $("events").innerHTML = [...state.events]
+      .reverse()
+      .map(
+        (event) =>
+          `<p><time>${new Date(event.time * 1000).toLocaleTimeString("ru-RU", { timeZone: "Europe/Moscow", hour: "2-digit", minute: "2-digit" })}</time>${esc(event.text)}</p>`,
+      )
+      .join("");
+    document
+      .querySelectorAll("[data-st-balance]")
+      .forEach((node) => (node.textContent = Number(state.balance).toFixed(2)));
+    hand();
+  }
+  function accept(next) {
+    if (state && next.revision < state.revision) return;
+    const changed = !state || next.revision !== state.revision;
+    const key = [next.match_number, next.phase, next.actor].join(":");
+    if (key !== turnKey) {
+      selected = null;
+      turnKey = key;
+    }
+    if (selected && (!next.hand.includes(selected) || !next.legal[selected]))
+      selected = null;
+    state = next;
+    offset = next.server_time - Date.now() / 1000;
+    lastSync = Date.now();
+    $("game").hidden = false;
+    $("joinPanel").hidden = true;
+    $("connection").classList.remove("offline");
+    $("connection").textContent = "За столом · соединение активно";
+    if (networkMessage && $("error").textContent === networkMessage) notice("");
+    networkMessage = "";
+    if (changed) render();
+    else controls();
+  }
+  async function load(force = false) {
+    if (polling || closed || (busy && !force)) return;
+    polling = true;
+    try {
+      accept(await api(base + "/state"));
+    } catch (error) {
+      if (error.status === 403) {
+        try {
+          const data = await api(base + "/preview");
+          $("joinPanel").hidden = false;
+          $("game").hidden = true;
+          $("joinText").textContent =
+            `${data.players}/${data.rules.max_players} игроков · ставка ${money(data.rules.entry_cents)}. ${data.phase === "waiting" ? "Место можно занять до начала партии." : "Партия уже началась или завершена."}`;
+          $("join").disabled =
+            data.phase !== "waiting" || data.players >= data.rules.max_players;
+        } catch (failure) {
+          notice(failure.message);
+        }
+      } else if (error.status === 404) {
+        closed = true;
+        state = null;
+        clearInterval(pollTimer);
+        $("game").hidden = true;
+        $("joinPanel").hidden = true;
+        notice(
+          "Стол закрыт. Вернитесь в список столов, чтобы начать новую партию.",
+        );
+      } else {
+        $("connection").classList.add("offline");
+        $("connection").textContent = "Переподключаемся…";
+        networkMessage = error.message;
+        notice(error.message);
+      }
+    } finally {
+      polling = false;
+    }
+  }
+  async function action(path, payload = {}) {
+    if (busy || !state) return false;
+    busy = true;
+    notice("");
+    controls();
+    const post = () =>
+      api(base + "/" + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ revision: state.revision, ...payload }),
+      });
+    try {
+      let next;
+      try {
+        next = await post();
+      } catch (error) {
+        if (path !== "ready" || error.status !== 409) throw error;
+        accept(await api(base + "/state"));
+        if (state.phase !== "waiting") throw error;
+        const me = state.players.find((p) => p.id === state.your_id);
+        next = me.ready === payload.ready ? state : await post();
+      }
+      if (next.players) accept(next);
+      return true;
+    } catch (error) {
+      if (error.status === 409) await load(true);
+      notice(error.message);
+      return false;
+    } finally {
+      busy = false;
+      controls();
+    }
+  }
+  $("hand").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-tile]");
+    if (!button || button.disabled || !control()) return;
+    selected = button.dataset.tile === selected ? null : button.dataset.tile;
+    hand();
+  });
+  for (const [id, side] of [
+    ["playLeft", "left"],
+    ["playRight", "right"],
+  ])
+    $(id).addEventListener("click", () => {
+      if (control() && selected)
+        action("action", { kind: "play", tile: selected, side });
+    });
+  $("draw").addEventListener("click", () => {
+    if (control()) action("action", { kind: "draw" });
+  });
+  $("pass").addEventListener("click", () => {
+    if (control()) action("action", { kind: "pass" });
+  });
+  $("ready").addEventListener("click", () =>
+    action("ready", {
+      ready: !state.players.find((p) => p.id === state.your_id).ready,
+    }),
+  );
+  $("start").addEventListener("click", () => action("start"));
+  $("rematch").addEventListener("click", () => action("rematch"));
+  $("join").addEventListener("click", async () => {
+    if (busy) return;
+    busy = true;
+    $("join").disabled = true;
+    try {
+      await api(base + "/join", { method: "POST" });
+      busy = false;
+      await load();
+    } catch (error) {
+      notice(error.message);
+    } finally {
+      busy = false;
+      $("join").disabled = false;
+    }
+  });
+  $("leave").addEventListener("click", async () => {
+    if (
+      !confirm(
+        state.phase === "playing"
+          ? "Выйти со стола и сдаться?"
+          : "Выйти со стола?",
+      )
+    )
+      return;
+    if (await action("leave")) location.href = "/games/domino/lobby";
+  });
+  $("close").addEventListener("click", async () => {
+    if (
+      busy ||
+      !state.can_close ||
+      !confirm("Расформировать стол для всех участников?")
+    )
+      return;
+    busy = true;
+    controls();
+    try {
+      await api(
+        "/api/game-tables/domino/" + encodeURIComponent(tid) + "/close",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version: state.close_version }),
+        },
+      );
+      location.href = "/games/domino/lobby";
+    } catch (error) {
+      notice(error.message);
+      busy = false;
+      await load();
+      controls();
+    }
+  });
+  $("fit").addEventListener("click", () => {
+    fit = !fit;
+    $("chain").classList.toggle("fit", fit);
+    $("fit").textContent = fit ? "В одну линию" : "Вся цепочка";
+  });
+  $("invite").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(location.href);
+      $("invite").textContent = "Ссылка скопирована";
+      setTimeout(() => {
+        $("invite").textContent = "Пригласить друга";
+      }, 2000);
+    } catch (_) {
+      notice("Скопируйте ссылку из адресной строки браузера");
+    }
+  });
+  const pollTimer = setInterval(() => {
+    if (!document.hidden) load();
+  }, 1000);
+  const clockTimer = setInterval(() => {
+    if (state && !document.hidden) controls();
+  }, 400);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) load();
+  });
+  window.addEventListener("pagehide", () => {
+    clearInterval(pollTimer);
+    clearInterval(clockTimer);
+  });
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) location.reload();
+  });
+  load();
+})();

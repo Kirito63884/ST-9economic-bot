@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Домино — игровой стол ST-9</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    {% include "_site_ui.html" %}{% include "_domino_ui.html" %}
+  </head>
+  <body>
+    {% include "_site_nav.html" %}
+    <main id="st-content" class="dm-page" data-table-id="{{ table_id }}">
+      <header class="dm-head">
+        <div>
+          <span class="dm-eyebrow">Strike Team 9 · Классическое домино</span>
+          <h1>За общим столом.</h1>
+        </div>
+        <div class="dm-actions">
+          <button id="invite" class="dm-btn">Пригласить друга</button
+          ><a class="dm-btn" href="/games/domino/lobby">Все столы →</a>
+        </div>
+      </header>
+      <p id="error" class="dm-notice" role="alert" hidden></p>
+      <section id="joinPanel" class="dm-panel" hidden>
+        <h2>Место за столом</h2>
+        <p class="dm-muted" id="joinText"></p>
+        <button id="join" class="dm-btn primary mt-3">Присоединиться</button>
+      </section>
+      <section id="game" hidden>
+        <div id="players" class="dm-seats"></div>
+        <div class="dm-table">
+          <div class="dm-table-top">
+            <span id="turn" class="dm-turn" role="status">Загрузка…</span
+            ><span id="clock" class="dm-clock"></span><span id="bank"></span
+            ><span>Базар: <strong id="stock">0</strong></span>
+          </div>
+          <div class="dm-board">
+            <div id="boardEmpty" class="dm-board-empty"></div>
+            <div
+              id="chainScroll"
+              class="dm-chain-scroll"
+              tabindex="0"
+              aria-label="Цепочка домино, прокручивается горизонтально"
+              hidden
+            >
+              <div id="chain" class="dm-chain"></div>
+            </div>
+          </div>
+          <div id="ends" class="dm-table-ends" hidden>
+            <span class="dm-end">Левый конец <b id="leftEnd"></b></span
+            ><span class="dm-end">Правый конец <b id="rightEnd"></b></span>
+          </div>
+          <div class="dm-controls">
+            <p id="moveHelp">Выберите кость, затем конец цепочки.</p>
+            <div class="dm-side-buttons">
+              <button id="playLeft" class="dm-btn" disabled>
+                ← Поставить слева</button
+              ><button id="playRight" class="dm-btn" disabled>
+                Поставить справа →</button
+              ><button id="draw" class="dm-btn" hidden>Взять с базара</button
+              ><button id="pass" class="dm-btn" hidden>Пропустить</button>
+            </div>
+          </div>
+        </div>
+        <section id="handPanel" class="dm-hand-panel">
+          <div class="dm-hand-header">
+            <h2>Ваши кости <small id="handCount" class="dm-muted"></small></h2>
+            <span class="dm-muted" id="selection"></span>
+          </div>
+          <div id="hand" class="dm-hand"></div>
+        </section>
+        <section id="waiting" class="dm-panel mt-3" hidden>
+          <h2>Собираемся за столом</h2>
+          <p class="dm-muted" id="waitingText"></p>
+          <div class="dm-ready">
+            <button id="ready" class="dm-btn primary">Я готов</button
+            ><button id="start" class="dm-btn primary" hidden>
+              Начать партию
+            </button>
+          </div>
+        </section>
+        <section id="result" class="dm-panel dm-result" hidden>
+          <span class="dm-eyebrow">Партия завершена</span>
+          <h2 id="resultTitle" class="mt-2"></h2>
+          <p id="resultReason" class="dm-muted"></p>
+          <div id="resultPlayers"></div>
+          <button id="rematch" class="dm-btn primary mt-3" hidden>
+            Ещё партия
+          </button>
+        </section>
+        <div class="dm-status">
+          <span id="connection" class="dm-connection">Подключение…</span>
+          <div class="dm-actions">
+            <button id="fit" class="dm-btn">Вся цепочка</button
+            ><button id="leave" class="dm-btn danger">Выйти со стола</button
+            ><button id="close" class="dm-btn danger" hidden>
+              Расформировать
+            </button>
+          </div>
+        </div>
+      </section>
+      <div class="dm-lower">
+        <div>{% include "_domino_rules.html" %}</div>
+        <details class="dm-panel">
+          <summary>История партии</summary>
+          <div id="events" class="dm-log"></div>
+        </details>
+      </div>
+    </main>
+    <script nonce="{{ request.state.csp_nonce }}">
+      {% include "_domino_tiles.js.html" %}
+    </script>
+    <script nonce="{{ request.state.csp_nonce }}">
+      {% include "_domino_game.js.html" %}
+    </script>
+  </body>
+</html>

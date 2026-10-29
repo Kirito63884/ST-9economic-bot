@@ -53,6 +53,7 @@ def test_rendered_scripts_parse(make_user, login_as):
         "/games/crash",
         "/games/durak/lobby",
         "/games/billiards/lobby",
+        "/games/domino/lobby",
         "/medals",
         f"/medals/progress/{uid}",
         "/squad",

@@ -53,6 +53,7 @@ def make_router(
     durak,
     billiards=None,
     log_game=None,
+    domino=None,
 ):
     # Older main.py versions pass log_game in the billiards position. Keeping this
     # compatible makes an emergency source rollback safe after this module exists.
@@ -73,6 +74,8 @@ def make_router(
         games = {"poker": poker, "durak": durak.tables}
         if billiards is not None:
             games["billiards"] = billiards.tables
+        if domino is not None:
+            games["domino"] = domino.tables
         if game not in games:
             raise HTTPException(400, "Неизвестная игра")
         table = games[game].get(tid)
@@ -121,6 +124,8 @@ def make_router(
         games = [("poker", poker), ("durak", durak.tables)]
         if billiards is not None:
             games.append(("billiards", billiards.tables))
+        if domino is not None:
+            games.append(("domino", domino.tables))
         for game, values in games:
             for tid, table in values.items():
                 if game == "poker":
@@ -160,17 +165,14 @@ def make_router(
         admin=Depends(require_chief),
         db=Depends(get_db),
     ):
-        if game not in ("poker", "durak") and (
-            game != "billiards" or billiards is None
-        ):
-            raise HTTPException(400, "Неизвестная игра.")
-        values = (
-            poker
-            if game == "poker"
-            else durak.tables
-            if game == "durak"
-            else billiards.tables
-        )
+        games = {"poker": poker, "durak": durak.tables}
+        if billiards is not None:
+            games["billiards"] = billiards.tables
+        if domino is not None:
+            games["domino"] = domino.tables
+        if game not in games:
+            raise HTTPException(400, "Неизвестная игра")
+        values = games[game]
         table = values.get(tid)
         if table is None:
             return {"ok": True, "deleted": False, "message": "Стол уже удалён."}

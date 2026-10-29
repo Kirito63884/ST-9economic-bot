@@ -10,7 +10,9 @@ from squad_routes import public_roster
 FAVICON = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="15" fill="#121d30"/><path d="M32 7 54 16v17c0 13-12 21-22 26C22 54 10 46 10 33V16Z" fill="#253e63" stroke="#a9c9ff" stroke-width="2"/><path d="M38 14 21 34h12l-7 16 19-24H32Z" fill="#f2cc82"/></svg>"""
 
 
-def activity(db, blackjack, crash, poker, durak, billiards=None, *, now=None):
+def activity(
+    db, blackjack, crash, poker, durak, billiards=None, domino=None, *, now=None
+):
     now = time.time() if now is None else now
     threshold = datetime.fromtimestamp(now) - timedelta(minutes=5)
     users = {
@@ -123,6 +125,20 @@ def activity(db, blackjack, crash, poker, durak, billiards=None, *, now=None):
             [p["id"] for p in table.players if not p.get("left")],
         )
 
+    for tid, table in sorted(domino.tables.items()) if domino is not None else []:
+        if table.phase != "playing":
+            continue
+        private = table.rules["private"]
+        creator = next(
+            (p["name"] for p in table.players if p["id"] == table.creator), "сообщества"
+        )
+        add(
+            "domino-private" if private else "domino:" + tid,
+            "Домино · закрытые столы" if private else "Домино · стол " + creator,
+            "/games/domino/lobby" if private else "/games/domino/table/" + tid,
+            [p["id"] for p in table.players if not p["left"]],
+        )
+
     squad = public_roster(db, now=now)
     unavailable = 0
     pending = 0
@@ -151,13 +167,13 @@ def activity(db, blackjack, crash, poker, durak, billiards=None, *, now=None):
     }
 
 
-def make_router(get_db, blackjack, crash, poker, durak, billiards=None):
+def make_router(get_db, blackjack, crash, poker, durak, billiards=None, domino=None):
     router = APIRouter()
 
     @router.get("/api/home/activity")
     def current_activity(response: Response, db=Depends(get_db)):
         response.headers["Cache-Control"] = "no-store"
-        return activity(db, blackjack, crash, poker, durak, billiards)
+        return activity(db, blackjack, crash, poker, durak, billiards, domino)
 
     @router.get("/favicon.svg", include_in_schema=True)
     def favicon():

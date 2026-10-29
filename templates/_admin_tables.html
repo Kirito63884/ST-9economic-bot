@@ -4,7 +4,7 @@
         <div class="section-heading">
             <div>
                 <h2>Игровые столы</h2>
-                <p>Открытые и закрытые столы покера и дурака. Удаление доступно после завершения игры.</p>
+                <p>Открытые и закрытые столы покера, дурака, бильярда и домино. Удаление доступно после завершения игры.</p>
             </div>
             <button type="button" class="btn btn-sm" onclick="loadAdminTables()">Обновить</button>
         </div>
@@ -26,7 +26,7 @@ async function loadAdminTables() {
             ? data.tables
                   .map(
                       (t) =>
-                          `<article class="st-admin-table-row"><div><strong>${t.game === "poker" ? "Покер" : "Дурак"} · ${TableAdmin.esc(t.creator)}</strong><p>${t.players} игроков · ${t.private ? "Закрытый" : "Открытый"} · ${t.can_delete ? "Можно удалить" : "Идёт игра"}</p></div>${TableAdmin.markup(t, t.game)}</article>`,
+                          `<article class="st-admin-table-row"><div><strong>${({poker:"Покер",durak:"Дурак",billiards:"Бильярд",domino:"Домино"})[t.game] || "Игра"} · ${TableAdmin.esc(t.creator)}</strong><p>${t.players} игроков · ${t.private ? "Закрытый" : "Открытый"} · ${t.can_delete ? "Можно удалить" : "Идёт игра"}</p></div>${TableAdmin.markup(t, t.game)}</article>`,
                   )
                   .join("")
             : '<div class="empty-state">Столов пока нет</div>';
