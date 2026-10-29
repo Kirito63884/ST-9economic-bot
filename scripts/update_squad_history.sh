@@ -40,6 +40,11 @@ case "${3:-full}" in
         services=(balance-app.service balance-app-medals.service)
         test -f "$app_dir/medals_monitor.py"
         ;;
+    sqstat-progress)
+        files=(medals_monitor.py)
+        services=(balance-app-medals.service)
+        test -f "$app_dir/medals_monitor.py"
+        ;;
     *) echo "Неизвестный режим установки."; exit 1 ;;
 esac
 python_files=()
@@ -116,7 +121,9 @@ curl -fsS --max-time 10 --retry 5 --retry-delay 1 --retry-connrefused \
     http://127.0.0.1:8000/ -o /dev/null
 systemctl is-active "${services[@]}"
 changing=0
-if [[ "${3:-full}" == sqstat-source ]]; then
+if [[ "${3:-full}" == sqstat-progress ]]; then
+    echo "Готово. Перезапущен только сборщик статистики. Счётчики относятся к новому циклу; успешная дата сохраняется до завершения архива."
+elif [[ "${3:-full}" == sqstat-source ]]; then
     echo "Готово. Сборщик SQSTAT запущен с адресом https://prot.sqstat.ru. Дата успешного обновления изменится после полного цикла."
 else
     echo "Готово. Обновите админку через Ctrl+F5 → Группы. Состав групп обновляется после синхронизации Discord."

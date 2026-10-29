@@ -31,6 +31,19 @@ Discord-бот, база, `.env`, cookies Protocol и другие настро�
 `checked_at` обновится после успешного прохода архива; до этого старая дата
 сама по себе не показывает прогресс нового сканирования.
 
+В начале каждого нового цикла счётчики ошибок и обработанных профилей,
+старый номер матча и прежнее сообщение об ошибке сбрасываются. Поля
+`cycle_started_at` и `current_profile_index` показывают начало текущего цикла
+и номер профиля, запрос которого выполняется или ожидает разрешённого слота.
+`profiles_done` увеличивается после завершения обработки профиля, в том числе
+неудачной, а `profiles_failed` считает только ошибки текущего цикла. Дата
+последнего успешного архива, курсор и проверенная статистика сохраняются.
+
+Если исправление домена уже установлено, режим `sqstat-progress` заменяет
+только `medals_monitor.py` и перезапускает только `balance-app-medals.service`.
+Резервная копия и откат предусмотрены. Он не перезапускает веб-приложение
+или Discord-бота и не удаляет ограничитель частоты запросов.
+
 Без раскрытия приватных параметров прогресс можно посмотреть так:
 
 ```bash
@@ -43,7 +56,7 @@ with SessionLocal() as db:
     row = db.get(MedalMonitor, 1)
     data = json.loads(row.payload) if row else {}
     print("Последняя запись состояния (UTC):", row.updated_at if row else None)
-    for key in ("status", "phase", "profiles_done", "profiles_total", "profiles_failed", "current_match", "checked_at", "last_error"):
+    for key in ("status", "phase", "cycle_started_at", "current_profile_index", "profiles_done", "profiles_total", "profiles_failed", "current_match", "checked_at", "last_error"):
         print(f"{key}: {data.get(key)}")
 PY
 ```

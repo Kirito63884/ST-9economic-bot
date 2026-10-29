@@ -148,3 +148,18 @@ five selected files installed, other files/settings/data preserved; rollback
 after failed HTTP health restores originals. Only web/statistics services restart.
 The new host's live page parsing and completion of a production collection cycle
 remain to be verified after the user installs this update.
+
+SQSTAT progress reset, 2026-10-29:
+Full suite: 491 passed, 0 failed, 0 skipped; two unchanged dependency warnings.
+New cycle initialization resets prior failure counts, error text and match ID.
+cycle_started_at and current_profile_index identify the active run/request.
+Only completed profile attempts increase profiles_done; failed attempts count
+against the current run. Successful archive timestamps/cursors, verified cache
+and upstream rate-limit state are preserved, never replaced by an attempt time.
+Tests inspect persisted progress while a profile call is in flight, across one
+success/one failure, on an empty roster and with an existing verified profile.
+Ruff checks and formatting pass. Installer sqstat-progress mode simulated on
+success and failed-health rollback: only medals_monitor.py changes and only
+balance-app-medals.service restarts; web, Discord bot, settings and data persist.
+This fixes misleading progress; live upstream success or the cause of an actual
+long-running request cannot be inferred from the old counters alone.

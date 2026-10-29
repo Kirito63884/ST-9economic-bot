@@ -130,16 +130,25 @@ class Monitor:
         # A bad archive page must not starve all-time medal/pilot profiles.
         errors = 0
         unique_users = list(dict.fromkeys(users))
-        publish_status(
-            {
-                **state,
-                "status": "collecting",
-                "phase": "profiles",
-                "profiles_total": len(unique_users),
-                "profiles_done": 0,
-            }
-        )
+        # Reset only transient progress. Successful timestamps, cursor and
+        # verified archive exclusions must survive a new/failed collection run.
+        state = {
+            **state,
+            "status": "collecting",
+            "phase": "profiles",
+            "cycle_started_at": now.isoformat() + "Z",
+            "profiles_total": len(unique_users),
+            "profiles_done": 0,
+            "profiles_failed": 0,
+            "current_profile_index": None,
+            "current_match": None,
+            "archive_failed": [],
+            "last_error": None,
+        }
+        publish_status(state)
         for index, sid in enumerate(unique_users, 1):
+            state["current_profile_index"] = index
+            publish_status(state)
             try:
                 p = profile(self.client.player(sid), sid)
                 with SessionLocal.begin() as db:
@@ -173,16 +182,12 @@ class Monitor:
                 logger.warning(
                     "SQSTAT profile unavailable; retaining previous verified data"
                 )
-            publish_status(
-                {
-                    **state,
-                    "status": "collecting",
-                    "phase": "profiles",
-                    "profiles_total": len(unique_users),
-                    "profiles_done": index,
-                    "profiles_failed": errors,
-                }
+            state.update(
+                profiles_done=index,
+                profiles_failed=errors,
+                current_profile_index=None,
             )
+            publish_status(state)
         state = {
             **state,
             "phase": "archive",
