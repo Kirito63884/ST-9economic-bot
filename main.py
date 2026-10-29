@@ -1789,6 +1789,7 @@ async def admin_assembly_status(request: Request):
             "steam_unlinked": "Не привязан Steam ID",
             "pending_penalty": "Ожидает списания",
             "exempted": "Освобождён администратором",
+            "waived": "Общее освобождение от списаний",
         }
         outcome_order = {
             "pending_penalty": 0,
@@ -1800,6 +1801,7 @@ async def admin_assembly_status(request: Request):
             "present": 4,
             "present_voice": 4,
             "exempted": 5,
+            "waived": 5,
         }
         for row in assessments:
             user = users.get(row.user_id)
@@ -5055,3 +5057,7 @@ from distinction_reviews import make_router as make_distinction_review_router
 app.include_router(make_distinction_review_router(get_user, get_db))
 
 app.include_router(make_wallet_router(get_user, get_db, templates))
+
+from assembly_waivers import make_router as make_assembly_waiver_router
+
+app.include_router(make_assembly_waiver_router(get_user, get_db, is_super_admin))

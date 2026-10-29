@@ -230,3 +230,20 @@ Collapsible admin navigation and embedded audit/statistics, 2026-10-29:
   player editor and open the filtered journal, statistics stays in /admin, mobile
   width 390px has no horizontal page overflow, junior notes are masked and statistics
   is absent; zero pageerror events. Collector polling stops on hidden panels.
+
+Date-scoped assembly waivers and optional refunds, 2026-10-29:
+- Full isolated suite: 554 passed, no failures/skips; existing two dependency warnings.
+- Eleven new cases cover read-only preview/cancel, default pending-only cancellation,
+  independent date scope, policy before collection, late queued decisions at finalize,
+  once-only refunds, already approved refunds, pending appeal resolution, exact-state
+  invalidation, actor/expiry binding, CSRF and chief-only enforcement.
+- Chromium against isolated SQLite: per-window shortcut, literal hostile player
+  name, cancelling preview changes nothing, default operation leaves prior charged
+  balance unchanged, optional refund restores exactly once, empty future plan can
+  be confirmed, senior UI/API denied and 390px dialog has no page overflow.
+  Zero pageerror events; no real production financial operations executed.
+- Four isolated installer paths (success, copy failure, preflight failure and HTTP
+  health failure) verify file rollback/new-file removal and preservation of live
+  .env/database/collector sentinels. SQLite backup and only web/bot service selection
+  retained from the verified workspace installer. Schema remains unchanged.
+- Ruff E9/F, shell syntax and rendered JavaScript checks pass.

@@ -1245,6 +1245,7 @@
             .assembly-outcome-present_voice,
             .assembly-outcome-excused,
             .assembly-outcome-exempted,
+            .assembly-outcome-waived,
             .assembly-outcome-appeal_approved {
                 color: var(--green)
             }
@@ -2567,6 +2568,8 @@
                          role="tabpanel"
                          aria-labelledby="tab-assembly"
                          hidden>
+{% include "_assembly_waiver.html" %}
+
                     {% if is_super %}
                     <div class="section-card">
                         <div class="section-heading">
@@ -4967,7 +4970,7 @@ async function loadAssemblyStatus(force = false) {
                         const review = window.requires_confirmation
                             ? `<div class="assembly-problems">Списание ожидает подтверждения главным администратором. Автоматического списания нет.</div>{% if is_super %}<div class="action-row mt-3"><button class="btn btn-primary btn-sm" onclick="finalizeAssembly('${escapeHtml(window.event_date)}')">Подтвердить оставшиеся штрафы</button></div>{% endif %}`
                             : "";
-                        return `<article class="section-card assembly-window"><header class="assembly-window-head"><div><h2>${assemblyDate(window.starts_at, { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</h2><p>${assemblyDate(window.starts_at, { hour: "2-digit", minute: "2-digit" })}–${assemblyDate(window.ends_at, { hour: "2-digit", minute: "2-digit" })} МСК · ${window.processed_at ? "обработано " + assemblyDate(window.processed_at) + " МСК" : "обработка ещё не завершена"}</p></div><span class="assembly-status assembly-status-${escapeHtml(window.status)}">${escapeHtml(window.status_label)}</span></header><div class="assembly-window-body"><div class="assembly-summary">${assemblyMetric(window.member_count, "участников")}${assemblyMetric(window.report_count, "рапортов")}${assemblyMetric(window.present_count, "присутствовали")}${assemblyMetric(window.penalty_count, window.requires_confirmation ? "возможных штрафов" : "штрафов")}${assemblyMetric(numberFormat.format(window.charged), "списано БК")}${assemblyMetric(window.coverage_percent + "%", "покрытие")}</div>${review}${problems}${retry}${technical}<div class="action-row mt-3"><button class="btn btn-sm" onclick="downloadAssemblyAbsent('${escapeHtml(window.event_date)}')">Скачать отсутствовавших без рапорта · TXT</button></div><details class="assembly-details"><summary>Решения по людям (${window.assessment_count})</summary><div>${decisions}</div></details></div></article>`;
+                        return `<article class="section-card assembly-window"><header class="assembly-window-head"><div><h2>${assemblyDate(window.starts_at, { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}</h2><p>${assemblyDate(window.starts_at, { hour: "2-digit", minute: "2-digit" })}–${assemblyDate(window.ends_at, { hour: "2-digit", minute: "2-digit" })} МСК · ${window.processed_at ? "обработано " + assemblyDate(window.processed_at) + " МСК" : "обработка ещё не завершена"}</p></div><span class="assembly-status assembly-status-${escapeHtml(window.status)}">${escapeHtml(window.status_label)}</span></header><div class="assembly-window-body"><div class="assembly-summary">${assemblyMetric(window.member_count, "участников")}${assemblyMetric(window.report_count, "рапортов")}${assemblyMetric(window.present_count, "присутствовали")}${assemblyMetric(window.penalty_count, window.requires_confirmation ? "возможных штрафов" : "штрафов")}${assemblyMetric(numberFormat.format(window.charged), "списано БК")}${assemblyMetric(window.coverage_percent + "%", "покрытие")}</div>${review}${problems}${retry}${technical}<div class="action-row mt-3"><button class="btn btn-sm" onclick="downloadAssemblyAbsent('${escapeHtml(window.event_date)}')">Скачать отсутствовавших без рапорта · TXT</button>{% if is_super %}<button class="btn btn-sm" onclick="prepareAssemblyWaiver('${escapeHtml(window.event_date)}')">Освободить всех от списаний</button>{% endif %}</div><details class="assembly-details"><summary>Решения по людям (${window.assessment_count})</summary><div>${decisions}</div></details></div></article>`;
                     })
                     .join("");
             }

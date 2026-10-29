@@ -1,0 +1,259 @@
+{% if is_super %}
+<div class="section-card" id="assemblyWaiverCard">
+  <h2>Освободить всех от списаний за сбор</h2>
+  <p>
+    Общее освобождение действует только на выбранную субботу и на все группы
+    клана. Сведения о присутствии и рапортах сохраняются.
+  </p>
+  <form id="assemblyWaiverForm" class="waiver-form">
+    <div>
+      <label class="form-label" for="assemblyWaiverDate">Дата сбора · МСК</label
+      ><input
+        class="form-control"
+        type="date"
+        id="assemblyWaiverDate"
+        required
+      />
+    </div>
+    <div>
+      <label class="form-label" for="assemblyWaiverReason"
+        >Причина освобождения</label
+      ><input
+        class="form-control"
+        id="assemblyWaiverReason"
+        minlength="3"
+        maxlength="500"
+        required
+        placeholder="Например: сбор отменён командованием"
+      />
+    </div>
+    <label class="waiver-refund"
+      ><input type="checkbox" id="assemblyWaiverRefund" /> Также вернуть уже
+      списанные бишопкоины за этот сбор</label
+    >
+    <p class="hint">
+      Без этой отметки уже выполненные списания не меняются. Перед применением
+      будут показаны отменяемые списания и суммы возврата.
+    </p>
+    <button class="btn btn-primary" id="assemblyWaiverPreview" type="submit">
+      Предварительный просмотр
+    </button>
+  </form>
+  <p
+    class="hint"
+    id="assemblyWaiverStatus"
+    role="status"
+    aria-live="polite"
+  ></p>
+</div>
+<dialog id="assemblyWaiverDialog" aria-labelledby="assemblyWaiverTitle">
+  <h2 id="assemblyWaiverTitle">Освобождение всех участников</h2>
+  <p id="assemblyWaiverSummary"></p>
+  <p id="assemblyWaiverScope">
+    Действует на всех участников выбранного сбора, в том числе если проверка
+    подготовит списания позже. Другие сборы не затрагиваются. Подтверждение
+    действительно 5 минут.
+  </p>
+  <p id="assemblyWaiverWarnings" class="hint"></p>
+  <div class="waiver-scroll">
+    <table class="waiver-table">
+      <thead>
+        <tr>
+          <th>Игрок</th>
+          <th>Отменяем списание, БК</th>
+          <th>Возвращаем, БК</th>
+          <th>Баланс после возврата, БК</th>
+        </tr>
+      </thead>
+      <tbody id="assemblyWaiverRows"></tbody>
+    </table>
+  </div>
+  <div class="action-row mt-3">
+    <button class="btn" id="assemblyWaiverCancel" type="button">Отмена</button
+    ><button class="btn btn-primary" id="assemblyWaiverConfirm" type="button">
+      Подтвердить освобождение
+    </button>
+  </div>
+</dialog>
+<style>
+  .waiver-form {
+    display: grid;
+    gap: 14px;
+    margin: 18px 0;
+  }
+  .waiver-refund {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+  .waiver-refund input {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+  }
+  #assemblyWaiverDialog {
+    width: min(1000px, 94vw);
+    max-height: 85vh;
+    overflow: auto;
+    background: #172131;
+    color: var(--text);
+    border: 1px solid #526683;
+    border-radius: 12px;
+    padding: 24px;
+  }
+  #assemblyWaiverDialog::backdrop {
+    background: #000a;
+  }
+  .waiver-scroll {
+    overflow-x: auto;
+  }
+  .waiver-table {
+    width: 100%;
+    min-width: 540px;
+    border-collapse: collapse;
+  }
+  .waiver-table td,
+  .waiver-table th {
+    padding: 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--line);
+  }
+</style>
+<script>
+  (() => {
+    const $ = (id) => document.getElementById(id);
+    const money = new Intl.NumberFormat("ru-RU", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+    const node = (tag, text) => {
+      const n = document.createElement(tag);
+      n.textContent = text;
+      return n;
+    };
+    const dialog = $("assemblyWaiverDialog");
+    let prepared = null,
+      requestBody = null,
+      busy = false,
+      statusVersion = 0;
+    async function json(url, options = {}) {
+      const response = await adminFetch(url, { ...options, cache: "no-store" }),
+        data = await response.json();
+      if (!response.ok)
+        throw Error(
+          typeof data.detail === "string"
+            ? data.detail
+            : "Не удалось выполнить запрос",
+        );
+      return data;
+    }
+    async function status() {
+      const version = ++statusVersion,
+        date = $("assemblyWaiverDate").value;
+      if (!date) return;
+      try {
+        const data = await json(
+          "/api/admin/assembly/waiver?event_date=" + encodeURIComponent(date),
+        );
+        if (version !== statusVersion) return;
+        $("assemblyWaiverStatus").textContent = data.waiver
+          ? `Все участники уже освобождены от будущих списаний за ${date}. Причина: ${data.waiver.reason}`
+          : "Общее освобождение за эту дату ещё не задано.";
+      } catch (error) {
+        if (version === statusVersion)
+          $("assemblyWaiverStatus").textContent = error.message;
+      }
+    }
+    window.prepareAssemblyWaiver = (date) => {
+      $("assemblyWaiverDate").value = date;
+      $("assemblyWaiverRefund").checked = false;
+      $("assemblyWaiverCard").scrollIntoView({
+        block: "start",
+        behavior: "smooth",
+      });
+      $("assemblyWaiverReason").focus({ preventScroll: true });
+      status();
+    };
+    $("assemblyWaiverDate").addEventListener("change", status);
+    $("assemblyWaiverForm").addEventListener("submit", async (event) => {
+      event.preventDefault();
+      if (busy) return;
+      busy = true;
+      $("assemblyWaiverPreview").disabled = true;
+      requestBody = {
+        event_date: $("assemblyWaiverDate").value,
+        reason: $("assemblyWaiverReason").value,
+        refund: $("assemblyWaiverRefund").checked,
+      };
+      try {
+        prepared = await json("/api/admin/assembly/waive", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ...requestBody, preview: true }),
+        });
+        $("assemblyWaiverSummary").textContent =
+          `Сбор ${prepared.event_date}. Отменяем ожидающие списания: ${prepared.pending_count} на ${money.format(prepared.cancelled_cents / 100)} БК. Возврат: ${prepared.refund_count} игрокам, всего ${money.format(prepared.refund_cents / 100)} БК. Причина: ${requestBody.reason}`;
+        $("assemblyWaiverWarnings").textContent =
+          (prepared.already_waived
+            ? "Общее освобождение за эту дату уже действует. "
+            : "") +
+          (prepared.skipped.length
+            ? `Не удаётся вернуть средства: профили не найдены для ${prepared.skipped.length} записей. Такие суммы не начисляются другим игрокам.`
+            : "");
+        $("assemblyWaiverRows").replaceChildren();
+        for (const row of prepared.rows) {
+          const tr = document.createElement("tr");
+          tr.append(
+            node("td", row.name),
+            node("td", money.format(row.cancelled_cents / 100)),
+            node("td", money.format(row.refund_cents / 100)),
+            node(
+              "td",
+              row.balance === null
+                ? "Не меняется"
+                : money.format(row.balance + row.refund_cents / 100),
+            ),
+          );
+          $("assemblyWaiverRows").append(tr);
+        }
+        $("assemblyWaiverConfirm").disabled = !prepared.action_needed;
+        dialog.showModal();
+      } catch (error) {
+        $("assemblyWaiverStatus").textContent = error.message;
+      } finally {
+        busy = false;
+        $("assemblyWaiverPreview").disabled = false;
+      }
+    });
+    dialog.addEventListener("cancel", event => { if (busy) event.preventDefault(); });
+    $("assemblyWaiverCancel").addEventListener("click", () => dialog.close());
+    $("assemblyWaiverConfirm").addEventListener("click", async () => {
+      if (!prepared || busy) return;
+      busy = true;
+      $("assemblyWaiverConfirm").disabled = true;
+      $("assemblyWaiverCancel").disabled = true;
+      try {
+        const data = await json("/api/admin/assembly/waive", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-ST9-Confirmation": prepared.confirmation,
+          },
+          body: JSON.stringify(requestBody),
+        });
+        dialog.close();
+        $("assemblyWaiverStatus").textContent =
+          `Все участники освобождены от будущих списаний за ${data.event_date}. Отменено ожидающих списаний: ${data.pending_count}. Возвращено: ${money.format(data.refund_cents / 100)} БК.`;
+        await loadAssemblyStatus(true);
+      } catch (error) {
+        dialog.close();
+        $("assemblyWaiverStatus").textContent = error.message;
+      } finally {
+        busy = false;
+        $("assemblyWaiverCancel").disabled = false;
+        prepared = null;
+      }
+    });
+  })();
+</script>
+{% endif %}

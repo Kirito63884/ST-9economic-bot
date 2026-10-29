@@ -33,6 +33,10 @@ def report_pages(db, now):
         "Группы — по последней сохранённой синхронизации Discord. Один участник может входить в несколько групп.",
     ]
     intro.extend(f"{label}: {summary['counts'][key]}" for key, label in LABELS.items())
+    if summary.get("deductions_waived"):
+        intro.append(
+            "За этот сбор все освобождены от списаний. Категории ниже отражают фактическое присутствие и рапорты."
+        )
     if not summary["reports_ready"]:
         intro.append("Рапорты пока не проверены полностью. Сводка предварительная.")
     if not summary["membership_complete"]:

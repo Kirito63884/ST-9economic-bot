@@ -520,6 +520,11 @@ def apply_assessments(db, event_date, member_ids, reports, now=None, defer=True)
             exclusion = exception_for(
                 db, user.id, "assembly", "absence_penalty", event_date
             )
+            from assembly_waivers import active_waiver
+
+            if active_waiver(db, event_date):
+                _assessment(db, event, sid, user, "waived", now)
+                continue
             if exclusion:
                 _assessment(db, event, sid, user, "exempted", now)
                 continue
@@ -560,6 +565,11 @@ def finalize_penalties(db, event_date, now=None):
             continue
         if user.deleted_at is not None:
             row.outcome = "unregistered"
+            continue
+        from assembly_waivers import active_waiver
+
+        if active_waiver(db, event_date):
+            row.outcome = "waived"
             continue
         if exception_for(db, user.id, "assembly", "absence_penalty", event_date):
             row.outcome = "exempted"

@@ -254,8 +254,11 @@ def assembly_summary(db, users, now, event_date=None):
                 "evidence": evidence,
             }
         )
+    from assembly_waivers import active_waiver
+
     return {
         "date": day,
+        "deductions_waived": bool(active_waiver(db, day)),
         "starts_at": iso(start),
         "ends_at": iso(end),
         "members": result,

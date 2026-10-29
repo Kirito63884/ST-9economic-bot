@@ -320,7 +320,7 @@
         if (version !== summaryVersion) return;
         $("assemblySummaryDate").value = data.date;
         $("assemblySummaryStatus").textContent =
-          `${data.date}, 19:00–22:00 МСК. ${data.reports_ready ? "Рапорты проверены." : "Проверка рапортов не завершена."} ${data.membership_complete ? "Есть сохранённый состав на момент сбора." : "Состав на дату неполный: показаны только доказанно состоявшие тогда в Discord участники."} Группы — по текущему составу Discord. При неполных данных отсутствие не утверждается.`;
+          `${data.date}, 19:00–22:00 МСК. ${data.deductions_waived ? "Все освобождены от списаний за этот сбор. " : ""}${data.reports_ready ? "Рапорты проверены." : "Проверка рапортов не завершена."} ${data.membership_complete ? "Есть сохранённый состав на момент сбора." : "Состав на дату неполный: показаны только доказанно состоявшие тогда в Discord участники."} Группы — по текущему составу Discord. При неполных данных отсутствие не утверждается.`;
         const root = $("assemblySummaryResult");
         root.append(
           metrics(Object.entries(labels).map(([k, v]) => [v, data.counts[k]])),
