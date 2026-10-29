@@ -247,3 +247,21 @@ Date-scoped assembly waivers and optional refunds, 2026-10-29:
   .env/database/collector sentinels. SQLite backup and only web/bot service selection
   retained from the verified workspace installer. Schema remains unchanged.
 - Ruff E9/F, shell syntax and rendered JavaScript checks pass.
+
+Award gallery and all saved Protocol lists, 2026-10-29:
+- Full isolated suite: 562 passed, no failures/skips; two existing dependency warnings.
+- Eight additional cases cover anonymous/player denial, junior/senior access,
+  private/no-store responses, all 18 export types and eight published categories,
+  clan metrics, future saved categories, foreign-source rejection, search and
+  bounded pagination. A 56-player TXT retains every ID across 50+6 rows without
+  inventing ranks/values or producing award/history writes.
+- Chromium with isolated SQLite: native catalog tab, medal/distinction filters,
+  search, live custom design updates, portraits/actual award badges, all Protocol
+  category groups, official podium places, literal hostile names, full-list paging,
+  unknown metrics, public catalog and 390px mobile layout. Zero pageerror events.
+- Eight isolated installer paths cover success/copy/preflight/health failure for
+  both prior-worker-upgrade and already-current-worker installations. File rollback,
+  removal of new files, database backup, untouched .env/database/collector sentinels
+  and conditional bot versus web-only service selection verified.
+- Shell syntax, Ruff E9/F and whitespace checks pass. Live Protocol collection was
+  not exercised from the cloud environment; the view uses existing cached records.

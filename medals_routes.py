@@ -58,6 +58,51 @@ async def medal_checker():
         await asyncio.sleep(60)
 
 
+def catalog_context(db):
+    from automation_control import setting
+
+    medals = named_catalog(db, {**MANUAL_MEDALS, **MEDAL_CATALOG})
+    distinctions = named_catalog(db, {**DISTINCTIONS, **MANUAL_DISTINCTIONS})
+    rules = {
+        "gold_star": f"{setting(db, 'weekly_gold_rank')}-е место по убийствам за прошлую неделю среди всех игроков Protocol",
+        "silver_star": f"{setting(db, 'weekly_silver_rank')}-е место по убийствам за прошлую неделю среди всех игроков Protocol",
+        "bronze_star": f"{setting(db, 'weekly_bronze_rank')}-е место по убийствам за прошлую неделю среди всех игроков Protocol",
+        "outstanding_service": f"Топ-{setting(db, 'weekly_cmd_rank')} за прошлую неделю по победам командиром стороны",
+        "merit": f"Прошлая неделя: топ-{setting(db, 'weekly_merit_kills_rank')} по убийствам, топ-{setting(db, 'weekly_merit_wins_rank')} по победам или топ-{setting(db, 'weekly_merit_damage_rank')} по урону",
+        "good_conduct": f"{setting(db, 'medal_good_voice_hours')} часов в войсах клана без AFK и {setting(db, 'medal_good_protocol_hours')} часов на Protocol",
+        "infantry_blue": f"{setting(db, 'medal_combat_hours')} часов на Protocol и K/D не ниже {setting(db, 'medal_combat_i_kd')}",
+        "infantry_red": f"{setting(db, 'medal_combat_hours')} часов на Protocol и K/D не ниже {setting(db, 'medal_combat_ii_kd')}",
+        "infantry_green": f"{setting(db, 'medal_combat_hours')} часов на Protocol и K/D не ниже {setting(db, 'medal_combat_iii_kd')}",
+        "purple_heart": f"Не менее {setting(db, 'medal_purple_hours')} часов на Protocol и K/D ниже {setting(db, 'medal_purple_kd_below')}",
+        "best_pilot": "1-е место завершённой недели Protocol в разделе «Пилот»",
+        "squad_leader": f"Топ-{setting(db, 'weekly_squad_leader_rank')} за прошлую неделю по победам сквадным среди всех игроков Protocol",
+        "anti_tank": f"Топ-{setting(db, 'weekly_anti_tank_rank')} за прошлую неделю по уничтожению техники трубами и тандемами",
+        "best_crew": f"Топ-{setting(db, 'weekly_best_crew_rank')} по урону за прошлую неделю",
+        "medical_aid": f"Топ-{setting(db, 'weekly_merit_revive_rank')} за прошлую неделю по поднятиям",
+        "best_medic": "Топ-3 за прошлую неделю по часам на ките медика Medic",
+        "best_knife": f"Топ-{setting(db, 'weekly_best_knife_rank')} за прошлую неделю по ножевым убийствам",
+    }
+    rules["best_driver"] = (
+        "1-е место завершённой недели Protocol в разделе «Экипаж» (мехвод)"
+    )
+    for target in (medals, distinctions):
+        for code, rule in rules.items():
+            if code in target:
+                target[code] = (target[code][0], rule, *target[code][2:])
+    return {
+        "catalog": medals,
+        "manual_medals": MANUAL_MEDALS,
+        "distinctions": distinctions,
+        "manual_distinctions": MANUAL_DISTINCTIONS,
+        "blocked": {**BLOCKED, **BLOCKED_MEDALS},
+        "asset_suffix": ASSET_SUFFIX,
+        "award_images": {
+            code: image_path(code, db) for code in {**CATALOG, **MANUAL_CATALOG}
+        },
+        "rewards": prices(db),
+    }
+
+
 def make_router(get_user, get_db, templates):
     router = APIRouter()
     from award_design import make_router as make_design_router
@@ -81,49 +126,10 @@ def make_router(get_user, get_db, templates):
 
     @router.get("/medals")
     async def catalog(request: Request, user=Depends(get_user), db=Depends(get_db)):
-        from automation_control import setting
-
-        medals = named_catalog(db, {**MANUAL_MEDALS, **MEDAL_CATALOG})
-        distinctions = named_catalog(db, {**DISTINCTIONS, **MANUAL_DISTINCTIONS})
-        rules = {
-            "gold_star": f"{setting(db, 'weekly_gold_rank')}-е место по убийствам за прошлую неделю среди всех игроков Protocol",
-            "silver_star": f"{setting(db, 'weekly_silver_rank')}-е место по убийствам за прошлую неделю среди всех игроков Protocol",
-            "bronze_star": f"{setting(db, 'weekly_bronze_rank')}-е место по убийствам за прошлую неделю среди всех игроков Protocol",
-            "outstanding_service": f"Топ-{setting(db, 'weekly_cmd_rank')} за прошлую неделю по победам командиром стороны",
-            "merit": f"Прошлая неделя: топ-{setting(db, 'weekly_merit_kills_rank')} по убийствам, топ-{setting(db, 'weekly_merit_wins_rank')} по победам или топ-{setting(db, 'weekly_merit_damage_rank')} по урону",
-            "good_conduct": f"{setting(db, 'medal_good_voice_hours')} часов в войсах клана без AFK и {setting(db, 'medal_good_protocol_hours')} часов на Protocol",
-            "infantry_blue": f"{setting(db, 'medal_combat_hours')} часов на Protocol и K/D не ниже {setting(db, 'medal_combat_i_kd')}",
-            "infantry_red": f"{setting(db, 'medal_combat_hours')} часов на Protocol и K/D не ниже {setting(db, 'medal_combat_ii_kd')}",
-            "infantry_green": f"{setting(db, 'medal_combat_hours')} часов на Protocol и K/D не ниже {setting(db, 'medal_combat_iii_kd')}",
-            "purple_heart": f"Не менее {setting(db, 'medal_purple_hours')} часов на Protocol и K/D ниже {setting(db, 'medal_purple_kd_below')}",
-            "best_pilot": "1-е место завершённой недели Protocol в разделе «Пилот»",
-            "squad_leader": f"Топ-{setting(db, 'weekly_squad_leader_rank')} за прошлую неделю по победам сквадным среди всех игроков Protocol",
-            "anti_tank": f"Топ-{setting(db, 'weekly_anti_tank_rank')} за прошлую неделю по уничтожению техники трубами и тандемами",
-            "best_crew": f"Топ-{setting(db, 'weekly_best_crew_rank')} по урону за прошлую неделю",
-            "medical_aid": f"Топ-{setting(db, 'weekly_merit_revive_rank')} за прошлую неделю по поднятиям",
-            "best_medic": "Топ-3 за прошлую неделю по часам на ките медика Medic",
-            "best_knife": f"Топ-{setting(db, 'weekly_best_knife_rank')} за прошлую неделю по ножевым убийствам",
-        }
-        for target in (medals, distinctions):
-            for code, rule in rules.items():
-                if code in target:
-                    target[code] = (target[code][0], rule, *target[code][2:])
         return templates.TemplateResponse(
             request=request,
             name="medals.html",
-            context={
-                "user": user,
-                "catalog": medals,
-                "manual_medals": MANUAL_MEDALS,
-                "distinctions": distinctions,
-                "manual_distinctions": MANUAL_DISTINCTIONS,
-                "blocked": {**BLOCKED, **BLOCKED_MEDALS},
-                "asset_suffix": ASSET_SUFFIX,
-                "award_images": {
-                    code: image_path(code, db) for code in {**CATALOG, **MANUAL_CATALOG}
-                },
-                "rewards": prices(db),
-            },
+            context={"user": user, **catalog_context(db)},
         )
 
     @router.get("/medal-assets/{filename}")

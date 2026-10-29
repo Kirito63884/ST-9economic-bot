@@ -1,0 +1,655 @@
+<section
+  id="panel-protocol-rankings"
+  role="tabpanel"
+  aria-labelledby="tab-protocol-rankings"
+  hidden
+>
+  <div class="section-card protocol-board">
+    <div class="section-heading">
+      <div>
+        <span class="award-kicker">PROTOCOL · СОХРАНЁННАЯ СТАТИСТИКА</span>
+        <h2>Все списки Protocol</h2>
+        <p>
+          Достижения, опубликованные итоги недель и статистика состава — с
+          исходными местами и значениями.
+        </p>
+      </div>
+      <button type="button" class="btn" id="protocolListsRefresh">
+        Обновить списки
+      </button>
+    </div>
+    <div class="protocol-list-tools">
+      <div class="award-segments" id="protocolListSources">
+        <button
+          type="button"
+          data-source-group="achievements"
+          aria-pressed="true"
+        >
+          Достижения · TXT</button
+        ><button type="button" data-source-group="weekly" aria-pressed="false">
+          Итоги недель</button
+        ><button type="button" data-source-group="clan" aria-pressed="false">
+          Состав клана
+        </button>
+      </div>
+      <div>
+        <label class="form-label" for="protocolListWeek">Период</label
+        ><select class="form-select" id="protocolListWeek"></select>
+      </div>
+      <div>
+        <label class="form-label" for="protocolListCategorySearch"
+          >Найти категорию</label
+        ><input
+          class="form-control"
+          id="protocolListCategorySearch"
+          type="search"
+          placeholder="Пилот, мехвод, поднятия…"
+        />
+      </div>
+    </div>
+    <p
+      id="protocolListsStatus"
+      class="medal-source"
+      role="status"
+      aria-live="polite"
+    ></p>
+    <div id="protocolListCards" class="protocol-categories"></div>
+  </div>
+  <div class="section-card protocol-board" id="protocolListDetail" hidden>
+    <div class="section-heading">
+      <div>
+        <span class="award-kicker" id="protocolDetailPeriod"></span>
+        <h2 id="protocolDetailTitle"></h2>
+        <p class="medal-source" id="protocolDetailStatus" role="status"></p>
+      </div>
+      <button type="button" class="btn" id="protocolDetailClose">
+        К категориям ↑
+      </button>
+    </div>
+    <div class="protocol-list-tools">
+      <div class="protocol-player-search">
+        <label class="form-label" for="protocolListPlayerSearch"
+          >Найти игрока в полном списке</label
+        ><input
+          class="form-control"
+          id="protocolListPlayerSearch"
+          type="search"
+          maxlength="200"
+          placeholder="Ник или Steam ID"
+        />
+      </div>
+      <a class="btn" id="protocolDetailDownload" hidden>Скачать полный TXT</a
+      ><a
+        class="btn"
+        id="protocolDetailSource"
+        target="_blank"
+        rel="noopener noreferrer"
+        >Открыть источник ↗</a
+      >
+    </div>
+    <div id="protocolListRows" class="protocol-ranking-rows"></div>
+    <div class="protocol-pages">
+      <button class="btn" id="protocolListPrev" type="button">Назад</button
+      ><span id="protocolListPage"></span
+      ><button class="btn" id="protocolListNext" type="button">Далее</button>
+    </div>
+  </div>
+</section>
+<style>
+  #protocolListDetail {
+    min-height: calc(100svh - 40px);
+    scroll-margin-top: 20px;
+  }
+  .protocol-board {
+    color: var(--text);
+  }
+  .protocol-list-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 16px;
+    margin: 20px 0;
+  }
+  .protocol-list-tools > div {
+    max-width: 100%;
+  }
+  .protocol-player-search {
+    flex: 1;
+    min-width: min(100%, 250px);
+  }
+  .protocol-categories {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 255px), 1fr));
+    gap: 14px;
+  }
+  .protocol-category {
+    background: linear-gradient(140deg, #1c2b40, #131c2b);
+    color: #e9eff9;
+    border: 1px solid #354863;
+    border-radius: 14px;
+    padding: 18px;
+    text-align: left;
+    cursor: pointer;
+    min-height: 170px;
+    transition: border-color 0.15s;
+  }
+  .protocol-category:hover,
+  .protocol-category[aria-pressed="true"] {
+    border-color: #a9c3eb;
+  }
+  .protocol-category:disabled {
+    opacity: 0.55;
+    cursor: default;
+    background: #141c28;
+  }
+  .protocol-category-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .protocol-category-icon {
+    display: grid;
+    place-items: center;
+    width: 35px;
+    height: 35px;
+    border: 1px solid #56739b;
+    border-radius: 10px;
+    color: #b7d0f5;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+  .protocol-category-header strong {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  .protocol-category-meta {
+    color: #8fa6c5;
+    font-size: 11px;
+    margin: 8px 0;
+  }
+  .protocol-category-preview {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+    padding: 5px 0;
+    border-top: 1px solid #35486377;
+    font-size: 12px;
+  }
+  .protocol-category-preview span:first-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .protocol-category-preview span:last-child {
+    color: #d9c28d;
+    white-space: nowrap;
+  }
+  .protocol-ranking-rows {
+    display: grid;
+    gap: 10px;
+    margin: 18px 0;
+  }
+  .protocol-ranking-row {
+    display: flex;
+    gap: 14px;
+    align-items: center;
+    border: 1px solid #33435d;
+    border-radius: 12px;
+    background: #142031;
+    padding: 16px;
+  }
+  .protocol-rank {
+    width: 42px;
+    height: 42px;
+    flex-shrink: 0;
+    display: grid;
+    place-items: center;
+    background: #21324c;
+    border: 1px solid #465d7e;
+    color: #a7bddd;
+    border-radius: 12px;
+    font-weight: 700;
+    font-size: 16px;
+  }
+  .protocol-rank.place-1 {
+    color: #f0d28a;
+    border-color: #a58a48;
+    background: #473f2c;
+  }
+  .protocol-rank.place-2 {
+    color: #d9e3f1;
+    border-color: #8498b5;
+    background: #343f51;
+  }
+  .protocol-rank.place-3 {
+    color: #e7b58e;
+    border-color: #936744;
+    background: #443329;
+  }
+  .protocol-ranking-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .protocol-ranking-name {
+    display: block;
+    font-size: 15px;
+    font-weight: 650;
+    color: #e3ebf9;
+    overflow-wrap: anywhere;
+  }
+  .protocol-ranking-meta {
+    color: #8ea5c6;
+    font-size: 11px;
+    margin-top: 4px;
+    overflow-wrap: anywhere;
+  }
+  .protocol-ranking-value {
+    text-align: right;
+    color: #dce9fa;
+    font-size: 22px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .protocol-ranking-value small {
+    display: block;
+    font-size: 10px;
+    font-weight: 400;
+    color: #8ea5c6;
+  }
+  .protocol-row-metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 9px;
+  }
+  .protocol-row-metrics span {
+    padding: 5px 8px;
+    background: #223149;
+    border-radius: 6px;
+    color: #b9cce8;
+    font-size: 11px;
+  }
+  .protocol-pages {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    color: #9db0c9;
+    font-size: 12px;
+  }
+  @media (max-width: 600px) {
+    .protocol-list-tools > div {
+      width: 100%;
+    }
+    .protocol-ranking-row {
+      gap: 10px;
+      padding: 12px;
+      flex-wrap: wrap;
+    }
+    .protocol-ranking-value {
+      font-size: 18px;
+      margin-left: auto;
+    }
+    .protocol-rank {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+    }
+  }
+</style>
+<script>
+  (() => {
+    const $ = (id) => document.getElementById(id),
+      node = (tag, value, cls) => {
+        const n = document.createElement(tag);
+        if (value !== undefined) n.textContent = value;
+        if (cls) n.className = cls;
+        return n;
+      };
+    const numbers = new Intl.NumberFormat("ru-RU", {
+        maximumFractionDigits: 2,
+      }),
+      dates = new Intl.DateTimeFormat("ru-RU", {
+        timeZone: "Europe/Moscow",
+        dateStyle: "short",
+        timeStyle: "short",
+      });
+    let index = null,
+      group = "achievements",
+      selected = null,
+      offset = 0,
+      total = 0,
+      generation = 0,
+      searchTimer;
+    const stamp = (value) =>
+      value ? dates.format(new Date(value)) + " МСК" : "дата не сохранена";
+    const metric = (value, unit) =>
+      value === null || value === undefined
+        ? "Нет числовых данных"
+        : numbers.format(value) + (unit === "hours" ? " ч" : "");
+    function cards() {
+      if (!index) return;
+      const period = $("protocolListWeek").value,
+        q = $("protocolListCategorySearch")
+          .value.trim()
+          .toLocaleLowerCase("ru");
+      $("protocolListWeek").disabled = group === "clan";
+      const available = index.items.filter(
+        (item) => item.group === group && (!item.week || item.week === period),
+      );
+      const categories = index.categories.filter(
+        (item) => item.group === group,
+      );
+      for (const item of available)
+        if (!categories.some((c) => c.kind === item.kind))
+          categories.push(item);
+      $("protocolListCards").replaceChildren();
+      let loaded = 0,
+        shown = 0;
+      for (const category of categories) {
+        const item = available.find((v) => v.kind === category.kind),
+          label = item?.title || category.title;
+        const aliases = {
+          crew: "мехвод механик водитель",
+          pilot: "летчик лётчик вертолет вертолёт",
+          mg: "пулемётчик пулеметчик",
+          sapper: "инженер сапёр сапер",
+          medic: "медик медпомощь",
+          revives: "поднятия ревайвы",
+          fob: "подрывник",
+          fobweek: "подрывник",
+        };
+        if (
+          q &&
+          !(label + " " + (aliases[category.kind] || ""))
+            .toLocaleLowerCase("ru")
+            .includes(q)
+        )
+          continue;
+        shown++;
+        if (item) loaded++;
+        const button = node("button", undefined, "protocol-category"),
+          header = node("div", undefined, "protocol-category-header");
+        button.type = "button";
+        button.dataset.kind = category.kind;
+        button.disabled = !item;
+        button.setAttribute(
+          "aria-pressed",
+          String(selected?.id === item?.id && !!item),
+        );
+        header.append(
+          node("span", category.icon || "◈", "protocol-category-icon"),
+          node("strong", label),
+        );
+        button.append(header);
+        button.append(
+          node(
+            "div",
+            item
+              ? `${item.count} игроков · ${item.week ? (item.final ? "итог недели" : "текущий топ") : "за всё время"}`
+              : "Список ещё не сохранён",
+            "protocol-category-meta",
+          ),
+        );
+        if (item) {
+          if (item.group === "achievements") {
+            button.append(
+              node(
+                "div",
+                `${item.file_verified ? "TXT подтверждён" : "TXT ожидает проверки"} · ${item.full_file_saved ? "полный список сохранён" : "сохранены строки страницы"}`,
+                "protocol-category-meta",
+              ),
+            );
+          }
+          for (const row of item.preview || []) {
+            const line = node("div", undefined, "protocol-category-preview");
+            line.append(
+              node("span", `${row.rank ? row.rank + ". " : ""}${row.name}`),
+              node("span", metric(row.value, item.unit)),
+            );
+            button.append(line);
+          }
+          button.append(
+            node(
+              "div",
+              "Обновлено " + stamp(item.checked_at),
+              "protocol-category-meta",
+            ),
+          );
+          button.addEventListener("click", () => choose(item));
+        } else
+          button.append(
+            node(
+              "div",
+              "Фоновый сборщик пока не получил подтверждённые данные за этот период.",
+              "protocol-category-meta",
+            ),
+          );
+        $("protocolListCards").append(button);
+      }
+      $("protocolListsStatus").textContent =
+        `Сохранено категорий: ${loaded} из ${shown}${group !== "clan" && period ? " · неделя с " + period : ""}. Показаны все категории источника, включая ещё не загруженные. Обновление списка не запускает выдачу наград.`;
+    }
+    async function json(url) {
+      const r = await adminFetch(url, {
+          cache: "no-store",
+          signal: AbortSignal.timeout(15000),
+        }),
+        d = await r.json();
+      if (!r.ok)
+        throw Error(
+          typeof d.detail === "string"
+            ? d.detail
+            : "Не удалось загрузить список",
+        );
+      return d;
+    }
+    window.loadProtocolRankings = async (force = false) => {
+      if (index && !force) return;
+      $("protocolListsStatus").textContent =
+        "Читаем сохранённые списки Protocol…";
+      try {
+        const data = await json("/api/admin/protocol-lists"),
+          old = $("protocolListWeek").value;
+        index = data;
+        $("protocolListWeek").replaceChildren();
+        for (const week of data.weeks) {
+          const option = node("option", "Неделя с " + week);
+          option.value = week;
+          $("protocolListWeek").append(option);
+        }
+        if (data.weeks.includes(old)) $("protocolListWeek").value = old;
+        else if (data.weeks.includes(data.default_week))
+          $("protocolListWeek").value = data.default_week;
+        cards();
+        if (selected) {
+          const updated = data.items.find((i) => i.id === selected.id);
+          if (updated) choose(updated);
+        }
+      } catch (error) {
+        $("protocolListsStatus").textContent = error.message;
+      }
+    };
+    async function choose(item) {
+      selected = item;
+      offset = 0;
+      $("protocolListPlayerSearch").value = "";
+      $("protocolListDetail").hidden = false;
+      $("protocolDetailTitle").textContent = item.title;
+      $("protocolDetailPeriod").textContent = item.week
+        ? "НЕДЕЛЯ С " + item.week
+        : "ЗА ВСЁ ВРЕМЯ";
+      $("protocolDetailSource").href = item.source;
+      cards();
+      await rows();
+      if (selected?.id !== item.id) return;
+      $("protocolListDetail").scrollIntoView({
+        block: "start",
+        behavior: "smooth",
+      });
+    }
+    async function rows() {
+      if (!selected) return;
+      const version = ++generation,
+        item = selected;
+      $("protocolListRows").replaceChildren();
+      $("protocolListPrev").disabled = true;
+      $("protocolListNext").disabled = true;
+      $("protocolDetailDownload").hidden = true;
+      $("protocolDetailStatus").textContent = "Загружаем участников…";
+      try {
+        const d = await json(
+          item.endpoint +
+            "?" +
+            new URLSearchParams({
+              q: $("protocolListPlayerSearch").value,
+              offset: String(offset),
+              limit: "50",
+            }),
+        );
+        if (version !== generation) return;
+        total = d.total;
+        $("protocolDetailStatus").textContent =
+          `Обновлено ${stamp(d.checked_at)}. ${d.week ? (d.final ? "Завершённый период." : "Промежуточные результаты могут изменяться.") : "Сохранённые данные за всё время."} ${d.coverage || ""}${d.group === "clan" ? " Часы, сид, K/D и боевые показатели приведены из таблицы состава." : " Числа показаны только там, где их опубликовал источник; позиция в TXT не означает место в рейтинге."}`;
+        if (item.group === "achievements") {
+          $("protocolDetailStatus").textContent +=
+            ` ${d.file_verified ? "TXT подтверждён." : "TXT пока не подтверждён."} ${d.full_file_saved ? "Доступен полный сохранённый список." : "Пока сохранены только строки страницы; полный TXT появится после успешного обновления сборщика."}`;
+        }
+        for (const row of d.rows) {
+          const box = node("article", undefined, "protocol-ranking-row"),
+            rank = Number.isInteger(row.rank) && row.rank > 0 ? row.rank : null,
+            badge = node(
+              "span",
+              rank ? String(rank) : String(row.position),
+              "protocol-rank" + (rank && rank <= 3 ? " place-" + rank : ""),
+            );
+          badge.title = rank
+            ? "Опубликованное место"
+            : "Позиция в сохранённом списке";
+          const info = node("div", undefined, "protocol-ranking-info"),
+            name = node("a", row.name, "protocol-ranking-name");
+          name.href =
+            "https://protocol-squad.ru/player/" +
+            encodeURIComponent(row.steam_id);
+          name.target = "_blank";
+          name.rel = "noopener noreferrer";
+          info.append(
+            name,
+            node(
+              "div",
+              `${row.steam_id}${row.user_id ? " · профиль на сайте" : " · без связанного профиля"}`,
+              "protocol-ranking-meta",
+            ),
+          );
+          if (row.metrics) {
+            const values = node("div", undefined, "protocol-row-metrics");
+            for (const [key, label] of Object.entries({
+              hours: "Часы",
+              seed_hours: "Сид",
+              kd: "K/D",
+              kills: "Убийства",
+              deaths: "Смерти",
+            }))
+              values.append(
+                node(
+                  "span",
+                  label +
+                    ": " +
+                    (row.metrics[key] === null
+                      ? "—"
+                      : numbers.format(row.metrics[key])),
+                ),
+              );
+            info.append(values);
+          }
+          box.append(badge, info);
+          if (!row.metrics) {
+            const value = node(
+              "div",
+              metric(row.value, d.unit),
+              "protocol-ranking-value",
+            );
+            value.append(
+              node(
+                "small",
+                rank ? "место подтверждено источником" : "порядок списка TXT",
+              ),
+            );
+            box.append(value);
+          }
+          if (row.user_id) {
+            const link = node("a", "Прогресс →", "btn btn-sm");
+            link.href = "/medals/progress/" + row.user_id;
+            box.append(link);
+          }
+          $("protocolListRows").append(box);
+        }
+        if (!d.rows.length)
+          $("protocolListRows").append(
+            node("p", "Подходящих игроков нет.", "medal-source"),
+          );
+        if (d.full_file_saved && d.file_verified) {
+          $("protocolDetailDownload").hidden = false;
+          $("protocolDetailDownload").href = item.endpoint + "/download";
+        }
+        $("protocolListPage").textContent = total
+          ? `${offset + 1}–${Math.min(offset + 50, total)} из ${total}`
+          : "0 записей";
+        $("protocolListPrev").disabled = offset === 0;
+        $("protocolListNext").disabled = offset + 50 >= total;
+      } catch (error) {
+        if (version === generation)
+          $("protocolDetailStatus").textContent = error.message;
+      }
+    }
+    $("protocolListSources")
+      .querySelectorAll("[data-source-group]")
+      .forEach((button) =>
+        button.addEventListener("click", () => {
+          group = button.dataset.sourceGroup;
+          $("protocolListSources")
+            .querySelectorAll("button")
+            .forEach((b) =>
+              b.setAttribute("aria-pressed", String(b === button)),
+            );
+          selected = null;
+          generation++;
+          $("protocolListDetail").hidden = true;
+          cards();
+        }),
+      );
+    $("protocolListWeek").addEventListener("change", () => {
+      selected = null;
+      generation++;
+      $("protocolListDetail").hidden = true;
+      cards();
+    });
+    $("protocolListCategorySearch").addEventListener("input", cards);
+    $("protocolListsRefresh").addEventListener("click", () =>
+      window.loadProtocolRankings(true),
+    );
+    $("protocolDetailClose").addEventListener("click", () => {
+      $("protocolListDetail").hidden = true;
+      generation++;
+      $("protocolListCards").scrollIntoView({ block: "start" });
+    });
+    $("protocolListPlayerSearch").addEventListener("input", () => {
+      clearTimeout(searchTimer);
+      generation++;
+      searchTimer = setTimeout(() => {
+        offset = 0;
+        rows();
+      }, 250);
+    });
+    $("protocolListPrev").addEventListener("click", () => {
+      offset = Math.max(0, offset - 50);
+      rows();
+    });
+    $("protocolListNext").addEventListener("click", () => {
+      offset += 50;
+      rows();
+    });
+  })();
+</script>

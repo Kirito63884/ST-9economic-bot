@@ -2068,7 +2068,7 @@
   </div>
 </details>
 <details class="admin-nav-group" data-nav-group="awards">
-  <summary class="nav-group-summary">Награды</summary>
+  <summary class="nav-group-summary">Награждения</summary>
   <div class="admin-nav-items">
   <button
     class="nav-item"
@@ -2079,8 +2079,10 @@
     tabindex="-1"
     onclick="switchTab('medals')"
   >
-    <span class="nav-icon">✦</span>Медали и знаки отличия
+    <span class="nav-icon">✦</span>Награды игроков
   </button>
+  <button class="nav-item" id="tab-award-catalog" role="tab" aria-controls="panel-award-catalog" aria-selected="false" tabindex="-1" onclick="switchTab('award-catalog')"><span class="nav-icon">◈</span>Каталог наград</button>
+  <button class="nav-item" id="tab-protocol-rankings" role="tab" aria-controls="panel-protocol-rankings" aria-selected="false" tabindex="-1" onclick="switchTab('protocol-rankings')"><span class="nav-icon">▥</span>Рейтинги Protocol</button>
   <button
     class="nav-item"
     id="tab-award-review"
@@ -2854,6 +2856,9 @@
 {% include "_admin_audit.html" %}
                 {% include "_admin_hub.html" %}
                 {% include "_admin_backups.html" %}
+                {% include "_award_gallery_style.html" %}
+                {% include "_admin_award_catalog.html" %}
+                {% include "_protocol_rankings.html" %}
                 {% include "_admin_medals.html" %}
                 {% include "_admin_automation.html" %}
             </main>
@@ -3204,6 +3209,7 @@ function switchTab(name, focus = false) {
     if (name === "assembly-summary") window.loadAssemblySummary();
     if (name === "wallet-questions") window.loadWalletQuestions();
     if (name === "groups") window.loadClanGroups();
+    if (name === "protocol-rankings") window.loadProtocolRankings();
     if (name === "audit") window.loadAdminAudit();
     if (name === "statistics") window.loadAdminStatistics?.();
     const selectedTab = document.getElementById("tab-" + name);

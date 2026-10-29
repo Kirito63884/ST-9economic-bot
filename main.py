@@ -86,7 +86,11 @@ from discord_sync import sync_profile_name
 from audit_logs import is_money_log, log_details, page_context as audit_page_context
 from squad_names import admin_game_names
 from medals import visible_awards, sync_manual
-from medals_routes import medal_checker, make_router as make_medals_router
+from medals_routes import (
+    catalog_context,
+    medal_checker,
+    make_router as make_medals_router,
+)
 from automation_admin import make_router as make_automation_router
 from admin_hub import make_router as make_admin_hub_router
 from roster_membership import (
@@ -1352,6 +1356,26 @@ async def admin(
     role_filters, user_role_ids, user_role_labels, user_role_ranks = user_role_context(
         db, active_users
     )
+    award_context = catalog_context(db)
+    from medals import active_awards, MedalAward
+
+    player_awards = {u.id: [] for u in active_users}
+    user_by_discord = {u.discord_id: u for u in active_users}
+    all_awards = {**award_context["catalog"], **award_context["distinctions"]}
+    for award in (
+        active_awards(db)
+        .filter(MedalAward.discord_id.in_(user_by_discord))
+        .order_by(MedalAward.earned_at.desc())
+    ):
+        owner = user_by_discord[award.discord_id]
+        if award.medal in all_awards:
+            player_awards[owner.id].append(
+                {
+                    "name": all_awards[award.medal][0],
+                    "image": award_context["award_images"].get(award.medal),
+                    "symbol": all_awards[award.medal][3],
+                }
+            )
     return templates.TemplateResponse(
         request=request,
         name="admin.html",
@@ -1371,6 +1395,8 @@ async def admin(
             "user_role_labels": user_role_labels,
             "user_role_ranks": user_role_ranks,
             "server_rule_questions": list_server_rule_questions(db),
+            "player_awards": player_awards,
+            **award_context,
         },
     )
 
@@ -5061,3 +5087,7 @@ app.include_router(make_wallet_router(get_user, get_db, templates))
 from assembly_waivers import make_router as make_assembly_waiver_router
 
 app.include_router(make_assembly_waiver_router(get_user, get_db, is_super_admin))
+
+from protocol_rankings import make_router as make_protocol_rankings_router
+
+app.include_router(make_protocol_rankings_router(get_user, get_db))

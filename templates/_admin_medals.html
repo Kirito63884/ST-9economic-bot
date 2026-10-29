@@ -1,484 +1,543 @@
 <section id="panel-medals" role="tabpanel" aria-labelledby="tab-medals" hidden>
-    <div class="section-card">
-        <div class="section-heading">
-            <div>
-                <h2>Медали, знаки отличия и статистика</h2>
-                <p>Администраторы могут снять награду в прогрессе игрока. Роль Discord будет удалена, повторная автовыдача заблокирована. Прогресс любого участника доступен в его карточке.</p>
-            </div>
-            <a class="btn" href="/medals">Каталог ↗</a>
-        </div>
-        <div class="medal-status-line">
-            <strong id="medalAdminState">Проверяем сборщик…</strong><button class="btn btn-sm" id="medalAdminRefresh">Обновить</button>{% if is_super %}<button class="btn btn-sm" id="medalDiscordMatch">Сопоставить роли с Discord</button><button class="btn btn-sm" id="medalRestoreRoles">Восстановить заслуженные роли</button>{% endif %}<span id="medalDiscordMatchResult" role="status" class="small muted"></span>
-        </div>
-        {% include "_award_design.html" %}
-        <p class="medal-source" id="clanStatsState" role="status"></p>
-        <p class="medal-source" id="awardExportsState" role="status"></p>
-        {% include "_protocol_exports_admin.html" %}
-        <div class="medal-summary" id="medalAdminSummary"></div>
-        <p class="medal-source" id="medalAdminSource"></p>
-        <p class="medal-panel-note">При недоступности SQSTAT проверка повторяется каждые 5 минут. Последние успешные данные сохраняются. Новая недельная выдача ждёт проверки всех доступных матчей; неопределённые победы не засчитываются. Уведомления Discord стоят в очереди до успешной отправки. Заслуженные роли проверяются при запуске бота, после изменения ролей и каждые 15 минут. Заслуженные роли восстанавливаются без повторной выплаты. Награды, снятые администратором на сайте, исключены из восстановления и повторных сообщений. По запросу владельца ранее полученные награды повторно объявляются в канале награждений один раз; перезапуск бота или повторная установка не начинают рассылку заново.</p>
-        {% if is_super %}
-        <section class="st-panel mt-3">
-            <h3>Довыдача наград за прошлую неделю</h3>
-            <p class="medal-panel-note">Заново проверит опубликованные топы и TXT Protocol. Если Protocol недоступен, недостающие топы проверяются по полностью собранной завершённой неделе SQSTAT. Кнопка подтверждает выдачу недостающих наград за завершённую прошлую неделю. Уже выданные и снятые награды не дублируются; ручные исключения сохраняются.</p>
-            <button class="btn btn-primary btn-sm"
-                    id="protocolWeekCheck">Проверить прошлую неделю и довыдать награды</button>
-            <p id="protocolWeekCheckStatus" class="medal-source" aria-live="polite"></p>
-        </section>
-        {% endif %}
-        <section class="st-panel mt-3">
-            <h3>Protocol: опубликованный итог прошлой недели</h3>
-            <p class="medal-source" id="protocolAdminPreviousState"></p>
-            <div class="medal-grid" id="protocolAdminPreviousTables"></div>
-            <p class="medal-panel-note">Указаны реальные места из коротких топов Protocol среди всех игроков. Уничтожения техники на этой странице не разделены по оружию; рейтинг стрелков не включает весь необходимый учёт для суммарных убийств. Protocol — основной источник для топ-3 CMD, топ-3 сквадных и опубликованных мест по поднятиям. При отсутствии подтверждённых итогов Protocol резервом служат проверенные недельные топы SQSTAT; неполная неделя наград не даёт. Каждый понедельник по МСК проверяется завершённая прошлая неделя. Статистика состава и TXT-выгрузки проверяются раз в час. Неудачные запросы повторяются не чаще раза в час, успешные данные сохраняются. SQSTAT дополняет остальные доступные условия; BattleMetrics служит резервом по часам на сервере.</p>
-            <a href="https://protocol-squad.ru/week?w=prev"
-               target="_blank"
-               rel="noopener noreferrer">Открыть источник ↗</a>
-        </section>
-        <details class="st-panel mt-3" id="bmDiagnostics">
-            <summary>BattleMetrics · причины недоступности резервных часов</summary>
-            <div id="bmDiagnosticContent" aria-live="polite">Загрузка…</div>
-        </details>
-        <div class="medal-notice mt-3" id="medalDataLimits"></div>
-        <div class="action-row mt-3">
-            <input id="medalPlayerSearch"
-                   class="form-control medal-search"
-                   type="search"
-                   placeholder="Найти игрока по нику или Steam ID"
-                   aria-label="Поиск прогресса игрока">
-        </div>
-        <div class="archive-list mt-3" id="medalPlayerList">
-            {% for u in users %}
-            <div data-medal-player="{{ (u.display_name or u.username)|lower }} {{ u.username|lower }} {{ u.steam_id or '' }}"
-                 class="medal-player-row">
-                <div>
-                    <strong>{{ u.display_name or u.username }}</strong>
-                    <div class="small muted">{{ u.steam_id or 'Steam ID не привязан' }}</div>
-                </div>
-                <a href="/medals/progress/{{ u.id }}" class="btn btn-sm">Прогресс →</a>
-            </div>
-            {% endfor %}
-        </div>
+  <div class="section-card">
+    <div class="section-heading">
+      <div>
+        <h2>Награды игроков</h2>
+        <p>
+          Администраторы могут снять награду в прогрессе игрока. Роль Discord
+          будет удалена, повторная автовыдача заблокирована. Прогресс любого
+          участника доступен в его карточке.
+        </p>
+      </div>
+      <button type="button" class="btn" onclick="switchTab('award-catalog')">
+        Каталог наград</button
+      ><button
+        type="button"
+        class="btn"
+        onclick="switchTab('protocol-rankings')"
+      >
+        Все списки Protocol
+      </button>
     </div>
+    <div class="medal-status-line">
+      <strong id="medalAdminState">Проверяем сборщик…</strong
+      ><button class="btn btn-sm" id="medalAdminRefresh">Обновить</button>{% if
+      is_super %}<button class="btn btn-sm" id="medalDiscordMatch">
+        Сопоставить роли с Discord</button
+      ><button class="btn btn-sm" id="medalRestoreRoles">
+        Восстановить заслуженные роли</button
+      >{% endif %}<span
+        id="medalDiscordMatchResult"
+        role="status"
+        class="small muted"
+      ></span>
+    </div>
+    <p class="medal-source" id="clanStatsState" role="status"></p>
+    <p class="medal-source" id="awardExportsState" role="status"></p>
+    <div class="medal-summary" id="medalAdminSummary"></div>
+    <p class="medal-source" id="medalAdminSource"></p>
+    <p class="medal-panel-note">
+      При недоступности SQSTAT проверка повторяется каждые 5 минут. Последние
+      успешные данные сохраняются. Новая недельная выдача ждёт проверки всех
+      доступных матчей; неопределённые победы не засчитываются. Уведомления
+      Discord стоят в очереди до успешной отправки. Заслуженные роли проверяются
+      при запуске бота, после изменения ролей и каждые 15 минут. Заслуженные
+      роли восстанавливаются без повторной выплаты. Награды, снятые
+      администратором на сайте, исключены из восстановления и повторных
+      сообщений. По запросу владельца ранее полученные награды повторно
+      объявляются в канале награждений один раз; перезапуск бота или повторная
+      установка не начинают рассылку заново.
+    </p>
+    {% if is_super %}
+    <section class="st-panel mt-3">
+      <h3>Довыдача наград за прошлую неделю</h3>
+      <p class="medal-panel-note">
+        Заново проверит опубликованные топы и TXT Protocol. Если Protocol
+        недоступен, недостающие топы проверяются по полностью собранной
+        завершённой неделе SQSTAT. Кнопка подтверждает выдачу недостающих наград
+        за завершённую прошлую неделю. Уже выданные и снятые награды не
+        дублируются; ручные исключения сохраняются.
+      </p>
+      <button class="btn btn-primary btn-sm" id="protocolWeekCheck">
+        Проверить прошлую неделю и довыдать награды
+      </button>
+      <p
+        id="protocolWeekCheckStatus"
+        class="medal-source"
+        aria-live="polite"
+      ></p>
+    </section>
+    {% endif %}
+    <details class="st-panel mt-3" id="bmDiagnostics">
+      <summary>BattleMetrics · причины недоступности резервных часов</summary>
+      <div id="bmDiagnosticContent" aria-live="polite">Загрузка…</div>
+    </details>
+    <div class="medal-notice mt-3" id="medalDataLimits"></div>
+    <div class="action-row mt-3">
+      <input
+        id="medalPlayerSearch"
+        class="form-control medal-search"
+        type="search"
+        placeholder="Найти игрока по нику или Steam ID"
+        aria-label="Поиск прогресса игрока"
+      />
+    </div>
+    <p id="medalPlayerCount" class="medal-source" role="status"></p>
+    <div class="award-people-grid" id="medalPlayerList">
+      {% for u in users %}
+      <article
+        class="award-person"
+        data-medal-player="{{ (u.display_name or u.username)|lower }} {{ u.username|lower }} {{ u.steam_id or '' }}"
+      >
+        <div class="award-person-head">
+          <span class="award-person-avatar" aria-hidden="true"
+            >{{ u.avatar_emoji or (u.display_name or u.username)[:1]|upper
+            }}</span
+          >
+          <div class="award-person-identity">
+            <strong>{{ u.display_name or u.username }}</strong>
+            <div class="award-person-meta">@{{ u.username }}</div>
+          </div>
+        </div>
+        <div class="award-person-roles">
+          {% for label in user_role_labels.get(u.id, []) %}<span
+            >{{ label }}</span
+          >{% endfor %}
+        </div>
+        <div class="award-person-meta">
+          {{ u.steam_id or 'Steam ID ещё не привязан' }}
+        </div>
+        <div class="award-person-awards">
+          {% for a in player_awards.get(u.id, [])[:4] %}{% if a.image %}<img
+            src="{{ a.image }}"
+            alt="{{ a.name }}"
+            title="{{ a.name }}"
+            loading="lazy"
+          />{% else %}<span title="{{ a.name }}">{{ a.symbol }}</span>{% endif
+          %}{% endfor %}<span
+            >Наград: {{ player_awards.get(u.id, [])|length }}</span
+          >
+        </div>
+        <div class="award-person-actions">
+          <button
+            type="button"
+            class="btn btn-sm"
+            onclick="openPlayer({{ u.id }})"
+          >
+            Профиль</button
+          ><a href="/medals/progress/{{ u.id }}" class="btn btn-sm"
+            >Медали и прогресс →</a
+          >
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
 </section>
 <script>
-(() => {
+  (() => {
     const dates = new Intl.DateTimeFormat("ru-RU", {
-            timeZone: "Europe/Moscow",
-            dateStyle: "short",
-            timeStyle: "short",
-        }),
-        stamp = (x) => (x ? dates.format(new Date(x)) + " МСК" : "ещё нет данных");
+        timeZone: "Europe/Moscow",
+        dateStyle: "short",
+        timeStyle: "short",
+      }),
+      stamp = (x) =>
+        x ? dates.format(new Date(x)) + " МСК" : "ещё нет данных";
     let controller = null,
-        generation = 0;
+      generation = 0;
 
     function render(d) {
-        const age = d.checked_at ? (Date.now() - new Date(d.checked_at)) / 60000 : null,
-            unavailable =
-                d.status === "unavailable" ||
-                (age !== null && age > 20) ||
-                (!d.checked_at && d.updated_at && Date.now() - new Date(d.updated_at) > 1200000),
-            warming = d.status !== "ready";
-        const ex = d.protocol_exports || {},
-            exBox = document.getElementById("awardExportsState");
-        if (exBox)
-            exBox.textContent =
-                "Выгрузки SteamID Protocol: " +
-                (ex.status === "ready"
-                    ? "проверены"
-                    : ex.status === "partial"
-                      ? "частично проверены"
-                      : ex.status === "auth_required"
-                        ? "требуется вход"
-                        : "ожидаем проверку") +
-                " · сохранено таблиц: " +
-                (ex.snapshots || 0) +
-                " · точное время на китах с 12.10.2026." +
-                (ex.error ? " " + ex.error : "");
-        const clan = d.protocol_clan || {},
-            clanBox = document.getElementById("clanStatsState");
-        if (clanBox)
-            clanBox.textContent =
-                "Protocol · статистика состава: " +
-                (clan.checked_at
-                    ? clan.players + " игроков · обновлено " + stamp(clan.checked_at)
-                    : "ещё не загружена") +
-                (clan.error ? " · " + clan.error : "");
-        const bm = d.battlemetrics || {},
-            bmBox = document.getElementById("bmDiagnosticContent");
-        if (bmBox) {
-            bmBox.replaceChildren();
-            const note = document.createElement("p");
-            note.textContent =
-                `Нужна резервная проверка: ${bm.needed || 0} · Есть подтверждённые часы: ${bm.ready || 0} · Ещё не проверены: ${bm.pending || 0} · Ошибки: ${bm.failed || 0}.` +
-                (bm.enabled === false ? " Источник отключён в настройках автоматизации." : "") +
-                (bm.ignored_errors
-                    ? ` Старые ошибки вне текущей проверки: ${bm.ignored_errors} (архивные игроки или уже есть свежие данные основного источника).`
-                    : "");
-            bmBox.append(note);
-            for (const reason of bm.errors || []) {
-                const p = document.createElement("p");
-                p.textContent = `${reason.message}: ${reason.count}. ${reason.action}`;
-                bmBox.append(p);
-            }
-            for (const player of bm.players || []) {
-                const p = document.createElement("p"),
-                    a = document.createElement("a");
-                a.href = "/admin?player=" + encodeURIComponent(player.user_id);
-                a.textContent = player.name;
-                p.append(
-                    a,
-                    document.createTextNode(
-                        " · " +
-                            player.error +
-                            " · последняя попытка: " +
-                            stamp(player.attempted_at),
-                    ),
-                );
-                bmBox.append(p);
-            }
+      const age = d.checked_at
+          ? (Date.now() - new Date(d.checked_at)) / 60000
+          : null,
+        unavailable =
+          d.status === "unavailable" ||
+          (age !== null && age > 20) ||
+          (!d.checked_at &&
+            d.updated_at &&
+            Date.now() - new Date(d.updated_at) > 1200000),
+        warming = d.status !== "ready";
+      const ex = d.protocol_exports || {},
+        exBox = document.getElementById("awardExportsState");
+      if (exBox)
+        exBox.textContent =
+          "Выгрузки SteamID Protocol: " +
+          (ex.status === "ready"
+            ? "проверены"
+            : ex.status === "partial"
+              ? "частично проверены"
+              : ex.status === "auth_required"
+                ? "требуется вход"
+                : "ожидаем проверку") +
+          " · сохранено таблиц: " +
+          (ex.snapshots || 0) +
+          " · точное время на китах с 12.10.2026." +
+          (ex.error ? " " + ex.error : "");
+      const clan = d.protocol_clan || {},
+        clanBox = document.getElementById("clanStatsState");
+      if (clanBox)
+        clanBox.textContent =
+          "Protocol · статистика состава: " +
+          (clan.checked_at
+            ? clan.players + " игроков · обновлено " + stamp(clan.checked_at)
+            : "ещё не загружена") +
+          (clan.error ? " · " + clan.error : "");
+      const bm = d.battlemetrics || {},
+        bmBox = document.getElementById("bmDiagnosticContent");
+      if (bmBox) {
+        bmBox.replaceChildren();
+        const note = document.createElement("p");
+        note.textContent =
+          `Нужна резервная проверка: ${bm.needed || 0} · Есть подтверждённые часы: ${bm.ready || 0} · Ещё не проверены: ${bm.pending || 0} · Ошибки: ${bm.failed || 0}.` +
+          (bm.enabled === false
+            ? " Источник отключён в настройках автоматизации."
+            : "") +
+          (bm.ignored_errors
+            ? ` Старые ошибки вне текущей проверки: ${bm.ignored_errors} (архивные игроки или уже есть свежие данные основного источника).`
+            : "");
+        bmBox.append(note);
+        for (const reason of bm.errors || []) {
+          const p = document.createElement("p");
+          p.textContent = `${reason.message}: ${reason.count}. ${reason.action}`;
+          bmBox.append(p);
         }
-        document.getElementById("medalAdminState").textContent =
-            ex.status === "ready"
-                ? "Protocol — основной источник · выгрузки проверены"
-                : ex.status === "auth_required"
-                  ? "Protocol — требуется вход"
-                  : ex.status === "partial"
-                    ? "Protocol — часть выгрузок проверена"
-                    : "Protocol — ожидаем проверку · SQSTAT и BattleMetrics — резерв";
-        const warnings = [];
-        if (d.battlemetrics?.enabled !== false && d.battlemetrics?.failed)
-            warnings.push(
-                "Резервные часы BattleMetrics: ошибки у " +
-                    d.battlemetrics.failed +
-                    " активных игроков. Причины и рекомендации — в разделе «Медали», блок BattleMetrics.",
-            );
-        if (unavailable)
-            warnings.push(
-                "Резерв SQSTAT недоступен или ещё не проверен; основной источник — Protocol. Последнее успешное обновление: " +
-                    stamp(d.checked_at) +
-                    ". Запросы будут повторяться автоматически.",
-            );
-        if (!d.voice?.available)
-            warnings.push(
-                "Счётчик войса не получает подтверждение от Discord-бота. Проверьте службу discord-bot.service. Накопленные часы сохранены.",
-            );
-        if (d.profiles_failed)
-            warnings.push(
-                "Не удалось обновить профили: " +
-                    d.profiles_failed +
-                    ". Сохранены предыдущие данные.",
-            );
-        if (d.failed)
-            warnings.push(
-                "Не отправлены уведомления Discord: " +
-                    d.failed +
-                    ". Проверьте управление ролями и положение роли бота выше медалей, а также доступ к каналу 1556767291608268840: просмотр, отправка, вложения, ссылки и история.",
-            );
-        if (d.rewards_failed)
-            warnings.push(
-                "Ожидают начисления за награды: " +
-                    d.rewards_failed +
-                    ". Причина может быть в пределе баланса или архивном аккаунте; выплаты повторяются автоматически. Подробности доступны в прогрессе игрока.",
-            );
-        const banner = document.getElementById("medalAdminAlert");
-        banner.hidden = !warnings.length;
-        banner.textContent = warnings.join(" ");
-        if (d.revocations?.failed)
-            warnings.push(
-                "Удаление ролей снятых наград ждёт повторной попытки: " +
-                    d.revocations.failed +
-                    ". Проверьте права Discord-бота.",
-            );
-        if (d.protocol_previous?.status === "unavailable")
-            warnings.push(
-                "Не удалось обновить итог прошлой недели protocol-squad.ru. Сохранён последний успешный итог; запросы повторяются.",
-            );
-        if (d.reannouncements?.failed)
-            warnings.push(
-                "Ожидают повторной отправки сообщений о наградах: " +
-                    d.reannouncements.failed +
-                    ". После ошибки Discord бот повторит попытку.",
-            );
-        if (d.role_sync?.failed)
-            warnings.push(
-                "Не удалось восстановить роли у игроков: " +
-                    d.role_sync.failed +
-                    ". Причины: " +
-                    d.role_sync.errors.join(", ") +
-                    ". Бот повторит попытки; проверьте его права и положение роли.",
-            );
-        if (d.archive_failed?.length)
-            warnings.push(
-                "Не прочитаны матчи SQSTAT: " +
-                    d.archive_failed.join(", ") +
-                    ". Остальные данные сохраняются, недельные итоги не выдаются по неполной статистике.",
-            );
-        banner.hidden = !warnings.length;
-        banner.textContent = warnings.join(" ");
-        const container = document.getElementById("medalAdminSummary");
-        container.replaceChildren();
-        for (const [label, value] of [
-            ["Действующих наград", d.awards],
-            ["Снято администраторами", d.revocations?.total || 0],
-            ["Ролей ожидают снятия", d.revocations?.pending || 0],
-            ["Повторных сообщений отправлено", d.reannouncements?.sent || 0],
-            ["Повторных сообщений в очереди", d.reannouncements?.pending || 0],
-            ["Игроков в очереди восстановления ролей", d.role_sync?.pending || 0],
-            ["Ролей восстановлено", d.role_sync?.restored || 0],
-            ["Игроков проверено", d.role_sync?.checked || 0],
-            ["Игроков в войсах без AFK", d.voice?.active || 0],
-            ["Уведомлений в очереди", d.pending],
-            ["Матчей текущей недели", d.live?.match_count || 0],
-            ["Результатов побед на проверке", d.live?.unresolved?.length || 0],
-            ...(d.rewards_active
-                ? [
-                      ["Выплат за награды", d.rewards_paid],
-                      ["Начислений в очереди", d.rewards_pending],
-                  ]
-                : []),
-        ]) {
-            const item = document.createElement("div"),
-                small = document.createElement("small"),
-                strong = document.createElement("strong");
-            small.textContent = label;
-            strong.textContent = value;
-            item.append(small, strong);
-            container.append(item);
-        }
-        const pub = d.protocol_previous || {};
-        document.getElementById("protocolAdminPreviousState").textContent = pub.available
-            ? pub.period +
+        for (const player of bm.players || []) {
+          const p = document.createElement("p"),
+            a = document.createElement("a");
+          a.href = "/admin?player=" + encodeURIComponent(player.user_id);
+          a.textContent = player.name;
+          p.append(
+            a,
+            document.createTextNode(
               " · " +
-              pub.basis +
-              " · Проверено: " +
-              stamp(pub.checked_at) +
-              (pub.stale ? " · Сохранён более ранний период" : "")
-            : "Итог ещё не проверен. Сборщик повторяет запросы.";
-        const pubTables = document.getElementById("protocolAdminPreviousTables");
-        pubTables.replaceChildren();
-        for (const category of Object.values(pub.categories || {})) {
-            const card = document.createElement("div"),
-                title = document.createElement("h4"),
-                list = document.createElement("ol");
-            card.className = "st-panel";
-            title.textContent = category.name;
-            for (const row of category.rows || []) {
-                const item = document.createElement("li"),
-                    link = document.createElement("a"),
-                    sid = document.createElement("small");
-                link.href = "https://protocol-squad.ru/player/" + encodeURIComponent(row.steam_id);
-                link.target = "_blank";
-                link.rel = "noopener noreferrer";
-                link.textContent =
-                    row.name +
-                    " · " +
-                    row.value +
-                    (row.matches !== null ? " (" + row.matches + " матчей)" : "");
-                sid.className = "d-block small muted";
-                sid.textContent = row.steam_id;
-                item.append(link, sid);
-                list.append(item);
-            }
-            card.append(title, list);
-            pubTables.append(card);
+                player.error +
+                " · последняя попытка: " +
+                stamp(player.attempted_at),
+            ),
+          );
+          bmBox.append(p);
         }
-        const limits = document.getElementById("medalDataLimits");
-        limits.replaceChildren();
-        for (const v of Object.values({
-            ...d.unsupported_medals,
-            ...d.unsupported_distinctions,
-        })) {
-            const item = document.createElement("p");
-            item.textContent = v.name + ": " + v.reason;
-            limits.append(item);
-        }
-        document.getElementById("medalAdminSource").textContent =
-            "Последнее успешное обновление SQSTAT: " +
+      }
+      document.getElementById("medalAdminState").textContent =
+        ex.status === "ready"
+          ? "Protocol — основной источник · выгрузки проверены"
+          : ex.status === "auth_required"
+            ? "Protocol — требуется вход"
+            : ex.status === "partial"
+              ? "Protocol — часть выгрузок проверена"
+              : "Protocol — ожидаем проверку · SQSTAT и BattleMetrics — резерв";
+      const warnings = [];
+      if (d.battlemetrics?.enabled !== false && d.battlemetrics?.failed)
+        warnings.push(
+          "Резервные часы BattleMetrics: ошибки у " +
+            d.battlemetrics.failed +
+            " активных игроков. Причины и рекомендации — в разделе «Медали», блок BattleMetrics.",
+        );
+      if (unavailable)
+        warnings.push(
+          "Резерв SQSTAT недоступен или ещё не проверен; основной источник — Protocol. Последнее успешное обновление: " +
             stamp(d.checked_at) +
-            " · Проверка сборщика: " +
-            stamp(d.updated_at) +
-            " · Первый период выдачи: 28.09–04.10.2026. Все даты и время — МСК." +
-            (d.weeks?.length
-                ? " Проверенные недели: " +
-                  d.weeks
-                      .map(
-                          (w) =>
-                              w.label +
-                              " (" +
-                              w.matches +
-                              " матчей; " +
-                              w.unresolved +
-                              " результатов побед на проверке)",
-                      )
-                      .join("; ")
-                : "");
+            ". Запросы будут повторяться автоматически.",
+        );
+      if (!d.voice?.available)
+        warnings.push(
+          "Счётчик войса не получает подтверждение от Discord-бота. Проверьте службу discord-bot.service. Накопленные часы сохранены.",
+        );
+      if (d.profiles_failed)
+        warnings.push(
+          "Не удалось обновить профили: " +
+            d.profiles_failed +
+            ". Сохранены предыдущие данные.",
+        );
+      if (d.failed)
+        warnings.push(
+          "Не отправлены уведомления Discord: " +
+            d.failed +
+            ". Проверьте управление ролями и положение роли бота выше медалей, а также доступ к каналу 1556767291608268840: просмотр, отправка, вложения, ссылки и история.",
+        );
+      if (d.rewards_failed)
+        warnings.push(
+          "Ожидают начисления за награды: " +
+            d.rewards_failed +
+            ". Причина может быть в пределе баланса или архивном аккаунте; выплаты повторяются автоматически. Подробности доступны в прогрессе игрока.",
+        );
+      const banner = document.getElementById("medalAdminAlert");
+      banner.hidden = !warnings.length;
+      banner.textContent = warnings.join(" ");
+      if (d.revocations?.failed)
+        warnings.push(
+          "Удаление ролей снятых наград ждёт повторной попытки: " +
+            d.revocations.failed +
+            ". Проверьте права Discord-бота.",
+        );
+      if (d.protocol_previous?.status === "unavailable")
+        warnings.push(
+          "Не удалось обновить итог прошлой недели protocol-squad.ru. Сохранён последний успешный итог; запросы повторяются.",
+        );
+      if (d.reannouncements?.failed)
+        warnings.push(
+          "Ожидают повторной отправки сообщений о наградах: " +
+            d.reannouncements.failed +
+            ". После ошибки Discord бот повторит попытку.",
+        );
+      if (d.role_sync?.failed)
+        warnings.push(
+          "Не удалось восстановить роли у игроков: " +
+            d.role_sync.failed +
+            ". Причины: " +
+            d.role_sync.errors.join(", ") +
+            ". Бот повторит попытки; проверьте его права и положение роли.",
+        );
+      if (d.archive_failed?.length)
+        warnings.push(
+          "Не прочитаны матчи SQSTAT: " +
+            d.archive_failed.join(", ") +
+            ". Остальные данные сохраняются, недельные итоги не выдаются по неполной статистике.",
+        );
+      banner.hidden = !warnings.length;
+      banner.textContent = warnings.join(" ");
+      const container = document.getElementById("medalAdminSummary");
+      container.replaceChildren();
+      for (const [label, value] of [
+        ["Действующих наград", d.awards],
+        ["Снято администраторами", d.revocations?.total || 0],
+        ["Ролей ожидают снятия", d.revocations?.pending || 0],
+        ["Повторных сообщений отправлено", d.reannouncements?.sent || 0],
+        ["Повторных сообщений в очереди", d.reannouncements?.pending || 0],
+        ["Игроков в очереди восстановления ролей", d.role_sync?.pending || 0],
+        ["Ролей восстановлено", d.role_sync?.restored || 0],
+        ["Игроков проверено", d.role_sync?.checked || 0],
+        ["Игроков в войсах без AFK", d.voice?.active || 0],
+        ["Уведомлений в очереди", d.pending],
+        ["Матчей текущей недели", d.live?.match_count || 0],
+        ["Результатов побед на проверке", d.live?.unresolved?.length || 0],
+        ...(d.rewards_active
+          ? [
+              ["Выплат за награды", d.rewards_paid],
+              ["Начислений в очереди", d.rewards_pending],
+            ]
+          : []),
+      ]) {
+        const item = document.createElement("div"),
+          small = document.createElement("small"),
+          strong = document.createElement("strong");
+        small.textContent = label;
+        strong.textContent = value;
+        item.append(small, strong);
+        container.append(item);
+      }
+      const limits = document.getElementById("medalDataLimits");
+      limits.replaceChildren();
+      for (const v of Object.values({
+        ...d.unsupported_medals,
+        ...d.unsupported_distinctions,
+      })) {
+        const item = document.createElement("p");
+        item.textContent = v.name + ": " + v.reason;
+        limits.append(item);
+      }
+      document.getElementById("medalAdminSource").textContent =
+        "Последнее успешное обновление SQSTAT: " +
+        stamp(d.checked_at) +
+        " · Проверка сборщика: " +
+        stamp(d.updated_at) +
+        " · Первый период выдачи: 28.09–04.10.2026. Все даты и время — МСК." +
+        (d.weeks?.length
+          ? " Проверенные недели: " +
+            d.weeks
+              .map(
+                (w) =>
+                  w.label +
+                  " (" +
+                  w.matches +
+                  " матчей; " +
+                  w.unresolved +
+                  " результатов побед на проверке)",
+              )
+              .join("; ")
+          : "");
     }
     async function refresh() {
-        controller?.abort();
-        controller = new AbortController();
-        const current = ++generation,
-            requestController = controller,
-            signal = requestController.signal,
-            timer = setTimeout(() => requestController.abort(), 15000);
-        try {
-            const r = await fetch("/api/admin/medals/status", {
-                cache: "no-store",
-                signal,
-            });
-            if (!r.ok) throw new Error("Unavailable");
-            const d = await r.json();
-            if (current === generation) render(d);
-        } catch (e) {
-            if (current === generation) {
-                const b = document.getElementById("medalAdminAlert");
-                b.hidden = false;
-                b.textContent =
-                    "Не удалось проверить сборщик медалей. Повторим проверку автоматически.";
-            }
-        } finally {
-            clearTimeout(timer);
+      controller?.abort();
+      controller = new AbortController();
+      const current = ++generation,
+        requestController = controller,
+        signal = requestController.signal,
+        timer = setTimeout(() => requestController.abort(), 15000);
+      try {
+        const r = await fetch("/api/admin/medals/status", {
+          cache: "no-store",
+          signal,
+        });
+        if (!r.ok) throw new Error("Unavailable");
+        const d = await r.json();
+        if (current === generation) render(d);
+      } catch (e) {
+        if (current === generation) {
+          const b = document.getElementById("medalAdminAlert");
+          b.hidden = false;
+          b.textContent =
+            "Не удалось проверить сборщик медалей. Повторим проверку автоматически.";
         }
+      } finally {
+        clearTimeout(timer);
+      }
     }
-    document.getElementById("medalPlayerSearch").addEventListener("input", (e) => {
-        const q = e.target.value.trim().toLowerCase();
-        document
-            .querySelectorAll("[data-medal-player]")
-            .forEach((row) => (row.hidden = !row.dataset.medalPlayer.includes(q)));
-    });
+    function filterPlayers() {
+      const q = document
+        .getElementById("medalPlayerSearch")
+        .value.trim()
+        .toLowerCase();
+      const rows = [...document.querySelectorAll("[data-medal-player]")];
+      rows.forEach(
+        (row) => (row.hidden = !row.dataset.medalPlayer.includes(q)),
+      );
+      document.getElementById("medalPlayerCount").textContent =
+        `Показано игроков: ${rows.filter((row) => !row.hidden).length} из ${rows.length}`;
+    }
+    document
+      .getElementById("medalPlayerSearch")
+      .addEventListener("input", filterPlayers);
+    filterPlayers();
     const match = document.getElementById("medalDiscordMatch");
     if (match)
-        match.addEventListener("click", async () => {
-            const result = document.getElementById("medalDiscordMatchResult");
-            match.disabled = true;
-            result.textContent = "Получаем названия из Discord…";
-            const c = new AbortController(),
-                timer = setTimeout(() => c.abort(), 30000);
-            try {
-                const r = await fetch("/api/admin/medals/discord-names", {
-                        method: "POST",
-                        headers: {
-                            "X-ST9-Action": "discord-names",
-                        },
-                        signal: c.signal,
-                    }),
-                    d = await r.json();
-                if (!r.ok)
-                    throw new Error(
-                        typeof d.detail === "string" ? d.detail : "Не удалось сопоставить роли.",
-                    );
-                result.textContent =
-                    d.message +
-                    (d.missing
-                        ? " Отсутствуют роли: " +
-                          d.missing +
-                          ". Для них сохранены прежние названия."
-                        : "");
-                await refresh();
-            } catch (e) {
-                result.textContent =
-                    e.name === "AbortError"
-                        ? "Discord не ответил вовремя. Повторите позже."
-                        : e.message;
-            } finally {
-                clearTimeout(timer);
-                match.disabled = false;
-            }
-        });
+      match.addEventListener("click", async () => {
+        const result = document.getElementById("medalDiscordMatchResult");
+        match.disabled = true;
+        result.textContent = "Получаем названия из Discord…";
+        const c = new AbortController(),
+          timer = setTimeout(() => c.abort(), 30000);
+        try {
+          const r = await fetch("/api/admin/medals/discord-names", {
+              method: "POST",
+              headers: {
+                "X-ST9-Action": "discord-names",
+              },
+              signal: c.signal,
+            }),
+            d = await r.json();
+          if (!r.ok)
+            throw new Error(
+              typeof d.detail === "string"
+                ? d.detail
+                : "Не удалось сопоставить роли.",
+            );
+          result.textContent =
+            d.message +
+            (d.missing
+              ? " Отсутствуют роли: " +
+                d.missing +
+                ". Для них сохранены прежние названия."
+              : "");
+          await refresh();
+        } catch (e) {
+          result.textContent =
+            e.name === "AbortError"
+              ? "Discord не ответил вовремя. Повторите позже."
+              : e.message;
+        } finally {
+          clearTimeout(timer);
+          match.disabled = false;
+        }
+      });
     const restore = document.getElementById("medalRestoreRoles");
     if (restore)
-        restore.addEventListener("click", async () => {
-            restore.disabled = true;
-            const result = document.getElementById("medalDiscordMatchResult");
-            try {
-                const r = await fetch("/api/admin/medals/restore-roles", {
-                        method: "POST",
-                        headers: {
-                            "X-ST9-Action": "restore-roles",
-                        },
-                        signal: AbortSignal.timeout(15000),
-                    }),
-                    d = await r.json();
-                if (!r.ok) throw new Error("Не удалось запустить восстановление ролей.");
-                result.textContent = d.message;
-                await refresh();
-            } catch (e) {
-                result.textContent = e.message;
-            } finally {
-                restore.disabled = false;
-            }
-        });
+      restore.addEventListener("click", async () => {
+        restore.disabled = true;
+        const result = document.getElementById("medalDiscordMatchResult");
+        try {
+          const r = await fetch("/api/admin/medals/restore-roles", {
+              method: "POST",
+              headers: {
+                "X-ST9-Action": "restore-roles",
+              },
+              signal: AbortSignal.timeout(15000),
+            }),
+            d = await r.json();
+          if (!r.ok)
+            throw new Error("Не удалось запустить восстановление ролей.");
+          result.textContent = d.message;
+          await refresh();
+        } catch (e) {
+          result.textContent = e.message;
+        } finally {
+          restore.disabled = false;
+        }
+      });
     const weekButton = document.getElementById("protocolWeekCheck"),
-        weekStatus = document.getElementById("protocolWeekCheckStatus");
+      weekStatus = document.getElementById("protocolWeekCheckStatus");
     let weekPoll = null;
     async function checkWeekStatus() {
-        if (!weekButton) return;
-        try {
-            const r = await fetch("/api/admin/protocol-week-check", {
-                cache: "no-store",
-                signal: AbortSignal.timeout(15000),
-            });
-            const data = await r.json();
-            if (!r.ok) throw new Error(data.detail || "Не удалось получить статус.");
-            const busy = ["queued", "running"].includes(data.status);
-            weekButton.disabled = busy;
-            weekStatus.textContent =
-                (data.message || "Проверка по кнопке ещё не запускалась.") +
-                (data.warnings?.length ? " " + data.warnings.join(" ") : "");
-            clearTimeout(weekPoll);
-            if (busy) weekPoll = setTimeout(checkWeekStatus, 5000);
-            else if (["ready", "partial"].includes(data.status)) refresh();
-        } catch (e) {
-            weekStatus.textContent = e.message;
-            weekButton.disabled = false;
-        }
+      if (!weekButton) return;
+      try {
+        const r = await fetch("/api/admin/protocol-week-check", {
+          cache: "no-store",
+          signal: AbortSignal.timeout(15000),
+        });
+        const data = await r.json();
+        if (!r.ok)
+          throw new Error(data.detail || "Не удалось получить статус.");
+        const busy = ["queued", "running"].includes(data.status);
+        weekButton.disabled = busy;
+        weekStatus.textContent =
+          (data.message || "Проверка по кнопке ещё не запускалась.") +
+          (data.warnings?.length ? " " + data.warnings.join(" ") : "");
+        clearTimeout(weekPoll);
+        if (busy) weekPoll = setTimeout(checkWeekStatus, 5000);
+        else if (["ready", "partial"].includes(data.status)) refresh();
+      } catch (e) {
+        weekStatus.textContent = e.message;
+        weekButton.disabled = false;
+      }
     }
     if (weekButton) {
-        weekButton.addEventListener("click", async () => {
-            weekButton.disabled = true;
-            weekStatus.textContent = "Отправляем запрос…";
-            try {
-                const r = await fetch("/api/admin/protocol-week-check", {
-                    method: "POST",
-                    headers: {
-                        "X-ST9-Action": "protocol-week-check",
-                    },
-                    signal: AbortSignal.timeout(15000),
-                });
-                const data = await r.json();
-                if (!r.ok) throw new Error(data.detail || "Не удалось запустить проверку.");
-                await checkWeekStatus();
-            } catch (e) {
-                weekStatus.textContent = e.message;
-                weekButton.disabled = false;
-            }
-        });
-        checkWeekStatus();
+      weekButton.addEventListener("click", async () => {
+        weekButton.disabled = true;
+        weekStatus.textContent = "Отправляем запрос…";
+        try {
+          const r = await fetch("/api/admin/protocol-week-check", {
+            method: "POST",
+            headers: {
+              "X-ST9-Action": "protocol-week-check",
+            },
+            signal: AbortSignal.timeout(15000),
+          });
+          const data = await r.json();
+          if (!r.ok)
+            throw new Error(data.detail || "Не удалось запустить проверку.");
+          await checkWeekStatus();
+        } catch (e) {
+          weekStatus.textContent = e.message;
+          weekButton.disabled = false;
+        }
+      });
+      checkWeekStatus();
     }
-    document.getElementById("medalAdminRefresh").addEventListener("click", refresh);
+    document
+      .getElementById("medalAdminRefresh")
+      .addEventListener("click", refresh);
     window.refreshMedalStatus = refresh;
     refresh();
     setInterval(() => {
-        if (!document.hidden) refresh();
+      if (!document.hidden) refresh();
     }, 30000);
     document.addEventListener("visibilitychange", () => {
-        if (!document.hidden) refresh();
-        else {
-            generation++;
-            controller?.abort();
-        }
-    });
-    window.addEventListener("pagehide", () => {
+      if (!document.hidden) refresh();
+      else {
         generation++;
         controller?.abort();
-        clearTimeout(weekPoll);
+      }
+    });
+    window.addEventListener("pagehide", () => {
+      generation++;
+      controller?.abort();
+      clearTimeout(weekPoll);
     });
     window.addEventListener("pageshow", (e) => {
-        if (e.persisted) {
-            refresh();
-            checkWeekStatus();
-        }
+      if (e.persisted) {
+        refresh();
+        checkWeekStatus();
+      }
     });
-})();
-
+  })();
 </script>

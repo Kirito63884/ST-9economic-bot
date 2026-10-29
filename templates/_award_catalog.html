@@ -1,0 +1,167 @@
+<div id="awardCatalog" class="award-gallery">
+  <div class="award-gallery-hero">
+    <div>
+      <span class="award-kicker">STRIKE TEAM 9 · НАГРАДНОЙ ФОНД</span>
+      <h2>Медали и знаки отличия</h2>
+      <p>Условия получения, порядок рассмотрения и наградные выплаты.</p>
+    </div>
+    <div class="award-hero-count">
+      <strong>{{ catalog|length + distinctions|length }}</strong
+      ><span>наград в каталоге</span>
+    </div>
+  </div>
+  <div class="award-catalog-tools">
+    <div class="award-segments" aria-label="Вид наград">
+      <button type="button" data-award-filter="all" aria-pressed="true">
+        Все награды</button
+      ><button type="button" data-award-filter="medal" aria-pressed="false">
+        Медали · {{ catalog|length }}</button
+      ><button
+        type="button"
+        data-award-filter="distinction"
+        aria-pressed="false"
+      >
+        Знаки отличия · {{ distinctions|length }}
+      </button>
+    </div>
+    <label class="award-search-label" for="awardCatalogSearch"
+      >Поиск по названию и условиям<input
+        id="awardCatalogSearch"
+        type="search"
+        maxlength="200"
+        placeholder="Пилот, медик, победы…"
+    /></label>
+  </div>
+  <p class="award-catalog-note">
+    Награды бессрочные. Выплата за каждую награду начисляется один раз. Знаки
+    отличия проходят рассмотрение: подтверждение администратора или выдача через
+    24 часа. При нехватке подтверждённых данных награда ожидает проверки.
+  </p>
+  <p id="awardCatalogCount" class="award-catalog-note" role="status"></p>
+  {% for category, title, entries, manual in
+  [('medal','Медали',catalog,manual_medals),('distinction','Знаки
+  отличия',distinctions,manual_distinctions)] %}
+  <section class="award-catalog-group" data-award-group="{{ category }}">
+    <div class="award-section-title">
+      <h3>{{ title }}</h3>
+      <span>{{ entries|length }} в коллекции</span>
+    </div>
+    <div class="award-catalog-grid">
+      {% for code,item in entries.items() %}
+      <article
+        class="award-display-card"
+        data-award-code="{{ code }}"
+        data-award-category="{{ category }}"
+        style="--award-tint:{{ item[2] }}"
+      >
+        <div class="award-display-art">
+          <span class="award-card-category"
+            >{{ 'МЕДАЛЬ' if category == 'medal' else 'ЗНАК ОТЛИЧИЯ' }}</span
+          >
+          <div class="award-display-halo"></div>
+          {% if award_images.get(code) %}<img
+            src="{{ award_images[code] }}"
+            alt="{{ item[0] }}"
+            loading="lazy"
+          />{% else %}<span class="award-display-symbol" aria-hidden="true"
+            >{{ item[3] }}</span
+          >{% endif %}
+        </div>
+        <div class="award-display-body">
+          <div class="award-card-status">
+            {{ 'Ручная заявка' if code in manual else 'По подтверждённой
+            статистике' }}{% if category == 'distinction' %}<span
+              >Рассмотрение · 24 ч</span
+            >{% endif %}
+          </div>
+          <h4>{{ item[0] }}</h4>
+          <span class="award-rule-caption">УСЛОВИЕ ПОЛУЧЕНИЯ</span>
+          <p>{{ item[1] }}</p>
+          {% if code in blocked %}
+          <p class="award-data-note">{{ blocked[code] }}</p>
+          {% endif %}
+        </div>
+        <div class="award-display-footer">
+          {% if rewards.get(code) %}<span class="award-payout"
+            >+{{ rewards[code] }} <small>БК</small></span
+          ><span>один раз за награду</span>{% else %}<span
+            >Почётная награда</span
+          ><span>Бессрочно</span>{% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endfor %}
+  <p id="awardCatalogEmpty" class="award-catalog-note" hidden>
+    Ничего не найдено. Попробуйте другое название или условие.
+  </p>
+</div>
+<script>
+  (() => {
+    const root = document.getElementById("awardCatalog"),
+      search = document.getElementById("awardCatalogSearch"),
+      cards = [...root.querySelectorAll("[data-award-code]")];
+    let category = "all";
+    function filter() {
+      const q = search.value.trim().toLocaleLowerCase("ru");
+      let count = 0;
+      for (const card of cards) {
+        const visible =
+          (category === "all" || card.dataset.awardCategory === category) &&
+          card.textContent.toLocaleLowerCase("ru").includes(q);
+        card.hidden = !visible;
+        if (visible) count++;
+      }
+      root
+        .querySelectorAll("[data-award-group]")
+        .forEach(
+          (group) =>
+            (group.hidden = ![
+              ...group.querySelectorAll("[data-award-code]"),
+            ].some((card) => !card.hidden)),
+        );
+      document.getElementById("awardCatalogCount").textContent =
+        `Показано ${count} из ${cards.length}`;
+      document.getElementById("awardCatalogEmpty").hidden = count !== 0;
+    }
+    root.querySelectorAll("[data-award-filter]").forEach((button) =>
+      button.addEventListener("click", () => {
+        category = button.dataset.awardFilter;
+        root
+          .querySelectorAll("[data-award-filter]")
+          .forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
+        filter();
+      }),
+    );
+    window.addEventListener("award-design:changed", (event) => {
+      if (!Array.isArray(event.detail)) return;
+      for (const card of cards) {
+        const award = event.detail.find(
+          (item) => item.code === card.dataset.awardCode,
+        );
+        if (!award) continue;
+        card.querySelector("h4").textContent = award.name;
+        const art = card.querySelector(".award-display-art");
+        art
+          .querySelectorAll("img,.award-display-symbol")
+          .forEach((el) => el.remove());
+        if (award.image) {
+          const img = document.createElement("img");
+          img.src = award.image;
+          img.alt = award.name;
+          img.loading = "lazy";
+          art.append(img);
+        } else {
+          const symbol = document.createElement("span");
+          symbol.className = "award-display-symbol";
+          symbol.textContent = award.symbol;
+          art.append(symbol);
+        }
+      }
+      filter();
+    });
+    search.addEventListener("input", filter);
+    filter();
+  })();
+</script>
