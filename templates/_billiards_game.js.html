@@ -1,0 +1,852 @@
+/* Match controller: inputs propose a shot; the server owns positions, turns,
+ * rules, the clock and payouts. Polls and action responses share one revision. */
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const tid = $("st-content").dataset.tableId;
+  const base = "/api/billiards/table/" + encodeURIComponent(tid);
+  const renderer = new PoolRenderer($("table"));
+  const { bounds, pockets, colors, rowsToBalls } = PoolGeometry;
+  const names = {
+    eight: "8-ball",
+    practice: "Тренировка",
+    rotation: "Ротация",
+  };
+  const esc = (value) =>
+    String(value ?? "").replace(
+      /[&<>"']/g,
+      (char) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[char],
+    );
+  const money = (value) =>
+    new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(
+      value / 100,
+    ) + " БК";
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const normalize = (v) => Math.atan2(Math.sin(v), Math.cos(v));
+  let state = null,
+    angle = 0,
+    placement = null,
+    hoverPlace = null,
+    called = null;
+  let busy = false,
+    polling = false,
+    syncedAt = 0,
+    offset = 0,
+    lastRevision = -1,
+    lastTurn = null,
+    networkMessage = "";
+  let pointer = null,
+    charge = 0,
+    power = 0.55,
+    disposed = false;
+  let lastRenderKey = null;
+  let lastUiPaint = 0,
+    heardShot = null,
+    heardPockets = new Set(),
+    lastRailSound = 0;
+  let sound = false,
+    audio = null,
+    sensitivity = 1,
+    resizeTimer = null;
+  try {
+    sensitivity = clamp(
+      Number(localStorage.getItem("st9:billiards:sensitivity")) || 1,
+      0.25,
+      2,
+    );
+    sound = localStorage.getItem("st9:billiards:sound") === "true";
+  } catch (_) {}
+  $("sensitivity").value = Math.round(sensitivity * 100);
+  $("sensitivityValue").textContent = Math.round(sensitivity * 100) + "%";
+
+  async function api(url, options = {}) {
+    const response = await fetch(url, { cache: "no-store", ...options });
+    let data;
+    try {
+      data = await response.json();
+    } catch (_) {
+      throw Error("Не удалось получить ответ сервера. Подключаемся заново…");
+    }
+    if (!response.ok) {
+      const error = Error(
+        typeof data.detail === "string"
+          ? data.detail
+          : "Не удалось выполнить действие",
+      );
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  }
+  function error(message) {
+    $("error").textContent = message;
+    $("error").hidden = !message;
+  }
+  const now = () => Date.now() / 1000 + offset;
+  const moving = () =>
+    Boolean(state?.last_shot && now() < state.last_shot.available_at);
+  const playing = () => state?.phase === "playing";
+  const canControl = () =>
+    playing() &&
+    state.actor === state.your_id &&
+    !moving() &&
+    !busy &&
+    Date.now() - syncedAt < 5000 &&
+    now() < state.deadline;
+  function targets() {
+    if (!state) return [];
+    const remaining = state.balls.filter((b) => b[0] && !b[3]).map((b) => b[0]);
+    if (state.rules.mode === "rotation")
+      return remaining.length ? [Math.min(...remaining)] : [];
+    if (state.rules.mode !== "eight") return remaining;
+    const group = state.groups[String(state.actor)];
+    if (!group) return remaining.filter((id) => id !== 8);
+    const own = remaining.filter((id) =>
+      group === "solids" ? id < 8 : id > 8,
+    );
+    return own.length ? own : [8];
+  }
+  const needsCall = () =>
+    state?.rules.mode === "eight" &&
+    state.match?.rules_version >= 2 &&
+    targets()[0] === 8;
+  const waitingPlace = () => Boolean(state?.ball_in_hand && !placement);
+  function cue() {
+    return placement || rowsToBalls(state.balls).find((b) => b.id === 0);
+  }
+  function validPlace(point) {
+    if (
+      !point ||
+      point.x < bounds.left ||
+      point.x > bounds.right ||
+      point.y < bounds.top ||
+      point.y > bounds.bottom
+    )
+      return false;
+    if (pockets.some(([x, y]) => Math.hypot(point.x - x, point.y - y) < 37))
+      return false;
+    return !state.balls.some(
+      ([id, x, y, pocketed]) =>
+        id && !pocketed && Math.hypot(point.x - x, point.y - y) < 28.7,
+    );
+  }
+  function setPower(value) {
+    power = clamp(value, 0.05, 1);
+    $("power").value = Math.round(power * 100);
+    $("powerValue").textContent = Math.round(power * 100) + "%";
+  }
+  function enableAudio() {
+    if (!sound) return;
+    try {
+      audio ||= new (window.AudioContext || window.webkitAudioContext)();
+      audio.resume();
+    } catch (_) {
+      sound = false;
+    }
+  }
+  function tone(kind, strength = 1) {
+    if (!sound || !audio || audio.state !== "running") return;
+    const gain = audio.createGain(),
+      osc = audio.createOscillator(),
+      time = audio.currentTime;
+    osc.type = "sine";
+    osc.frequency.setValueAtTime(
+      kind === "pocket" ? 165 : kind === "cue" ? 700 : 470,
+      time,
+    );
+    osc.frequency.exponentialRampToValueAtTime(
+      kind === "pocket" ? 75 : 180,
+      time + 0.07,
+    );
+    gain.gain.setValueAtTime(0.0001, time);
+    gain.gain.exponentialRampToValueAtTime(
+      0.03 * clamp(strength, 0.1, 1),
+      time + 0.003,
+    );
+    gain.gain.exponentialRampToValueAtTime(0.0001, time + 0.1);
+    osc.connect(gain);
+    gain.connect(audio.destination);
+    osc.start(time);
+    osc.stop(time + 0.12);
+  }
+  function soundLabel() {
+    $("sound").textContent = sound ? "Звук вкл." : "Звук выкл.";
+    $("sound").setAttribute("aria-pressed", String(sound));
+  }
+  soundLabel();
+
+  function miniBall(id, sunk = false) {
+    return `<span class="pool-mini-ball ${id > 8 ? "stripe" : ""} ${sunk ? "sunk" : ""}" style="--ball:${colors[id]}" title="Шар ${id}${sunk ? " · забит" : ""}"><span>${id}</span></span>`;
+  }
+  function playerMarkup(player, index) {
+    if (!player)
+      return '<div class="pool-seat opponent"><div class="pool-avatar">?</div><div class="pool-seat-text"><strong>Свободное место</strong><small>Отправьте другу ссылку</small></div></div>';
+    const group = state.groups[String(player.id)];
+    const visibleActor = moving() ? state.last_shot.by : state.actor;
+    let ids = [];
+    if (state.rules.mode === "eight")
+      ids =
+        group === "solids"
+          ? [1, 2, 3, 4, 5, 6, 7]
+          : group === "stripes"
+            ? [9, 10, 11, 12, 13, 14, 15]
+            : [];
+    const caption =
+      state.phase === "waiting"
+        ? player.ready
+          ? "Готов к игре"
+          : "Подтверждает готовность"
+        : state.rules.mode === "eight"
+          ? group === "solids"
+            ? "Сплошные"
+            : group === "stripes"
+              ? "Полосатые"
+              : "Открытый стол"
+          : `${player.score} очк. · ${player.shots} ударов`;
+    return `<div class="pool-seat ${player.id === visibleActor ? "turn" : ""} ${index === 1 ? "opponent" : ""}"><div class="pool-avatar" aria-hidden="true">${esc(player.name.slice(0, 1).toUpperCase())}</div><div class="pool-seat-text"><strong title="${esc(player.name)}">${esc(player.name)}${player.id === state.your_id ? " · ты" : ""}</strong><small>${player.left ? "Покинул стол" : caption}</small><div class="pool-ball-row">${ids.map((id) => miniBall(id, state.balls.find((b) => b[0] === id)?.[3])).join("")}</div></div></div>`;
+  }
+  function paintPanels() {
+    if (!state) return;
+    $("title").textContent = names[state.rules.mode];
+    const players = state.players.filter(
+      (p) => !p.left || state.phase === "finished",
+    );
+    const me = state.players.find((p) => p.id === state.your_id);
+    const primary = players.find((p) => p.id === state.your_id) || players[0];
+    const others = players.filter((p) => p.id !== primary?.id);
+    const bank =
+      state.rules.mode === "practice"
+        ? "Без ставки"
+        : money(
+            state.match?.bank_cents ??
+              state.rules.entry_cents * state.rules.max_players,
+          );
+    $("scores").innerHTML =
+      playerMarkup(primary, 0) +
+      `<div class="pool-center"><div id="clock" class="pool-clock"><span>—</span></div><div class="pool-bank">${state.rules.mode === "practice" ? bank : "Банк " + bank}</div></div>` +
+      (others.length
+        ? others.map((p) => playerMarkup(p, 1)).join("")
+        : state.rules.mode === "practice"
+          ? '<div class="pool-seat opponent"><div class="pool-seat-text"><strong>Свободная практика</strong><small>15 шаров · без соперника</small></div></div>'
+          : playerMarkup(null, 1));
+    // Rotation supports six seats; let extra players share a second scoreboard row.
+    $("scores").style.gridTemplateColumns =
+      others.length > 1 ? "repeat(3,minmax(0,1fr))" : "";
+    $("events").innerHTML = [...state.events]
+      .reverse()
+      .map(
+        (event) =>
+          `<p><time>${new Date(event.time * 1000).toLocaleTimeString("ru-RU", { timeZone: "Europe/Moscow", hour: "2-digit", minute: "2-digit" })}</time>${esc(event.text)}</p>`,
+      )
+      .join("");
+    const ready = state.phase === "waiting",
+      finished = state.phase === "finished";
+    $("ready").hidden = !ready;
+    $("ready").textContent = me?.ready ? "Отменить готовность" : "Я готов";
+    $("start").hidden = !(ready && state.creator === state.your_id);
+    $("start").textContent =
+      state.rules.mode === "practice" ? "Начать тренировку" : "Начать партию";
+    $("start").disabled =
+      busy ||
+      players.length !== state.rules.max_players ||
+      !players.every((p) => p.ready);
+    $("rematch").hidden = !(finished && state.creator === state.your_id);
+    $("ready").disabled = busy;
+    $("rematch").disabled = busy;
+    $("overlayEyebrow").textContent = ready
+      ? "Комната ожидания"
+      : state.rules.mode === "practice"
+        ? "Практика завершена"
+        : "Партия завершена";
+    const won = state.match?.result?.winners.includes(state.your_id);
+    $("overlayIcon").textContent = ready ? "◉" : won ? "✦" : "◈";
+    $("overlayTitle").textContent = ready
+      ? "Всё готово к игре"
+      : state.rules.mode === "practice"
+        ? "Хорошая тренировка"
+        : won
+          ? "Победа!"
+          : "Партия окончена";
+    $("overlayText").textContent = ready
+      ? state.rules.mode === "practice"
+        ? "Подтвердите готовность и начинайте. Здесь можно спокойно освоить удары."
+        : `Ставка каждого — ${money(state.rules.entry_cents)}. Банк списывается только после готовности всех игроков и запуска партии.`
+      : state.match?.result?.reason || "";
+    if (finished && state.rules.mode !== "practice") {
+      const paid = state.match?.result?.payouts?.[String(state.your_id)];
+      if (paid !== undefined)
+        $("overlayText").textContent += ` Получено: ${money(paid)}.`;
+      if (state.creator !== state.your_id)
+        $("overlayText").textContent +=
+          " Новую партию запускает создатель стола.";
+    }
+    $("waitingPlayers").textContent = ready
+      ? players
+          .map((p) => p.name + (p.ready ? " · готов" : " · ожидаем"))
+          .join(" / ")
+      : "";
+    $("legacyRules").hidden =
+      state.rules.mode !== "eight" ||
+      !state.match ||
+      state.match.rules_version >= 2;
+    $("pocketLabel").hidden = !(canControl() && needsCall());
+    $("reposition").hidden = !(canControl() && state.ball_in_hand && placement);
+    document
+      .querySelectorAll("[data-st-balance]")
+      .forEach((node) => (node.textContent = Number(state.balance).toFixed(2)));
+  }
+
+  function accept(next) {
+    if (next.revision < lastRevision) return;
+    const previous = state;
+    if (
+      next.last_shot &&
+      !next.last_shot.frames &&
+      next.last_shot.id === previous?.last_shot?.id
+    )
+      next.last_shot = { ...next.last_shot, frames: previous.last_shot.frames };
+    lastRevision = next.revision;
+    state = next;
+    syncedAt = Date.now();
+    offset = Number.isFinite(next.server_time)
+      ? next.server_time - Date.now() / 1000
+      : 0;
+    const turnKey = [
+      next.match_number,
+      next.actor,
+      next.last_shot?.id,
+      next.phase,
+    ].join(":");
+    if (turnKey !== lastTurn) {
+      placement = null;
+      hoverPlace = null;
+      called = null;
+      $("calledPocket").value = "";
+      pointer = null;
+      charge = 0;
+      lastTurn = turnKey;
+    }
+    if (!next.ball_in_hand) placement = null;
+    if (next.phase === "playing" && (!previous || previous.phase === "waiting"))
+      angle = 0;
+    $("game").hidden = false;
+    $("joinPanel").hidden = true;
+    $("connection").classList.remove("offline");
+    $("connection").textContent = "За столом · соединение активно";
+    if (networkMessage && $("error").textContent === networkMessage) error("");
+    networkMessage = "";
+    paintPanels();
+  }
+  function cancelPointer() {
+    if (pointer && $("table").hasPointerCapture?.(pointer.id))
+      $("table").releasePointerCapture(pointer.id);
+    pointer = null;
+    charge = 0;
+    $("table").classList.remove("dragging");
+  }
+  async function action(path, payload = {}) {
+    if (busy || !state) return false;
+    busy = true;
+    error("");
+    cancelPointer();
+    refreshControls();
+    enableAudio();
+    try {
+      const post = () =>
+        api(base + "/" + path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ revision: state.revision, ...payload }),
+        });
+      let next;
+      try {
+        next = await post();
+      } catch (failure) {
+        // Readiness is a fixed boolean intent, so a seat/ready revision race can
+        // be retried once. Never retry a shot, start, rematch or wallet action.
+        if (failure.status !== 409 || path !== "ready") throw failure;
+        accept(await api(base + "/state"));
+        if (state.phase !== "waiting") throw failure;
+        const me = state.players.find((player) => player.id === state.your_id);
+        next = me.ready === payload.ready ? state : await post();
+      }
+      if (next.balls) accept(next);
+      return true;
+    } catch (failure) {
+      if (failure.status === 409) await load(true);
+      error(failure.message);
+      return false;
+    } finally {
+      busy = false;
+      paintPanels();
+      refreshControls();
+    }
+  }
+  async function load(force = false) {
+    if (polling || (busy && !force) || disposed) return;
+    polling = true;
+    try {
+      const known = state?.last_shot?.frames?.length ? state.last_shot.id : 0;
+      accept(await api(base + "/state?known_shot=" + known));
+    } catch (failure) {
+      if (failure.status === 403) {
+        try {
+          const preview = await api(base + "/preview");
+          $("joinPanel").hidden = false;
+          $("game").hidden = true;
+          $("joinText").textContent =
+            `${names[preview.rules.mode]} · ${preview.players}/${preview.rules.max_players} игроков · ${preview.rules.mode === "practice" ? "Без ставки" : money(preview.rules.entry_cents) + " с каждого"}`;
+          $("join").disabled =
+            preview.phase !== "waiting" ||
+            preview.players >= preview.rules.max_players;
+          if ($("join").disabled)
+            $("joinText").textContent +=
+              " · Присоединение к этой партии закрыто.";
+        } catch (previewFailure) {
+          error(previewFailure.message);
+        }
+      } else {
+        $("connection").classList.add("offline");
+        $("connection").textContent = "Связь потеряна · переподключение…";
+        networkMessage = failure.message;
+        error(failure.message);
+      }
+    } finally {
+      polling = false;
+    }
+  }
+
+  // Absolute server timestamps allow both browsers to replay the same shot and
+  // reconnect halfway through it. Interpolation is visual, not a second physics engine.
+  function animationRows() {
+    const shot = state.last_shot;
+    if (!shot || !moving() || !shot.frames?.length)
+      return { rows: state.balls, dropping: [] };
+    if (heardShot !== shot.id) {
+      heardShot = shot.id;
+      heardPockets = new Set();
+      if (now() - shot.started_at < 0.7) tone("cue", shot.power);
+    }
+    const position = clamp(
+      ((now() - shot.started_at) * 1000) / shot.frame_ms,
+      0,
+      shot.frames.length - 1,
+    );
+    const index = Math.floor(position),
+      mix = position - index;
+    const before = shot.frames[index],
+      after = shot.frames[Math.min(index + 1, shot.frames.length - 1)];
+    const nextById = new Map(after.map((row) => [row[0], row]));
+    const dropping = [];
+    const rows = before.map((row) => {
+      const next = nextById.get(row[0]) || row;
+      if (!row[3] && next[3]) {
+        dropping.push({ id: row[0], x: row[1], y: row[2], alpha: 1 - mix });
+        if (!heardPockets.has(row[0])) {
+          tone("pocket");
+          heardPockets.add(row[0]);
+        }
+        return [row[0], row[1], row[2], true];
+      }
+      return [
+        row[0],
+        row[1] + (next[1] - row[1]) * mix,
+        row[2] + (next[2] - row[2]) * mix,
+        row[3],
+      ];
+    });
+    if (sound && Date.now() - lastRailSound > 110) {
+      const previous = new Map(
+        shot.frames[Math.max(0, index - 1)].map((row) => [row[0], row]),
+      );
+      const bounced = before.some((row) => {
+        const prev = previous.get(row[0]),
+          next = nextById.get(row[0]);
+        if (row[3] || !prev || !next) return false;
+        const horizontal =
+          (row[1] < 48 || row[1] > 952) &&
+          (row[1] - prev[1]) * (next[1] - row[1]) < 0;
+        const vertical =
+          (row[2] < 48 || row[2] > 452) &&
+          (row[2] - prev[2]) * (next[2] - row[2]) < 0;
+        return horizontal || vertical;
+      });
+      if (bounced) {
+        tone("rail", 0.3);
+        lastRailSound = Date.now();
+      }
+    }
+    return { rows, dropping };
+  }
+  function refreshControls() {
+    const can = canControl(),
+      waiting = waitingPlace(),
+      call = needsCall();
+    $("shoot").disabled = !can || waiting || (call && called === null);
+    $("power").disabled = !can;
+    $("reposition").hidden = !(can && state.ball_in_hand && placement);
+    $("pocketLabel").hidden = !(can && call);
+    $("aimTitle").textContent = busy
+      ? "Отправляем удар…"
+      : moving()
+        ? "Шары в движении"
+        : !playing()
+          ? "К следующей партии"
+          : state.actor !== state.your_id
+            ? "Ход соперника"
+            : waiting
+              ? "Биток с руки"
+              : call && called === null
+                ? "Закажите лузу для восьмёрки"
+                : charge > 0
+                  ? "Отпустите для удара"
+                  : "Ваш ход";
+    $("aimHelp").textContent =
+      waiting && can
+        ? "Выберите свободную точку на сукне. Зелёный контур — допустимое положение."
+        : call && called === null && can
+          ? "Нажмите на одну из шести луз или выберите её в списке."
+          : can
+            ? "Нажмите и ведите для прицела. Оттяните назад и отпустите для удара."
+            : playing()
+              ? "Следите за столом. Управление включится на вашем ходу."
+              : "Готовность и новая партия — в центре стола.";
+    const clock = $("clock");
+    if (clock) {
+      const remaining = playing()
+        ? Math.max(0, Math.ceil(state.deadline - now()))
+        : 0;
+      clock.querySelector("span").textContent = moving()
+        ? "···"
+        : playing()
+          ? remaining
+          : "—";
+      clock.style.setProperty(
+        "--clock",
+        clamp((remaining / state.rules.turn_seconds) * 100, 0, 100) + "%",
+      );
+      clock.classList.toggle(
+        "urgent",
+        !moving() && playing() && remaining <= 10,
+      );
+    }
+    $("overlay").hidden = Boolean(
+      !state || state.phase === "playing" || moving(),
+    );
+    if (state) {
+      const actor = state.players.find((p) => p.id === state.actor);
+      let status =
+        state.phase === "waiting"
+          ? "Ожидаем готовности участников"
+          : state.phase === "finished"
+            ? state.match?.result?.reason
+            : moving()
+              ? "Идёт удар"
+              : state.actor === state.your_id
+                ? state.ball_in_hand
+                  ? "Ваш ход · биток с руки"
+                  : "Ваш ход"
+                : "Ходит " + (actor?.name || "игрок");
+      if (can && call && called !== null) status += " · луза " + (called + 1);
+      $("status").textContent = status;
+    }
+  }
+  function frame() {
+    if (disposed) return;
+    if (state && !document.hidden) {
+      if (performance.now() - lastUiPaint > 90) {
+        refreshControls();
+        lastUiPaint = performance.now();
+      }
+      const renderKey = [
+        state.revision,
+        angle,
+        power,
+        charge,
+        placement?.x,
+        placement?.y,
+        hoverPlace?.x,
+        hoverPlace?.y,
+        called,
+        canControl(),
+        moving(),
+        renderer.canvas.width,
+        renderer.canvas.height,
+      ].join(":");
+      // Idle tables are still polled, but do not repaint every ball at 60 Hz.
+      if (moving() || renderKey !== lastRenderKey) {
+        lastRenderKey = renderKey;
+        const sample = animationRows();
+        renderer.draw(sample.rows, {
+          angle,
+          power: charge || power,
+          dragging: charge > 0,
+          placement: canControl() ? placement : null,
+          hoverPlace: canControl() && waitingPlace() ? hoverPlace : null,
+          validPlace: validPlace(hoverPlace),
+          waitingPlace: canControl() && waitingPlace(),
+          canAim: canControl() && !waitingPlace(),
+          targets: targets(),
+          calling: canControl() && needsCall(),
+          called: canControl() ? called : null,
+          dropping: sample.dropping,
+        });
+      }
+      if (Date.now() - syncedAt > 5000) {
+        $("connection").classList.add("offline");
+        $("connection").textContent =
+          "Ожидаем соединения · удары приостановлены";
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  function pointAngle(point) {
+    const c = cue();
+    return Math.atan2(point.y - c.y, point.x - c.x);
+  }
+  function sendShot() {
+    if (!canControl() || waitingPlace()) return;
+    if (needsCall() && called === null) {
+      error("Сначала выберите лузу для восьмёрки");
+      return;
+    }
+    const c = cue();
+    action("shoot", {
+      angle,
+      power,
+      cue_x: c.x,
+      cue_y: c.y,
+      called_pocket: needsCall() ? called : null,
+    });
+  }
+  const canvas = $("table");
+  canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+  canvas.addEventListener("pointerdown", (event) => {
+    if (!canControl() || ![0, 2].includes(event.button)) return;
+    event.preventDefault();
+    enableAudio();
+    canvas.focus({ preventScroll: true });
+    const point = renderer.point(event);
+    if (needsCall()) {
+      const pocket = pockets.findIndex(
+        ([x, y]) => Math.hypot(point.x - x, point.y - y) < 43,
+      );
+      if (pocket >= 0) {
+        called = pocket;
+        $("calledPocket").value = String(pocket);
+        error("");
+        return;
+      }
+    }
+    if (waitingPlace()) {
+      if (validPlace(point)) {
+        placement = { x: point.x, y: point.y };
+        hoverPlace = null;
+        error("");
+      } else
+        error("Выберите точку внутри сукна, не в лузе и не на другом шаре");
+      return;
+    }
+    const a = pointAngle(point);
+    // A new click acquires the direction; subsequent motion can rotate or pull back.
+    angle = a;
+    pointer = {
+      id: event.pointerId,
+      origin: point,
+      angle: a,
+      lastAngle: a,
+      button: event.button,
+    };
+    charge = 0;
+    canvas.setPointerCapture(event.pointerId);
+    canvas.classList.add("dragging");
+  });
+  canvas.addEventListener("pointermove", (event) => {
+    if (!canControl()) return;
+    const point = renderer.point(event);
+    if (waitingPlace()) {
+      hoverPlace = point;
+      return;
+    }
+    if (!pointer || event.pointerId !== pointer.id) return;
+    event.preventDefault();
+    const dx = point.x - pointer.origin.x,
+      dy = point.y - pointer.origin.y;
+    const along = -(
+      dx * Math.cos(pointer.angle) +
+      dy * Math.sin(pointer.angle)
+    );
+    const side = Math.abs(
+      -dx * Math.sin(pointer.angle) + dy * Math.cos(pointer.angle),
+    );
+    if (
+      pointer.button === 0 &&
+      along > 12 &&
+      side < Math.max(25, along * 0.65)
+    ) {
+      charge = clamp(along / 165, 0.05, 1);
+      setPower(charge);
+    } else if (!charge) {
+      const next = pointAngle(point);
+      angle = normalize(
+        angle + normalize(next - pointer.lastAngle) * sensitivity,
+      );
+      pointer.lastAngle = next;
+      if (side > 25 || along < -10) {
+        pointer.origin = point;
+        pointer.angle = angle;
+      }
+    }
+  });
+  canvas.addEventListener("pointerup", (event) => {
+    if (!pointer || pointer.id !== event.pointerId) return;
+    const fire = charge > 0 && canControl();
+    cancelPointer();
+    if (fire) sendShot();
+  });
+  canvas.addEventListener("pointercancel", cancelPointer);
+  canvas.addEventListener("lostpointercapture", () => {
+    pointer = null;
+    charge = 0;
+    canvas.classList.remove("dragging");
+  });
+  canvas.addEventListener("pointerleave", () => {
+    hoverPlace = null;
+  });
+  function nudge(delta) {
+    if (canControl() && !waitingPlace()) {
+      cancelPointer();
+      angle = normalize(angle + delta);
+    }
+  }
+  canvas.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      cancelPointer();
+      return;
+    }
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      event.preventDefault();
+      nudge(
+        (event.key === "ArrowLeft" ? -1 : 1) * (event.shiftKey ? 0.001 : 0.008),
+      );
+    }
+    if (event.code === "Space") {
+      event.preventDefault();
+      if (!event.repeat) sendShot();
+    }
+  });
+  $("angleLeft").addEventListener("click", () => nudge(-0.003));
+  $("angleRight").addEventListener("click", () => nudge(0.003));
+  $("power").addEventListener("input", (event) =>
+    setPower(Number(event.target.value) / 100),
+  );
+  $("sensitivity").addEventListener("input", (event) => {
+    sensitivity = Number(event.target.value) / 100;
+    $("sensitivityValue").textContent = event.target.value + "%";
+    try {
+      localStorage.setItem("st9:billiards:sensitivity", String(sensitivity));
+    } catch (_) {}
+  });
+  $("calledPocket").addEventListener("change", (event) => {
+    called = event.target.value === "" ? null : Number(event.target.value);
+  });
+  $("reposition").addEventListener("click", () => {
+    placement = null;
+    cancelPointer();
+  });
+  $("shoot").addEventListener("click", sendShot);
+  $("ready").addEventListener("click", () =>
+    action("ready", {
+      ready: !state.players.find((p) => p.id === state.your_id).ready,
+    }),
+  );
+  $("start").addEventListener("click", () => action("start"));
+  $("rematch").addEventListener("click", () => action("rematch"));
+  $("join").addEventListener("click", async () => {
+    if (busy) return;
+    busy = true;
+    $("join").disabled = true;
+    try {
+      await api(base + "/join", { method: "POST" });
+      busy = false;
+      await load();
+    } catch (failure) {
+      error(failure.message);
+    } finally {
+      busy = false;
+      $("join").disabled = false;
+    }
+  });
+  $("leave").addEventListener("click", async () => {
+    if (
+      !confirm(playing() ? "Покинуть стол и сдаться?" : "Покинуть этот стол?")
+    )
+      return;
+    if (await action("leave")) location.href = "/games/billiards/lobby";
+  });
+  $("copy").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(location.href);
+      $("copy").textContent = "Ссылка скопирована";
+      setTimeout(() => {
+        $("copy").textContent = "Пригласить друга";
+      }, 2200);
+    } catch (_) {
+      error("Скопируйте ссылку из адресной строки браузера");
+    }
+  });
+  $("sound").addEventListener("click", () => {
+    sound = !sound;
+    enableAudio();
+    soundLabel();
+    if (sound) tone("cue", 0.5);
+    try {
+      localStorage.setItem("st9:billiards:sound", String(sound));
+    } catch (_) {}
+  });
+  $("fullscreen").hidden = !document.fullscreenEnabled;
+  $("fullscreen").addEventListener("click", async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await $("game").requestFullscreen();
+    } catch (_) {
+      error("Этот браузер не разрешил полноэкранный режим");
+    }
+  });
+  document.addEventListener("fullscreenchange", () => {
+    $("fullscreen").textContent = document.fullscreenElement
+      ? "Свернуть экран"
+      : "На весь экран";
+    setTimeout(() => renderer.resize(), 120);
+  });
+  window.addEventListener("resize", () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => renderer.resize(), 80);
+  });
+  document.addEventListener("visibilitychange", () => {
+    cancelPointer();
+    if (!document.hidden) load();
+  });
+  window.addEventListener("pagehide", () => {
+    disposed = true;
+    clearInterval(pollTimer);
+  });
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) {
+      disposed = false;
+      location.reload();
+    }
+  });
+  const pollTimer = setInterval(() => {
+    if (!document.hidden) load();
+  }, 800);
+  load();
+  requestAnimationFrame(frame);
+})();

@@ -1,614 +1,202 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ru">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width,initial-scale=1">
-        <title>Стол — Бильярд ST-9</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
-              rel="stylesheet">
-        {% include "_site_ui.html" %}{% include "_billiards_ui.html" %}
-    </head>
-    <body>
-        {% include "_site_nav.html" %}
-        <main class="container-fluid px-xl-4 mt-3" id="st-content">
-            <div class="st-page-heading">
-                <div>
-                    <span class="st-eyebrow">Бильярдный стол</span>
-                    <h1 id="title">Подключение…</h1>
-                    <p id="subtitle">Состояние хранится на сервере и переживает перезапуск.</p>
-                </div>
-                <a class="btn btn-outline-light" href="/games/billiards/lobby">К столам →</a>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <title>Бильярд — игровой стол ST-9</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    {% include "_site_ui.html" %} {% include "_billiards_ui.html" %}
+  </head>
+  <body>
+    {% include "_site_nav.html" %}
+    <main class="pool-page" id="st-content" data-table-id="{{ table_id }}">
+      <header class="pool-heading">
+        <div>
+          <span class="pool-eyebrow">Strike Team 9 · Pool club</span>
+          <h1 id="title">Бильярд</h1>
+        </div>
+        <div class="pool-actions">
+          <button class="pool-btn" id="copy">Пригласить друга</button
+          ><a class="pool-btn" href="/games/billiards/lobby">Все столы ↗</a>
+        </div>
+      </header>
+      <p id="error" class="pool-notice" role="alert" hidden></p>
+      <section id="joinPanel" class="pool-panel" hidden>
+        <span class="pool-eyebrow">Приглашение к столу</span>
+        <h2 class="mt-3">Сыграем партию?</h2>
+        <p id="joinText" class="pool-muted"></p>
+        <button class="pool-btn primary" id="join">Занять место</button>
+      </section>
+      <section id="game" class="pool-match" aria-label="Игровая комната" hidden>
+        <div id="scores" class="pool-scoreboard"></div>
+        <div id="status" class="pool-status-line" role="status">
+          Подключение к столу…
+        </div>
+        <div class="pool-stage">
+          <canvas
+            id="table"
+            class="pool-canvas"
+            width="1200"
+            height="700"
+            tabindex="0"
+            aria-label="Бильярдный стол. Выберите направление мышью или касанием. Стрелки меняют угол, пробел выполняет удар."
+          ></canvas>
+          <div id="overlay" class="pool-modal-layer" hidden>
+            <div class="pool-modal">
+              <div id="overlayIcon" class="pool-emblem" aria-hidden="true">
+                ◉
+              </div>
+              <span id="overlayEyebrow" class="pool-eyebrow"></span>
+              <h2 id="overlayTitle"></h2>
+              <p id="overlayText"></p>
+              <div id="waitingPlayers" class="pool-muted mb-3"></div>
+              <div class="pool-actions">
+                <button id="ready" class="pool-btn primary" hidden>
+                  Я готов</button
+                ><button id="start" class="pool-btn primary" hidden>
+                  Начать партию</button
+                ><button id="rematch" class="pool-btn primary" hidden>
+                  Ещё партия
+                </button>
+              </div>
             </div>
-            <div id="joinPanel" class="st-panel" hidden>
-                <h2>Присоединиться к столу</h2>
-                <p id="joinText" class="mb-3"></p>
-                <button id="join" class="btn btn-primary">Занять место</button>
+          </div>
+        </div>
+        <div class="pool-controls">
+          <div class="pool-instruction">
+            <strong id="aimTitle">Прицеливание</strong
+            ><span id="aimHelp">Загрузка управления…</span>
+          </div>
+          <div class="pool-power">
+            <label for="power"
+              >Сила удара
+              <output id="powerValue" for="power">55%</output></label
+            ><input
+              id="power"
+              type="range"
+              min="5"
+              max="100"
+              value="55"
+              aria-label="Сила удара"
+            />
+            <div class="pool-power-scale">
+              <span>Мягко</span><span>Сильно</span>
             </div>
-            <div id="game" class="bl-table-layout" hidden>
-                <section>
-                    <div id="status" class="bl-status">Загрузка…</div>
-                    <div class="bl-stage">
-                        <div class="bl-canvas-wrap">
-                            <canvas id="table"
-                                    class="bl-canvas"
-                                    width="1000"
-                                    height="500"
-                                    aria-label="Бильярдный стол"></canvas>
-                            <div id="overlay" class="bl-overlay" hidden></div>
-                        </div>
-                        <div class="bl-aim">
-                            <div class="bl-controls">
-                                <label class="bl-power">
-                                    <span class="bl-power-head"><span>Сила удара</span><output id="powerValue" for="power">55%</output></span><input id="power"
-       type="range"
-       min="5"
-       max="100"
-       value="55"
-       style="--power:55%"><span class="bl-power-scale"><span>Мягко</span><span>Средне</span><span>Сильно</span></span></label><label class="bl-sensitivity"><span class="bl-power-head"><span>Чувствительность кия</span><output id="sensitivityValue" for="sensitivity">100%</output></span><input id="sensitivity" type="range" min="25" max="200" step="5" value="100">
-                                    </label>
-                                </div>
-                                <button id="shoot" class="btn btn-primary" disabled>Ударить</button>
-                            </div>
-                            <p class="st-field-hint mt-2 mb-0" id="aimHelp">Зажми ПКМ и веди мышь для поворота кия. ЛКМ используется только для установки битка после фола.</p>
-                        </div>
-                        <div class="bl-mobile-actions mt-3">
-                            <button id="ready" class="btn btn-outline-light" hidden>Готов</button><button id="start" class="btn btn-primary" hidden>Начать партию</button><button id="rematch" class="btn btn-primary" hidden>Расставить шары заново</button><button id="leave" class="btn btn-outline-danger">Покинуть стол</button><button id="copy" class="btn btn-outline-light">Копировать ссылку</button>
-                        </div>
-                        <details class="st-panel mt-3">
-                            <summary>Управление и фолы</summary>
-                            <div class="bl-help mt-3">
-                                На компьютере кий поворачивается только пока зажата правая кнопка мыши. Чувствительность поворота сохраняется в этом браузере. На телефоне удерживай палец и веди по столу. Выбери силу по цветной шкале и нажми «Ударить»: положение кия показывает силу до удара. После фола сначала левым кликом или касанием поставь биток на свободное место, затем выбери направление.
-                                <br>
-                                <br>
-                                Сервер рассчитывает замедление по сукну, потерю энергии при столкновениях, отскок от деревянных бортов и падение в лузы. Фол фиксируется при падении битка, отсутствии касания, неправильном первом шаре и отсутствии борта или забитого шара после касания. Следующий игрок получает биток с руки.
-                            </div>
-                        </details>
-                    </section>
-                    <aside>
-                        <section class="st-panel">
-                            <h2>Участники</h2>
-                            <div id="scores" class="bl-score"></div>
-                            <div id="bank" class="bl-status mt-3"></div>
-                            <h3 class="mt-3">Забитые шары</h3>
-                            <div id="pocketed" class="bl-pockets mt-2"></div>
-                        </section>
-                        <section class="st-panel mt-3">
-                            <h2>События</h2>
-                            <div id="events" class="bl-events"></div>
-                        </section>
-                    </aside>
-                </div>
-            </main>
-            <script nonce="{{ request.state.csp_nonce }}">
-const TID = {{ table_id|tojson }},
-    canvas = document.getElementById("table"),
-    ctx = canvas.getContext("2d");
-let state = null,
-    aim = 0,
-    placing = false,
-    cuePlace = null,
-    animating = false,
-    lastShot = 0,
-    polling = false,
-    aimDragging = false,
-    aimPointer = null,
-    aimPointerAngle = null;
-let cueSensitivity = 1;
-try {
-    cueSensitivity = Math.min(
-        2,
-        Math.max(0.25, Number(localStorage.getItem("st9:billiards:sensitivity")) || 1),
-    );
-} catch (_) {}
-const CUSHION = 22,
-    BALL_RADIUS = 14,
-    PLAY_LEFT = 36,
-    PLAY_RIGHT = 964,
-    PLAY_TOP = 36,
-    PLAY_BOTTOM = 464;
-const colors = [
-    "#f5f1df",
-    "#f3cf3d",
-    "#3174c7",
-    "#d54b48",
-    "#7047a6",
-    "#e97d2e",
-    "#2a9a62",
-    "#7e2634",
-    "#202838",
-    "#f3cf3d",
-    "#3174c7",
-    "#d54b48",
-    "#7047a6",
-    "#e97d2e",
-    "#2a9a62",
-    "#7e2634",
-];
-const esc = (v) =>
-    String(v ?? "").replace(
-        /[&<>"']/g,
-        (c) =>
-            ({
-                "&": "&amp;",
-                "<": "&lt;",
-                ">": "&gt;",
-                '"': "&quot;",
-                "'": "&#39;",
-            })[c],
-    );
-async function api(url, options) {
-    const r = await fetch(url, options),
-        d = await r.json();
-    if (!r.ok) throw Error(d.detail || "Ошибка запроса");
-    return d;
-}
-
-function xy(event) {
-    const r = canvas.getBoundingClientRect();
-    return {
-        x: ((event.clientX - r.left) * 1000) / r.width,
-        y: ((event.clientY - r.top) * 500) / r.height,
-    };
-}
-
-function ballsFrom(rows) {
-    return rows.map((r) => ({
-        id: r[0],
-        x: r[1],
-        y: r[2],
-        pocketed: r[3],
-    }));
-}
-
-function cueBall(rows) {
-    return ballsFrom(rows).find((b) => b.id === 0);
-}
-
-function drawSurface() {
-    ctx.clearRect(0, 0, 1000, 500);
-    const wood = ctx.createLinearGradient(0, 0, 1000, 500);
-    wood.addColorStop(0, "#3d2114");
-    wood.addColorStop(0.35, "#8b552f");
-    wood.addColorStop(0.68, "#56301d");
-    wood.addColorStop(1, "#2d180f");
-    ctx.fillStyle = wood;
-    ctx.fillRect(0, 0, 1000, 500);
-    ctx.strokeStyle = "#b47a45";
-    ctx.lineWidth = 3;
-    ctx.strokeRect(8, 8, 984, 484);
-    const cloth = ctx.createLinearGradient(0, 0, 0, 500);
-    cloth.addColorStop(0, "#28785d");
-    cloth.addColorStop(0.5, "#1d654f");
-    cloth.addColorStop(1, "#154636");
-    ctx.fillStyle = cloth;
-    ctx.fillRect(CUSHION, CUSHION, 1000 - CUSHION * 2, 500 - CUSHION * 2);
-    ctx.strokeStyle = "#123c30";
-    ctx.lineWidth = 14;
-    ctx.strokeRect(29, 29, 942, 442);
-    for (const [x, y] of [
-        [CUSHION, CUSHION],
-        [500, CUSHION],
-        [1000 - CUSHION, CUSHION],
-        [CUSHION, 500 - CUSHION],
-        [500, 500 - CUSHION],
-        [1000 - CUSHION, 500 - CUSHION],
-    ]) {
-        ctx.beginPath();
-        ctx.fillStyle = "#050a09";
-        ctx.arc(x, y, 32, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.strokeStyle = "#21130d";
-        ctx.lineWidth = 5;
-        ctx.arc(x, y, 30, 0, Math.PI * 2);
-        ctx.stroke();
-    }
-    ctx.fillStyle = "#d2a66e";
-    for (const x of [155, 285, 715, 845]) {
-        ctx.beginPath();
-        ctx.arc(x, 11, 3, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(x, 489, 3, 0, Math.PI * 2);
-        ctx.fill();
-    }
-}
-
-function rayTarget(c, balls) {
-    const ux = Math.cos(aim),
-        uy = Math.sin(aim),
-        times = [];
-    if (ux > 0) times.push((PLAY_RIGHT - c.x) / ux);
-    else if (ux < 0) times.push((PLAY_LEFT - c.x) / ux);
-    if (uy > 0) times.push((PLAY_BOTTOM - c.y) / uy);
-    else if (uy < 0) times.push((PLAY_TOP - c.y) / uy);
-    let distance = Math.min(...times.filter((v) => v > 0)),
-        hit = null;
-    for (const b of balls) {
-        if (b.id === 0 || b.pocketed) continue;
-        const dx = b.x - c.x,
-            dy = b.y - c.y,
-            projection = dx * ux + dy * uy;
-        if (projection <= 0) continue;
-        const side2 = dx * dx + dy * dy - projection * projection,
-            diameter = BALL_RADIUS * 2;
-        if (side2 > diameter * diameter) continue;
-        const candidate = projection - Math.sqrt(Math.max(0, diameter * diameter - side2));
-        if (candidate >= 0 && candidate < distance) {
-            distance = candidate;
-            hit = b;
-        }
-    }
-    return {
-        x: c.x + ux * distance,
-        y: c.y + uy * distance,
-        hit,
-    };
-}
-
-function drawAimAndCue(c, balls) {
-    const target = rayTarget(c, balls),
-        ux = Math.cos(aim),
-        uy = Math.sin(aim);
-    ctx.save();
-    ctx.setLineDash([11, 8]);
-    ctx.strokeStyle = "#f7fbffb8";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(c.x, c.y);
-    ctx.lineTo(target.x, target.y);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    const strength = Number(document.getElementById("power").value) / 100,
-        gap = 10 + strength * 14,
-        tipX = c.x - ux * (BALL_RADIUS + gap),
-        tipY = c.y - uy * (BALL_RADIUS + gap),
-        backX = tipX - ux * 270,
-        backY = tipY - uy * 270;
-    ctx.shadowColor = "#000b";
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetY = 4;
-    ctx.lineCap = "round";
-    ctx.strokeStyle = "#26150e";
-    ctx.lineWidth = 11;
-    ctx.beginPath();
-    ctx.moveTo(backX, backY);
-    ctx.lineTo(tipX, tipY);
-    ctx.stroke();
-    const cueGradient = ctx.createLinearGradient(backX, backY, tipX, tipY);
-    cueGradient.addColorStop(0, "#3a1c10");
-    cueGradient.addColorStop(0.18, "#9e4f22");
-    cueGradient.addColorStop(0.72, "#e1b26e");
-    cueGradient.addColorStop(1, "#f4dfae");
-    ctx.shadowColor = "transparent";
-    ctx.strokeStyle = cueGradient;
-    ctx.lineWidth = 7;
-    ctx.beginPath();
-    ctx.moveTo(backX, backY);
-    ctx.lineTo(tipX, tipY);
-    ctx.stroke();
-    ctx.strokeStyle = "#3f78a1";
-    ctx.lineWidth = 8;
-    ctx.beginPath();
-    ctx.moveTo(tipX - ux * 5, tipY - uy * 5);
-    ctx.lineTo(tipX, tipY);
-    ctx.stroke();
-    ctx.restore();
-}
-
-function drawBall(b) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.shadowColor = "#000a";
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetY = 4;
-    const shade = ctx.createRadialGradient(b.x - 5, b.y - 6, 2, b.x, b.y, 15);
-    shade.addColorStop(0, "#fff");
-    shade.addColorStop(0.18, colors[b.id]);
-    shade.addColorStop(1, "#111");
-    ctx.fillStyle = shade;
-    ctx.arc(b.x, b.y, BALL_RADIUS, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowColor = "transparent";
-    if (b.id > 8) {
-        ctx.beginPath();
-        ctx.strokeStyle = "#f6f0df";
-        ctx.lineWidth = 8;
-        ctx.arc(b.x, b.y, 9, 0, Math.PI * 2);
-        ctx.stroke();
-    }
-    if (b.id) {
-        ctx.beginPath();
-        ctx.fillStyle = "#f5f1df";
-        ctx.arc(b.x, b.y, 6.5, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.fillStyle = "#17202d";
-        ctx.font = "bold 8px system-ui";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(b.id, b.x, b.y + 0.5);
-    }
-    ctx.restore();
-}
-
-function draw(rows) {
-    drawSurface();
-    const balls = ballsFrom(rows);
-    if (cuePlace && state?.ball_in_hand) {
-        const c = balls.find((b) => b.id === 0);
-        c.x = cuePlace.x;
-        c.y = cuePlace.y;
-        c.pocketed = false;
-    }
-    const waiting = state?.ball_in_hand && !cuePlace && !animating,
-        canAim = state?.phase === "playing" && state.actor === state.your_id && !animating,
-        cue = balls.find((b) => b.id === 0 && !b.pocketed);
-    if (canAim && cue && !waiting) drawAimAndCue(cue, balls);
-    for (const b of balls) {
-        if (!b.pocketed && !(waiting && b.id === 0)) drawBall(b);
-    }
-}
-
-function groupName(g) {
-    return g === "solids" ? "сплошные" : g === "stripes" ? "полосатые" : "группа не назначена";
-}
-
-function modeName(m) {
-    return m === "practice" ? "Тренировка" : m === "eight" ? "8-ball" : "Ротация";
-}
-
-function update(s, skipAnimation = false) {
-    state = s;
-    document.getElementById("title").textContent = modeName(s.rules.mode);
-    document.getElementById("subtitle").textContent =
-        s.rules.mode === "practice"
-            ? "Без ставки · статистика тренировки"
-            : `${s.players.length}/${s.rules.max_players} игроков · ставка ${(s.rules.entry_cents / 100).toFixed(2)} БК`;
-    const me = s.players.find((p) => p.id === s.your_id),
-        turn = s.players.find((p) => p.id === s.actor),
-        remaining = s.deadline ? Math.max(0, Math.ceil(s.deadline - Date.now() / 1000)) : 0;
-    let message =
-        s.phase === "waiting"
-            ? "Ожидаем готовности участников"
-            : s.phase === "finished"
-              ? s.match?.result?.reason || "Партия завершена"
-              : s.actor === s.your_id
-                ? s.ball_in_hand
-                    ? "Твой ход: сначала поставь биток"
-                    : "Твой ход"
-                : `Ходит ${turn?.name || "игрок"}`;
-    if (s.phase === "playing") message += ` · ${remaining} сек.`;
-    document.getElementById("status").textContent = message;
-    document.getElementById("scores").innerHTML = s.players
-        .filter((p) => !p.left)
-        .map(
-            (p) =>
-                `<div class="bl-player ${p.id === s.actor ? "turn" : ""} ${p.id === s.your_id ? "me" : ""}"><div class="bl-player-head"><span>${esc(p.name)}${p.id === s.your_id ? " · ты" : ""}</span><span>${s.rules.mode === "eight" ? groupName(s.groups[String(p.id)]) : p.score + " очк."}</span></div><div class="bl-meta">Удары: ${p.shots} · фолы: ${p.fouls}${p.ready ? " · готов" : ""}</div></div>`,
-        )
-        .join("");
-    document.getElementById("bank").innerHTML =
-        s.rules.mode === "practice"
-            ? `<span class="bl-practice">Тренировка · ${me?.shots || 0} ударов</span>`
-            : `Банк: <b>${(s.match?.bank_cents ?? s.rules.entry_cents * s.rules.max_players) / 100} БК</b>`;
-    const pocket = s.balls.filter((b) => b[0] && b[3]);
-    document.getElementById("pocketed").innerHTML = pocket.length
-        ? pocket
-              .map(
-                  (b) =>
-                      `<span class="bl-ball-chip" style="background:${colors[b[0]]}">${b[0]}</span>`,
-              )
-              .join("")
-        : '<span class="bl-meta">Пока ни одного</span>';
-    document.getElementById("events").innerHTML =
-        [...s.events]
-            .reverse()
-            .map((e) => `<div class="bl-event">${esc(e.text)}</div>`)
-            .join("") || '<div class="bl-meta">Игра ещё не началась.</div>';
-    const ready = document.getElementById("ready"),
-        start = document.getElementById("start"),
-        rematch = document.getElementById("rematch");
-    ready.hidden = s.phase !== "waiting";
-    ready.textContent = me?.ready ? "Отменить готовность" : "Готов";
-    start.hidden = !(s.phase === "waiting" && s.creator === s.your_id);
-    rematch.hidden = !(s.phase === "finished" && s.creator === s.your_id);
-    const canShoot = s.phase === "playing" && s.actor === s.your_id && !animating;
-    if (!canShoot || !s.ball_in_hand) cuePlace = null;
-    placing = canShoot && s.ball_in_hand && !cuePlace;
-    document.getElementById("shoot").disabled = !canShoot || (s.ball_in_hand && !cuePlace);
-    document.getElementById("aimHelp").textContent = placing
-        ? "Левым кликом или касанием выбери свободное место для битка."
-        : "Зажми ПКМ и веди курсор для выбора траектории. Затем выбери силу и нажми «Ударить».";
-    if (!skipAnimation && s.last_shot && s.last_shot.id !== lastShot) {
-        lastShot = s.last_shot.id;
-        animate(s.last_shot.frames, s.last_shot.frame_ms || 33.33);
-    } else if (!animating) draw(s.balls);
-}
-async function animate(frames, frameMs) {
-    animating = true;
-    document.getElementById("shoot").disabled = true;
-    document.getElementById("overlay").hidden = true;
-    let i = 0;
-    const delay = Math.max(16, Number(frameMs) || 33.33);
-    await new Promise((resolve) => {
-        function frame() {
-            draw(frames[i]);
-            i++;
-            if (i < frames.length) setTimeout(frame, delay);
-            else resolve();
-        }
-        frame();
-    });
-    animating = false;
-    if (state) {
-        draw(state.balls);
-        update(state, true);
-    }
-}
-
-function canControl() {
-    return state && state.phase === "playing" && state.actor === state.your_id && !animating;
-}
-
-function cueForAim() {
-    return cuePlace || cueBall(state.balls);
-}
-
-function pointerAngle(e) {
-    const cue = cueForAim();
-    if (!cue) return null;
-    const p = xy(e);
-    return Math.atan2(p.y - cue.y, p.x - cue.x);
-}
-
-function normalizeAngle(value) {
-    while (value > Math.PI) value -= Math.PI * 2;
-    while (value < -Math.PI) value += Math.PI * 2;
-    return value;
-}
-canvas.addEventListener("contextmenu", (e) => e.preventDefault());
-canvas.addEventListener("pointerdown", (e) => {
-    if (!canControl()) return;
-    const p = xy(e);
-    if (placing) {
-        if (e.pointerType !== "touch" && e.button !== 0) return;
-        e.preventDefault();
-        cuePlace = {
-            x: Math.min(PLAY_RIGHT, Math.max(PLAY_LEFT, p.x)),
-            y: Math.min(PLAY_BOTTOM, Math.max(PLAY_TOP, p.y)),
-        };
-        placing = false;
-        document.getElementById("shoot").disabled = false;
-        draw(state.balls);
-        document.getElementById("aimHelp").textContent =
-            "Биток поставлен. Зажми ПКМ и выбери направление удара.";
-        return;
-    }
-    if (e.button !== 2 && e.pointerType !== "touch") return;
-    e.preventDefault();
-    aimDragging = true;
-    aimPointer = e.pointerId;
-    aimPointerAngle = pointerAngle(e);
-    canvas.classList.add("aiming");
-    canvas.setPointerCapture?.(e.pointerId);
-});
-canvas.addEventListener("pointermove", (e) => {
-    if (!aimDragging || e.pointerId !== aimPointer || !canControl()) return;
-    e.preventDefault();
-    const current = pointerAngle(e);
-    if (current === null || aimPointerAngle === null) return;
-    aim = normalizeAngle(aim + normalizeAngle(current - aimPointerAngle) * cueSensitivity);
-    aimPointerAngle = current;
-    draw(state.balls);
-});
-
-function finishAim(e) {
-    if (!aimDragging || e.pointerId !== aimPointer) return;
-    aimDragging = false;
-    aimPointer = null;
-    aimPointerAngle = null;
-    canvas.classList.remove("aiming");
-    if (canvas.hasPointerCapture?.(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
-}
-canvas.addEventListener("pointerup", finishAim);
-canvas.addEventListener("pointercancel", finishAim);
-const sensitivity = document.getElementById("sensitivity");
-sensitivity.value = String(Math.round(cueSensitivity * 100));
-document.getElementById("sensitivityValue").textContent = sensitivity.value + "%";
-sensitivity.addEventListener("input", (e) => {
-    cueSensitivity = Number(e.target.value) / 100;
-    document.getElementById("sensitivityValue").textContent = e.target.value + "%";
-    try {
-        localStorage.setItem("st9:billiards:sensitivity", String(cueSensitivity));
-    } catch (_) {}
-});
-document.getElementById("power").addEventListener("input", (e) => {
-    document.getElementById("powerValue").textContent = e.target.value + "%";
-    e.target.style.setProperty("--power", e.target.value + "%");
-    if (state && !animating) draw(state.balls);
-});
-async function action(path, payload = {}) {
-    try {
-        const s = await api(`/api/billiards/table/${encodeURIComponent(TID)}/${path}`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                revision: state.revision,
-                ...payload,
-            }),
-        });
-        if (s.balls) update(s);
-        return s;
-    } catch (e) {
-        STUI.notice(e.message, "error");
-        await load();
-    }
-}
-document.getElementById("shoot").addEventListener("click", () => {
-    const cue = cueForAim();
-    if (!cue || (cue.pocketed && !cuePlace)) return;
-    document.getElementById("shoot").disabled = true;
-    action("shoot", {
-        angle: aim,
-        power: Number(document.getElementById("power").value) / 100,
-        cue_x: cue.x,
-        cue_y: cue.y,
-    });
-    cuePlace = null;
-});
-document.getElementById("ready").addEventListener("click", () =>
-    action("ready", {
-        ready: !state.players.find((p) => p.id === state.your_id).ready,
-    }),
-);
-document.getElementById("start").addEventListener("click", () => action("start"));
-document.getElementById("rematch").addEventListener("click", () => action("rematch"));
-document.getElementById("leave").addEventListener("click", async () => {
-    if (!confirm("Покинуть стол? Во время партии это считается сдачей.")) return;
-    await action("leave");
-    location.href = "/games/billiards/lobby";
-});
-document.getElementById("copy").addEventListener("click", async () => {
-    await navigator.clipboard.writeText(location.href);
-    STUI.notice("Ссылка скопирована", "success");
-});
-async function load() {
-    if (polling) return;
-    polling = true;
-    try {
-        const s = await api(`/api/billiards/table/${encodeURIComponent(TID)}/state`);
-        document.getElementById("game").hidden = false;
-        document.getElementById("joinPanel").hidden = true;
-        update(s);
-    } catch (e) {
-        if (e.message.includes("присоедин")) {
-            const p = await api(`/api/billiards/table/${encodeURIComponent(TID)}/preview`);
-            document.getElementById("joinPanel").hidden = false;
-            document.getElementById("joinText").textContent =
-                `${modeName(p.rules.mode)} · ${p.players}/${p.rules.max_players} игроков${p.rules.mode === "practice" ? "" : ` · ставка ${(p.rules.entry_cents / 100).toFixed(2)} БК`}`;
-        } else STUI.notice(e.message, "error");
-    } finally {
-        polling = false;
-    }
-}
-document.getElementById("join").addEventListener("click", async () => {
-    try {
-        await api(`/api/billiards/table/${encodeURIComponent(TID)}/join`, {
-            method: "POST",
-        });
-        document.getElementById("joinPanel").hidden = true;
-        document.getElementById("game").hidden = false;
-        load();
-    } catch (e) {
-        STUI.notice(e.message, "error");
-    }
-});
-load();
-setInterval(() => {
-    if (!document.hidden && !animating) load();
-}, 1000);
-
-</script>
-        </body>
-    </html>
+          </div>
+          <label id="pocketLabel" class="pool-muted" hidden
+            >Луза для восьмёрки<select
+              id="calledPocket"
+              class="pool-btn"
+              aria-label="Заказанная луза"
+            >
+              <option value="">Выберите лузу</option>
+              <option value="0">1 · верхняя левая</option>
+              <option value="1">2 · верхняя средняя</option>
+              <option value="2">3 · верхняя правая</option>
+              <option value="3">4 · нижняя левая</option>
+              <option value="4">5 · нижняя средняя</option>
+              <option value="5">6 · нижняя правая</option>
+            </select></label
+          ><button id="shoot" class="pool-btn primary" disabled>
+            Ударить ↗
+          </button>
+        </div>
+        <div class="pool-bottom-bar">
+          <span id="connection" class="pool-connection">Подключаемся…</span>
+          <div class="pool-actions">
+            <button id="reposition" class="pool-btn" hidden>
+              Переставить биток</button
+            ><button id="sound" class="pool-btn" aria-pressed="false">
+              Звук выкл.</button
+            ><button id="fullscreen" class="pool-btn">На весь экран</button>
+          </div>
+        </div>
+      </section>
+      <div class="pool-secondary">
+        <details class="pool-panel">
+          <summary>Правила и управление</summary>
+          <div class="pool-muted">
+            <p>
+              <b>Направление:</b> нажмите на стол и ведите мышью или пальцем.
+              Оттяните от места нажатия назад вдоль кия и отпустите для удара.
+              Можно отдельно выбрать силу ползунком и нажать «Ударить».
+            </p>
+            <p>
+              <b>Точность:</b> стрелки ← → поворачивают кий, Shift уменьшает
+              шаг. Пробел — удар. Esc отменяет оттяжку. Пунктир показывает
+              первое касание и короткое продолжение траектории; это подсказка
+              направления.
+            </p>
+            <p>
+              <b>8-ball:</b> разбой оставляет стол открытым. После законного
+              прицельного шара назначаются сплошные и полосатые. Забейте свою
+              группу, затем выберите лузу для восьмёрки. Ранняя восьмёрка,
+              неправильная луза или восьмёрка с фолом — поражение. Восьмёрка на
+              разбое возвращается на стол. Для законного разбоя нужен забитый
+              шар или четыре прицельных шара у борта.
+            </p>
+            <p>
+              <b>Фол:</b> падение битка, неправильное первое касание либо
+              отсутствие борта и забитого шара после касания. Следующий игрок
+              получает биток с руки. Три пропуска таймера — сдача.
+            </p>
+            <p>
+              <b>Ротация:</b> первым касанием нужен младший оставшийся шар. Очки
+              равны номерам забитых шаров. Тренировка — свободная игра без
+              ставки.
+            </p>
+            <p id="legacyRules" hidden>
+              Эта партия начата по прежним правилам: заказ лузы не требуется.
+              Обновлённые правила включатся со следующей партией.
+            </p>
+          </div>
+        </details>
+        <details class="pool-panel">
+          <summary>Ход партии и настройки</summary>
+          <div id="events" class="pool-log"></div>
+          <div class="pool-settings">
+            <label for="sensitivity"
+              >Чувствительность
+              <input
+                id="sensitivity"
+                type="range"
+                min="25"
+                max="200"
+                step="5"
+                value="100"
+              /><output id="sensitivityValue">100%</output></label
+            >
+            <div class="pool-fine">
+              <button
+                class="pool-btn"
+                id="angleLeft"
+                aria-label="Повернуть кий влево"
+              >
+                ←</button
+              ><button
+                class="pool-btn"
+                id="angleRight"
+                aria-label="Повернуть кий вправо"
+              >
+                →</button
+              ><small>Точная доводка угла</small>
+            </div>
+            <button id="leave" class="pool-btn danger">Покинуть стол</button>
+          </div>
+        </details>
+      </div>
+    </main>
+    <script nonce="{{ request.state.csp_nonce }}">
+      {% include "_billiards_renderer.js.html" %}
+    </script>
+    <script nonce="{{ request.state.csp_nonce }}">
+      {% include "_billiards_game.js.html" %}
+    </script>
+  </body>
+</html>

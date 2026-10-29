@@ -265,3 +265,28 @@ Award gallery and all saved Protocol lists, 2026-10-29:
   and conditional bot versus web-only service selection verified.
 - Shell syntax, Ruff E9/F and whitespace checks pass. Live Protocol collection was
   not exercised from the cloud environment; the view uses existing cached records.
+
+Playable pool lounge and 8-ball rebuild, 2026-10-29:
+- Final full isolated suite: 581 passed; two existing dependency warnings.
+- Nineteen new game cases cover legal final eight, wrong pocket/scratch/early and
+  same-shot eight losses, called-pocket validation, legacy saved matches, open break,
+  eight respotting without overlap, short-break foul, turn timing after animation,
+  late-shot rejection, invalid numeric inputs, deterministic finite stopped physics,
+  real HTTP wallet settlement exactly once, strict payloads, participant/private/CSRF
+  checks, rendered table JavaScript and known-shot frame omission without mutating
+  durable state. Practice remains free and prior settlement paths are retained.
+- Chromium with isolated SQLite and synthetic signed sessions: two actual players
+  create/join/ready/start, a physical drag-release break, identical authoritative shot
+  IDs, reload during animation, timer/control gating, literal hostile names, quick
+  practice, keyboard/sound/fullscreen, actual called-pocket eight win and rematch.
+  Real CDP touch input verifies rotated portrait coordinates, overlap rejection,
+  replacement and drag-release shot at 390px. Six seats and legacy rule notice work.
+  Zero pageerror events and no horizontal mobile overflow. Idle draw instrumentation
+  confirms polling an unchanged table does not repaint the canvas continuously.
+- Four isolated installer paths (success/copy/preflight/health failure) pass with
+  file restoration and new-template removal, preserving database/.env/bot/collector
+  sentinels and selecting only the website service. Actual SQLite backup/quick_check,
+  saved-table restoration and Jinja preflight run against the isolated browser DB.
+- Ruff E9/F, JavaScript syntax, shell syntax and git whitespace checks pass.
+  No production bets, payments or Discord actions executed. Foony access was denied
+  by the cloud domain policy; no external game source code or artwork was imported.

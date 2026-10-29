@@ -4,7 +4,7 @@ import secrets
 import time
 from decimal import Decimal
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import RedirectResponse
 
 from billiards import BilliardsError, BilliardsTable
@@ -279,9 +279,20 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
         return {"ok": True}
 
     @router.get("/api/billiards/table/{tid}/state")
-    async def state(tid: str, user=Depends(get_user), db=Depends(get_db)):
+    async def state(
+        tid: str,
+        known_shot: int = Query(0, ge=0),
+        user=Depends(get_user),
+        db=Depends(get_db),
+    ):
         require(user)
-        return service.state(service.member(tid, user.id), user, db)
+        data = service.state(service.member(tid, user.id), user, db)
+        shot = data.get("last_shot")
+        if shot and shot["id"] == known_shot:
+            # Frames are immutable for this shot. Omit the duplicate payload,
+            # leaving durable state intact and old clients fully compatible.
+            data["last_shot"] = {**shot, "frames": None}
+        return data
 
     @router.post("/api/billiards/table/{tid}/ready")
     async def ready(
@@ -331,7 +342,9 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
     ):
         require(user)
         table = service.member(tid, user.id)
-        data = await body(request, ["revision", "angle", "power", "cue_x", "cue_y"])
+        data = await body(
+            request, ["revision", "angle", "power", "cue_x", "cue_y", "called_pocket"]
+        )
         revision(table, data)
         table.shoot(
             user.id,
@@ -339,6 +352,7 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
             data.get("power"),
             data.get("cue_x"),
             data.get("cue_y"),
+            data.get("called_pocket"),
         )
         service.settle(table, db)
         return service.state(table, user, db)

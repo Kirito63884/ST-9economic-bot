@@ -32,7 +32,7 @@ STOP_SPEED = 3.0
 PHYSICS_HZ = 240
 ANIMATION_HZ = 30
 DEFAULTS = {
-    "mode": "rotation",
+    "mode": "eight",
     "max_players": 2,
     "entry_cents": 1000,
     "turn_seconds": 90,
@@ -125,6 +125,8 @@ def simulate(balls, angle, power):
     cue["vy"] = math.sin(angle) * speed
     first_contact = None
     rail_after_contact = False
+    object_rails = set()
+    pocket_map = {}
     pocketed = []
     frames = [_frame(balls)]
     dt = 1 / PHYSICS_HZ
@@ -135,13 +137,19 @@ def simulate(balls, angle, power):
             b["x"] += b["vx"] * dt
             b["y"] += b["vy"] * dt
         for b in list(active):
-            if any(
-                (b["x"] - px) ** 2 + (b["y"] - py) ** 2 <= POCKET_RADIUS**2
-                for px, py in POCKETS
-            ):
+            pocket = next(
+                (
+                    index
+                    for index, (px, py) in enumerate(POCKETS)
+                    if (b["x"] - px) ** 2 + (b["y"] - py) ** 2 <= POCKET_RADIUS**2
+                ),
+                None,
+            )
+            if pocket is not None:
                 b["pocketed"] = True
                 b["vx"] = b["vy"] = 0.0
                 pocketed.append(b["id"])
+                pocket_map[str(b["id"])] = pocket
                 if first_contact is not None:
                     rail_after_contact = True
                 continue
@@ -182,6 +190,8 @@ def simulate(balls, angle, power):
                 b["vx"] *= CUSHION_TANGENT_RETENTION
             if hit and first_contact is not None:
                 rail_after_contact = True
+                if b["id"]:
+                    object_rails.add(b["id"])
         active = [b for b in balls if not b["pocketed"]]
         # Two solver passes keep a tightly packed rack stable during the break.
         for _ in range(2):
@@ -240,6 +250,8 @@ def simulate(balls, angle, power):
         "rail_after_contact": rail_after_contact,
         "frames": frames,
         "frame_ms": round(1000 * frame_steps * stride / PHYSICS_HZ, 2),
+        "object_rails": sorted(object_rails),
+        "pocket_map": pocket_map,
     }
 
 
@@ -346,6 +358,7 @@ class BilliardsTable:
             "bank_cents": entry * len(active),
             "result": None,
             "settled": self.rules["mode"] == "practice",
+            "rules_version": 2,
         }
         self.balls = fresh_balls(self.rules["mode"])
         self.groups = {}
@@ -417,9 +430,13 @@ class BilliardsTable:
             self.finish(winners, "Все шары забиты; победа по сумме очков")
         return True
 
-    def shoot(self, uid, angle, power, cue_x=None, cue_y=None):
+    def shoot(self, uid, angle, power, cue_x=None, cue_y=None, called_pocket=None):
         if self.phase != "playing" or uid != self.actor:
             raise BilliardsError("Сейчас ход другого игрока", 409)
+        if self.deadline and time.time() >= self.deadline:
+            raise BilliardsError("Время хода истекло. Обновите состояние стола", 409)
+        if self.last_shot and time.time() < self.last_shot.get("available_at", 0):
+            raise BilliardsError("Дождитесь остановки шаров", 409)
         if type(angle) not in (int, float) or not math.isfinite(angle):
             raise BilliardsError("Некорректное направление удара")
         if (
@@ -428,6 +445,18 @@ class BilliardsTable:
             or not 0.05 <= power <= 1
         ):
             raise BilliardsError("Сила удара должна быть от 5% до 100%")
+        if called_pocket is not None and (
+            type(called_pocket) is not int or not 0 <= called_pocket < 6
+        ):
+            raise BilliardsError("Выберите одну из шести луз")
+        group_before = self.groups.get(str(uid))
+        target_eight = bool(group_before and not self.group_remaining(group_before))
+        breaking = sum(p["shots"] for p in self.players) == 0
+        modern_eight = (
+            self.rules["mode"] == "eight" and self.match.get("rules_version", 1) >= 2
+        )
+        if modern_eight and target_eight and called_pocket is None:
+            raise BilliardsError("Перед ударом по восьмёрке выберите лузу")
         if self.ball_in_hand:
             self.place_cue(cue_x, cue_y)
         cue = next(b for b in self.balls if b["id"] == 0)
@@ -448,15 +477,22 @@ class BilliardsTable:
             if result["first_contact"] != expected:
                 foul = f"Сначала нужно коснуться шара №{expected}"
         elif self.rules["mode"] == "eight":
-            group = self.groups.get(str(uid))
-            target_eight = bool(group and not self.group_remaining(group))
+            group = group_before
             if target_eight and result["first_contact"] != 8:
                 foul = "Сначала нужно коснуться восьмёрки"
             elif not target_eight and result["first_contact"] == 8:
                 foul = "Восьмёрку нельзя трогать первой"
-            elif group == "solids" and not 1 <= result["first_contact"] <= 7:
+            elif (
+                not target_eight
+                and group == "solids"
+                and not 1 <= result["first_contact"] <= 7
+            ):
                 foul = "Сначала нужно коснуться сплошного шара"
-            elif group == "stripes" and not 9 <= result["first_contact"] <= 15:
+            elif (
+                not target_eight
+                and group == "stripes"
+                and not 9 <= result["first_contact"] <= 15
+            ):
                 foul = "Сначала нужно коснуться полосатого шара"
         if result["scratch"]:
             foul = "Биток упал в лузу"
@@ -467,9 +503,39 @@ class BilliardsTable:
         ):
             foul = "После касания ни один шар не дошёл до борта"
 
+        if modern_eight and breaking:
+            if not object_pockets and len(result.get("object_rails", [])) < 4:
+                foul = (
+                    foul
+                    or "При разбое нужно забить шар или довести четыре прицельных шара до борта"
+                )
+            if 8 in object_pockets:
+                # House rule: eight on the break is spotted, never an instant win/loss.
+                eight = next(b for b in self.balls if b["id"] == 8)
+                candidates = [
+                    (690.0 + delta, HEIGHT / 2) for delta in range(0, 240, 30)
+                ]
+                candidates += [
+                    (float(x), float(y))
+                    for x in range(100, 901, 30)
+                    for y in range(80, 421, 30)
+                ]
+                x, y = next(
+                    (x, y)
+                    for x, y in candidates
+                    if all(
+                        b["id"] == 8
+                        or b["pocketed"]
+                        or math.hypot(x - b["x"], y - b["y"]) >= BALL_RADIUS * 2.05
+                        for b in self.balls
+                    )
+                )
+                eight.update(x=x, y=y, vx=0.0, vy=0.0, pocketed=False)
+                object_pockets.remove(8)
+                self.touch("Восьмёрка на разбое возвращена на стол")
+
         if self.rules["mode"] == "eight":
-            group_before = self.groups.get(str(uid))
-            if not foul and not group_before:
+            if not foul and not group_before and not (modern_eight and breaking):
                 assign = next(
                     (
                         "solids" if 1 <= bid <= 7 else "stripes"
@@ -488,14 +554,17 @@ class BilliardsTable:
                         f"{player['name']}: {'сплошные' if assign == 'solids' else 'полосатые'}"
                     )
             if 8 in object_pockets:
-                group = self.groups.get(str(uid))
-                legal = bool(group and not self.group_remaining(group) and not foul)
+                legal = bool(target_eight and not foul)
+                if modern_eight:
+                    legal = (
+                        legal and result.get("pocket_map", {}).get("8") == called_pocket
+                    )
                 opponent = next(p for p in self.active_players() if p["id"] != uid)
                 self.finish(
                     [uid] if legal else [opponent["id"]],
                     f"{player['name']} законно забил восьмёрку"
                     if legal
-                    else f"{player['name']} забил восьмёрку раньше времени",
+                    else f"{player['name']} забил восьмёрку с нарушением правил",
                 )
         else:
             player["score"] += sum(object_pockets)
@@ -516,7 +585,7 @@ class BilliardsTable:
                         if (group == "solids" and 1 <= bid <= 7)
                         or (group == "stripes" and 9 <= bid <= 15)
                     ]
-                    continue_turn = bool(own)
+                    continue_turn = bool(own or (not group and object_pockets))
                 else:
                     continue_turn = bool(object_pockets)
                 if not continue_turn:
@@ -530,7 +599,10 @@ class BilliardsTable:
             cue = next(b for b in self.balls if b["id"] == 0)
             if cue["pocketed"]:
                 self.ball_in_hand = True
-            self.deadline = time.time() + self.rules["turn_seconds"]
+            duration = max(0, len(result["frames"]) - 1) * result["frame_ms"] / 1000
+            self.deadline = time.time() + duration + self.rules["turn_seconds"]
+        started_at = time.time()
+        duration = max(0, len(result["frames"]) - 1) * result["frame_ms"] / 1000
         self.last_shot = {
             "id": self.revision + 1,
             "by": uid,
@@ -538,6 +610,12 @@ class BilliardsTable:
             "frame_ms": result["frame_ms"],
             "pocketed": result["pocketed"],
             "foul": foul,
+            "angle": float(angle),
+            "power": float(power),
+            "started_at": started_at,
+            "available_at": started_at + duration,
+            "called_pocket": called_pocket,
+            "pocket_map": result.get("pocket_map", {}),
         }
         self.touch()
 
@@ -598,6 +676,7 @@ class BilliardsTable:
 
     def public_state(self, uid):
         return {
+            "server_time": time.time(),
             "id": self.id,
             "creator": self.creator,
             "rules": self.rules,

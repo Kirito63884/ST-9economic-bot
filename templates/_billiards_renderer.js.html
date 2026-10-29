@@ -1,0 +1,392 @@
+/* Canvas renderer uses the server's 1000×500 playing coordinates.
+ * A 100-unit surround provides space for the rails and the cue.
+ * It never simulates outcomes: authoritative frames come from the server. */
+(() => {
+  const W = 1200,
+    H = 700,
+    R = 14,
+    TAU = Math.PI * 2;
+  const bounds = { left: 36, right: 964, top: 36, bottom: 464 };
+  const pockets = [
+    [22, 22],
+    [500, 22],
+    [978, 22],
+    [22, 478],
+    [500, 478],
+    [978, 478],
+  ];
+  const colors = [
+    "#f4efe3",
+    "#edbd42",
+    "#458bd4",
+    "#df5c5c",
+    "#a078cf",
+    "#eb8e43",
+    "#4db37b",
+    "#af4e68",
+    "#171f2c",
+    "#edbd42",
+    "#458bd4",
+    "#df5c5c",
+    "#a078cf",
+    "#eb8e43",
+    "#4db37b",
+    "#af4e68",
+  ];
+  const rowsToBalls = (rows) =>
+    rows.map(([id, x, y, pocketed]) => ({ id, x, y, pocketed }));
+  const line = (ctx, x, y, ex, ey) => {
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+  };
+
+  // The expanded target radius gives the location of the cue-ball centre at impact.
+  function ray(cue, balls, angle) {
+    const ux = Math.cos(angle),
+      uy = Math.sin(angle);
+    const candidates = [];
+    if (ux > 1e-9)
+      candidates.push({ t: (bounds.right - cue.x) / ux, axis: "x" });
+    if (ux < -1e-9)
+      candidates.push({ t: (bounds.left - cue.x) / ux, axis: "x" });
+    if (uy > 1e-9)
+      candidates.push({ t: (bounds.bottom - cue.y) / uy, axis: "y" });
+    if (uy < -1e-9)
+      candidates.push({ t: (bounds.top - cue.y) / uy, axis: "y" });
+    const wall = candidates
+      .filter((v) => v.t >= 0)
+      .sort((a, b) => a.t - b.t)[0] || { t: 0, axis: "x" };
+    let distance = wall.t,
+      hit = null;
+    for (const ball of balls) {
+      if (!ball.id || ball.pocketed) continue;
+      const dx = ball.x - cue.x,
+        dy = ball.y - cue.y,
+        projection = dx * ux + dy * uy;
+      if (projection <= 0) continue;
+      const side = dx * dx + dy * dy - projection * projection;
+      if (side > (2 * R) ** 2) continue;
+      const t = projection - Math.sqrt(Math.max(0, (2 * R) ** 2 - side));
+      if (t >= 0 && t < distance) {
+        distance = t;
+        hit = ball;
+      }
+    }
+    return {
+      x: cue.x + ux * distance,
+      y: cue.y + uy * distance,
+      hit,
+      axis: wall.axis,
+    };
+  }
+
+  class PoolRenderer {
+    constructor(canvas) {
+      this.canvas = canvas;
+      this.ctx = canvas.getContext("2d");
+      this.portrait = false;
+      this.surface = document.createElement("canvas");
+      this.surface.width = W;
+      this.surface.height = H;
+      this.paintSurface(this.surface.getContext("2d"));
+      this.resize();
+    }
+    resize() {
+      this.portrait = matchMedia(
+        "(max-width:600px) and (orientation:portrait)",
+      ).matches;
+      const width = this.canvas.getBoundingClientRect().width || W;
+      const ratio = this.portrait ? W / H : H / W;
+      const dpr = Math.min(2.5, window.devicePixelRatio || 1);
+      this.canvas.width = Math.round(width * dpr);
+      this.canvas.height = Math.round(width * ratio * dpr);
+    }
+    point(event) {
+      const rect = this.canvas.getBoundingClientRect();
+      const x = (event.clientX - rect.left) / rect.width,
+        y = (event.clientY - rect.top) / rect.height;
+      return this.portrait
+        ? { x: y * W - 100, y: (1 - x) * H - 100 }
+        : { x: x * W - 100, y: y * H - 100 };
+    }
+    paintSurface(ctx) {
+      ctx.save();
+      ctx.translate(100, 100);
+      ctx.shadowColor = "#000a";
+      ctx.shadowBlur = 38;
+      ctx.shadowOffsetY = 28;
+      const wood = ctx.createLinearGradient(0, -30, 0, 535);
+      wood.addColorStop(0, "#78654f");
+      wood.addColorStop(0.08, "#c8ad82");
+      wood.addColorStop(0.3, "#79664e");
+      wood.addColorStop(0.85, "#60513f");
+      wood.addColorStop(1, "#b99c72");
+      ctx.fillStyle = wood;
+      ctx.beginPath();
+      ctx.roundRect(-26, -26, 1052, 552, 42);
+      ctx.fill();
+      ctx.shadowColor = "transparent";
+      ctx.strokeStyle = "#dcc79d65";
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.strokeStyle = "#2c281f";
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.roundRect(-13, -13, 1026, 526, 31);
+      ctx.stroke();
+      const cloth = ctx.createRadialGradient(490, 180, 40, 500, 250, 640);
+      cloth.addColorStop(0, "#328c7c");
+      cloth.addColorStop(0.65, "#246c61");
+      cloth.addColorStop(1, "#174d47");
+      ctx.fillStyle = cloth;
+      ctx.fillRect(10, 10, 980, 480);
+      // A deterministic fine weave, drawn once rather than every animation frame.
+      ctx.globalAlpha = 0.045;
+      ctx.fillStyle = "#efffee";
+      for (let x = 16; x < 985; x += 5)
+        for (let y = 16; y < 485; y += 5)
+          if ((x * 13 + y * 7) % 11 < 6) ctx.fillRect(x, y, 1, 1);
+      ctx.globalAlpha = 1;
+      const rails = [
+        [51, 18, 467, 18],
+        [533, 18, 949, 18],
+        [51, 482, 467, 482],
+        [533, 482, 949, 482],
+        [18, 51, 18, 449],
+        [982, 51, 982, 449],
+      ];
+      for (const [x, y, ex, ey] of rails) {
+        ctx.lineCap = "butt";
+        ctx.lineWidth = 27;
+        ctx.strokeStyle = "#133d36";
+        line(ctx, x, y, ex, ey);
+        ctx.lineWidth = 18;
+        ctx.strokeStyle = "#2f7762";
+        line(ctx, x, y, ex, ey);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#8fc5a035";
+        line(ctx, x, y + (y < 250 ? 8 : -8), ex, ey + (y < 250 ? 8 : -8));
+      }
+      for (const [x, y] of pockets) {
+        ctx.fillStyle = "#3e382d";
+        ctx.beginPath();
+        ctx.arc(x, y, 35, 0, TAU);
+        ctx.fill();
+        const hole = ctx.createRadialGradient(x - 3, y - 3, 1, x, y, 32);
+        hole.addColorStop(0, "#010709");
+        hole.addColorStop(0.8, "#020a0d");
+        hole.addColorStop(1, "#103d35");
+        ctx.fillStyle = hole;
+        ctx.beginPath();
+        ctx.arc(x, y, 31, 0, TAU);
+        ctx.fill();
+        ctx.strokeStyle = "#0008";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      ctx.fillStyle = "#f3dfae9c";
+      for (const x of [145, 265, 385, 615, 735, 855])
+        for (const y of [-10, 510]) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(Math.PI / 4);
+          ctx.fillRect(-2.3, -2.3, 4.6, 4.6);
+          ctx.restore();
+        }
+      for (const x of [-10, 1010])
+        for (const y of [140, 250, 360]) {
+          ctx.save();
+          ctx.translate(x, y);
+          ctx.rotate(Math.PI / 4);
+          ctx.fillRect(-2.3, -2.3, 4.6, 4.6);
+          ctx.restore();
+        }
+      ctx.fillStyle = "#d9f0d32e";
+      for (const x of [245, 690]) {
+        ctx.beginPath();
+        ctx.arc(x, 250, 2.3, 0, TAU);
+        ctx.fill();
+      }
+      ctx.font = "700 15px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#c9e5ce16";
+      ctx.fillText("S T R I K E   T E A M   9", 500, 390);
+      ctx.restore();
+    }
+    ball(ctx, ball, alpha = 1, scale = 1) {
+      const { id, x, y } = ball;
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.globalAlpha = alpha;
+      ctx.scale(scale, scale);
+      ctx.shadowColor = "#0009";
+      ctx.shadowBlur = 6;
+      ctx.shadowOffsetY = 5;
+      ctx.fillStyle = id > 8 ? "#f2eddf" : colors[id];
+      ctx.beginPath();
+      ctx.arc(0, 0, R, 0, TAU);
+      ctx.fill();
+      ctx.shadowColor = "transparent";
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 0, R, 0, TAU);
+      ctx.clip();
+      if (id > 8) {
+        ctx.fillStyle = colors[id];
+        ctx.fillRect(-R, -8, R * 2, 16);
+      }
+      const shade = ctx.createRadialGradient(-5, -6, 0, 2, 3, 21);
+      shade.addColorStop(0, "#ffffff60");
+      shade.addColorStop(0.35, "#ffffff05");
+      shade.addColorStop(0.75, "#00000030");
+      shade.addColorStop(1, "#000000aa");
+      ctx.fillStyle = shade;
+      ctx.fillRect(-R, -R, 2 * R, 2 * R);
+      ctx.restore();
+      if (id) {
+        ctx.fillStyle = "#ffffeede";
+        ctx.beginPath();
+        ctx.arc(0, 0, 6.5, 0, TAU);
+        ctx.fill();
+        ctx.fillStyle = "#192029";
+        ctx.font = "800 8px system-ui";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(id), 0, 0.4);
+      }
+      ctx.fillStyle = "#ffffff8a";
+      ctx.beginPath();
+      ctx.ellipse(-5, -6, 3.2, 2.1, -0.7, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+    aim(ctx, cue, balls, model) {
+      const target = ray(cue, balls, model.angle),
+        ux = Math.cos(model.angle),
+        uy = Math.sin(model.angle);
+      const legal = !target.hit || model.targets.includes(target.hit.id);
+      const color = legal ? "#e3f7eac4" : "#ffae9ebd";
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([6, 7]);
+      line(ctx, cue.x, cue.y, target.x, target.y);
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      ctx.arc(target.x, target.y, R, 0, TAU);
+      ctx.stroke();
+      if (target.hit) {
+        const dx = (target.hit.x - target.x) / (2 * R),
+          dy = (target.hit.y - target.y) / (2 * R);
+        ctx.globalAlpha = 0.75;
+        line(
+          ctx,
+          target.hit.x,
+          target.hit.y,
+          target.hit.x + dx * 90,
+          target.hit.y + dy * 90,
+        );
+        const dot = ux * dx + uy * dy,
+          tx = ux - dot * dx,
+          ty = uy - dot * dy;
+        ctx.setLineDash([3, 6]);
+        line(ctx, target.x, target.y, target.x + tx * 85, target.y + ty * 85);
+      } else {
+        ctx.globalAlpha = 0.45;
+        const rx = target.axis === "x" ? -ux : ux,
+          ry = target.axis === "y" ? -uy : uy;
+        ctx.setLineDash([4, 7]);
+        line(ctx, target.x, target.y, target.x + rx * 80, target.y + ry * 80);
+      }
+      ctx.restore();
+      const gap = 18 + (model.dragging ? model.power * 110 : model.power * 22),
+        tip = { x: cue.x - ux * (R + gap), y: cue.y - uy * (R + gap) };
+      const back = { x: tip.x - ux * 225, y: tip.y - uy * 225 };
+      ctx.save();
+      ctx.lineCap = "round";
+      ctx.shadowColor = "#0008";
+      ctx.shadowBlur = 7;
+      ctx.shadowOffsetY = 5;
+      ctx.lineWidth = 9;
+      ctx.strokeStyle = "#261f22";
+      line(ctx, back.x, back.y, tip.x, tip.y);
+      ctx.shadowColor = "transparent";
+      const gradient = ctx.createLinearGradient(back.x, back.y, tip.x, tip.y);
+      gradient.addColorStop(0, "#302240");
+      gradient.addColorStop(0.25, "#735a8d");
+      gradient.addColorStop(0.28, "#d5c5a2");
+      gradient.addColorStop(1, "#f0d4a7");
+      ctx.strokeStyle = gradient;
+      ctx.lineWidth = 5;
+      line(ctx, back.x, back.y, tip.x, tip.y);
+      ctx.strokeStyle = "#8cbfc6";
+      ctx.lineWidth = 6;
+      line(ctx, tip.x - ux * 4, tip.y - uy * 4, tip.x, tip.y);
+      ctx.restore();
+    }
+    draw(rows, model = {}) {
+      const ctx = this.ctx,
+        canvas = this.canvas;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (this.portrait) {
+        ctx.scale(canvas.width / H, canvas.height / W);
+        ctx.translate(H, 0);
+        ctx.rotate(Math.PI / 2);
+      } else ctx.scale(canvas.width / W, canvas.height / H);
+      ctx.drawImage(this.surface, 0, 0);
+      ctx.save();
+      ctx.translate(100, 100);
+      const balls = rowsToBalls(rows);
+      if (model.placement) {
+        const cue = balls.find((b) => b.id === 0);
+        Object.assign(cue, model.placement, { pocketed: false });
+      }
+      const cue = balls.find((b) => b.id === 0 && !b.pocketed);
+      if (
+        model.calling ||
+        (model.called !== null && model.called !== undefined)
+      ) {
+        pockets.forEach(([x, y], i) => {
+          ctx.save();
+          ctx.strokeStyle = i === model.called ? "#f6de87" : "#dccef58a";
+          ctx.lineWidth = i === model.called ? 4 : 2;
+          ctx.setLineDash(i === model.called ? [] : [4, 4]);
+          ctx.beginPath();
+          ctx.arc(x, y, 37, 0, TAU);
+          ctx.stroke();
+          ctx.fillStyle = i === model.called ? "#f6de87" : "#f0e7ff";
+          ctx.font = "800 16px system-ui";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText(String(i + 1), x, y);
+          ctx.restore();
+        });
+      }
+      if (model.canAim && cue && !model.waitingPlace)
+        this.aim(ctx, cue, balls, model);
+      for (const ball of balls)
+        if (!ball.pocketed && !(ball.id === 0 && model.waitingPlace))
+          this.ball(ctx, ball);
+      if (model.hoverPlace) {
+        const valid = model.validPlace;
+        ctx.save();
+        ctx.strokeStyle = valid ? "#a5edc3" : "#f5a6a3";
+        ctx.setLineDash([4, 4]);
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(model.hoverPlace.x, model.hoverPlace.y, R + 5, 0, TAU);
+        ctx.stroke();
+        this.ball(ctx, { id: 0, ...model.hoverPlace }, 0.65);
+        ctx.restore();
+      }
+      for (const ball of model.dropping || [])
+        this.ball(ctx, ball, ball.alpha, ball.alpha);
+      ctx.restore();
+    }
+  }
+  window.PoolRenderer = PoolRenderer;
+  window.PoolGeometry = { bounds, pockets, colors, rowsToBalls, ray };
+})();
