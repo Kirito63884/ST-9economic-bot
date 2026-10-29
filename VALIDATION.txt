@@ -163,3 +163,16 @@ success and failed-health rollback: only medals_monitor.py changes and only
 balance-app-medals.service restarts; web, Discord bot, settings and data persist.
 This fixes misleading progress; live upstream success or the cause of an actual
 long-running request cannot be inferred from the old counters alone.
+
+Discord specialty panel, 2026-10-29:
+- Full isolated suite: 519 passed, 0 failed, 0 skipped (two existing dependency warnings).
+- 28 new checks: atomic multi-specialty add/remove, fresh role permissions,
+  privileged/hierarchy/managed/everyone/membership-role guards, forged panels,
+  persistent View, renamed pinned roles, restart reuse and interrupted-send recovery.
+- Ruff E9/F for the repository and full Ruff checks for the new module/tests pass.
+- Installer syntax verified; six isolated first-install/upgrade cases cover success,
+  copy failure and service-start failure. Only discord-bot.service is touched;
+  previous files restored and newly introduced files removed on failure;
+  .env, SQLite and medals_monitor.py sentinels remain byte-identical.
+- Live Discord publication not performed from this environment; validate existing
+  role names, hierarchy and channel permissions on the deployment server.

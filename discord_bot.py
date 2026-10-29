@@ -28,7 +28,10 @@ intents.voice_states = True
 
 class SyncedBot(commands.Bot):
     async def setup_hook(self):
+        from discord_specialties import SpecialtyView
         from discord_sync import member_events_available
+
+        self.add_view(SpecialtyView(self.st9_specialties))
 
         # ConnectionState retains this Intents object; configure it before IDENTIFY.
         # Raw gateway notifications avoid relying on the member cache.
@@ -969,6 +972,9 @@ register_roster_sync(bot)
 from discord_roster import register_roster_publication
 
 register_roster_publication(bot)
+from discord_specialties import register_specialties
+
+register_specialties(bot)
 # ST9_SQUAD_BOT_END
 
 # === Запуск ===
