@@ -108,3 +108,24 @@ files installed; failed HTTP health check restores originals and starts both
 web/bot services. Synthetic database and settings were preserved in both paths.
 Real production deployment and live Discord/report/history completeness remain
 unverified from this environment.
+
+Training group role and assembly membership filtering, 2026-10-29:
+Full suite: 476 passed, 0 failed, 0 skipped; two unchanged dependency warnings.
+Ruff lint/format checks pass (89 Python files).
+Role 1485577945316720780 is a full Training Group membership role in website
+catalog, online lookup and assembly views. Discord roster publication, role
+assignment and the existing roster/export catalog remain unchanged.
+Assembly rows/counts now include only membership observed during the event:
+the saved event roster, a member-list check inside the event window or dated
+Discord voice evidence. Later report refreshes, accepted reports by themselves
+and game-server sessions cannot add nonmembers to the Discord assembly roster.
+No historical membership facts means no fallback list of today's users.
+Tests cover all these cases, empty/partial rosters, voice timing and training
+members who have no instructor role.
+Chromium verified full Training Group display/online lookup and exclusion of a
+later Discord arrival from the assembly view; existing point/range, permissions,
+dark theme and mobile checks still pass, with zero pageerror events.
+Installer simulation verified full installation/rollback and groups-view mode:
+only three website files change, all other code/settings/data stay intact and
+Discord bot services are not stopped or started in groups-view mode.
+Production installation remains a separate user-run step.

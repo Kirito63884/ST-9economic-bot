@@ -291,10 +291,9 @@ def test_unchecked_reports_never_prove_unexcused_absence(admin):
 
 def test_missing_sources_and_reports_show_unknown(admin):
     result = assembly(admin)
-    assert (
-        result["counts"]["unknown"] == 3
-        and result["counts"]["absent_without_report"] == 0
-    )
+    assert result["members"] == []
+    assert result["membership_complete"] is False
+    assert result["counts"]["absent_without_report"] == 0
 
 
 def test_voice_presence_is_valid_and_afk_not_inferred(admin):
@@ -365,10 +364,7 @@ def test_non_monitored_server_is_not_assembly_presence(admin):
 
 def test_current_member_not_in_historical_roster_is_not_marked_absent(admin):
     event(expected=["102", "103"])
-    assert (
-        next(m for m in assembly(admin)["members"] if m["user_id"] == 104)["status"]
-        == "not_required"
-    )
+    assert all(m["user_id"] != 104 for m in assembly(admin)["members"])
 
 
 def test_overall_assembly_is_unique_across_multiple_group_roles(admin):
@@ -389,3 +385,132 @@ def test_overall_assembly_is_unique_across_multiple_group_roles(admin):
         g for g in admin.get("/api/admin/groups").json()["groups"] if g["id"] == "all"
     )
     assert all_group["members_count"] == 4
+
+
+def test_training_role_is_a_full_group_for_catalog_online_and_assembly(admin):
+    with SessionLocal.begin() as db:
+        db.get(DiscordMemberRoleSnapshot, "102").role_ids = '["1485577945316720780"]'
+    catalog = admin.get("/api/admin/groups").json()["groups"]
+    training = next(g for g in catalog if g["name"] == "Учебная группа")
+    assert training["members_count"] == 1
+    play()
+    event()
+    online = admin.get(
+        f"/api/admin/groups/{training['id']}/online",
+        params={"at": "2026-10-24T19:15:00+03:00"},
+    ).json()
+    assert (
+        online["members_count"] == 1
+        and online["servers"][0]["members"][0]["user_id"] == 102
+    )
+    result = admin.get(f"/api/admin/groups/{training['id']}/assembly").json()
+    assert [(m["user_id"], m["status"]) for m in result["members"]] == [
+        (102, "present")
+    ]
+    # This web-only mapping must not mutate the existing roster/export catalog.
+    from assembly_export import GROUPS
+
+    assert "1485577945316720780" not in next(
+        ids for name, ids in GROUPS if name == "Учебная группа"
+    )
+
+
+def test_game_presence_and_report_do_not_admit_nonmember_to_assembly(admin):
+    event(expected=["102", "103"])
+    play(steam="76561198000000002")
+    with SessionLocal.begin() as db:
+        row = db.get(AssemblyReportCheck, "2026-10-24")
+        row.member_ids = json.dumps(["102", "103", "104"])
+        reports = json.loads(row.reports)
+        reports["104"] = (START - timedelta(hours=1)).isoformat()
+        row.reports = json.dumps(reports)
+    result = assembly(admin)
+    assert all(m["user_id"] != 104 for m in result["members"])
+    assert sum(result["counts"].values()) == 2
+
+
+def test_report_before_event_does_not_prove_membership_during_event(admin):
+    event(expected=["102"])
+    result = assembly(admin)
+    assert [m["user_id"] for m in result["members"]] == [102]
+
+
+def test_after_event_roster_is_not_historical_membership(admin):
+    event()
+    with SessionLocal.begin() as db:
+        row = db.get(AssemblyWindow, "2026-10-24")
+        row.member_ids = None
+        health = json.loads(row.healthy_servers)
+        health["roster_basis"] = "after_event"
+        health["roster"] = {"102": {}, "103": {}, "104": {}}
+        row.healthy_servers = json.dumps(health)
+    result = assembly(admin)
+    assert result["members"] == [] and result["membership_complete"] is False
+
+
+def test_during_event_frozen_roster_proves_membership_without_member_ids(admin):
+    event()
+    with SessionLocal.begin() as db:
+        row = db.get(AssemblyWindow, "2026-10-24")
+        row.member_ids = None
+        health = json.loads(row.healthy_servers)
+        health["roster_basis"] = "during_event"
+        health["roster"] = {"102": {}}
+        row.healthy_servers = json.dumps(health)
+    result = assembly(admin)
+    assert [m["user_id"] for m in result["members"]] == [102]
+    assert result["membership_complete"] is True
+
+
+def test_report_check_during_event_can_prove_membership(admin):
+    event()
+    with SessionLocal.begin() as db:
+        db.get(AssemblyWindow, "2026-10-24").member_ids = None
+        check = db.get(AssemblyReportCheck, "2026-10-24")
+        check.checked_at = START + timedelta(minutes=30)
+        check.member_ids = '["102"]'
+    assert [m["user_id"] for m in assembly(admin)["members"]] == [102]
+
+
+def test_voice_observation_admits_member_who_joined_during_assembly(admin):
+    event(expected=["102"])
+    with SessionLocal.begin() as db:
+        row = db.get(AssemblyWindow, "2026-10-24")
+        row.attended = json.dumps(
+            {
+                "discord:104": {
+                    "at": (START + timedelta(minutes=30)).isoformat(),
+                    "source": "discord_voice",
+                    "channel_name": "Сбор",
+                }
+            }
+        )
+    result = assembly(admin)
+    assert (
+        next(m for m in result["members"] if m["user_id"] == 104)["status"] == "present"
+    )
+    assert all(m["user_id"] != 103 for m in result["members"])
+
+
+def test_voice_outside_window_does_not_admit_nonmember(admin):
+    event(expected=["102"])
+    with SessionLocal.begin() as db:
+        row = db.get(AssemblyWindow, "2026-10-24")
+        row.attended = json.dumps(
+            {
+                "discord:104": {
+                    "at": END.isoformat(),
+                    "source": "discord_voice",
+                    "channel_name": "Сбор",
+                }
+            }
+        )
+    assert [m["user_id"] for m in assembly(admin)["members"]] == [102]
+
+
+def test_known_empty_assembly_roster_does_not_fall_back_to_current_members(admin):
+    event()
+    with SessionLocal.begin() as db:
+        db.get(AssemblyWindow, "2026-10-24").member_ids = "[]"
+    result = assembly(admin)
+    assert result["members"] == [] and result["membership_complete"] is True

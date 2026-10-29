@@ -193,7 +193,6 @@
       absent_with_report: "Отсутствовали с рапортом",
       unknown: "Недостаточно данных — требуется проверка",
       exempted: "Освобождены от участия",
-      not_required: "Не включены в сохранённый состав сбора",
     };
     let selected = null,
       loaded = false,
@@ -272,6 +271,10 @@
         $("cgAssemblyTime").textContent =
           `${stamp(data.starts_at)} — ${stamp(data.ends_at)} МСК`;
         const warnings = [];
+        if (!data.membership_complete)
+          warnings.push(
+            "Полный состав Discord на время сбора не сохранён. Показаны только участники с подтверждённым нахождением в Discord во время сбора; текущий состав не подставляется.",
+          );
         if (!data.reports_ready)
           warnings.push("Рапорты ещё не проверены или проверка не завершена.");
         if (!data.battlemetrics_coverage && !data.voice_coverage)

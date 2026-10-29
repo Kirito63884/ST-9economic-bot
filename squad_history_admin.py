@@ -17,7 +17,14 @@ from database import User
 from squad_play_history import SquadPlaySession
 from squad_routes import amount_cents, apply_credit
 from roster_membership import DiscordMemberRoleSnapshot
-from assembly_export import GROUPS
+from assembly_export import GROUPS as ASSEMBLY_GROUPS
+
+# Website classification only. Discord roster publication and role assignment
+# are intentionally independent of this training-group membership role.
+GROUPS = tuple(
+    (name, roles | {"1485577945316720780"} if name == "Учебная группа" else roles)
+    for name, roles in ASSEMBLY_GROUPS
+)
 
 MOSCOW = ZoneInfo("Europe/Moscow")
 GRANT_PATH = "/api/admin/squad/history/grant"

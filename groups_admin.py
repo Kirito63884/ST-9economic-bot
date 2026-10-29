@@ -72,6 +72,50 @@ def saved_time(value):
         return None
 
 
+def assembly_membership(event, check, start, end, matching_window, assessments):
+    """Use membership observed during the assembly, never today's roster.
+
+    A report-topic refresh after the event lists today's guild members. It is
+    valid for checking reports but cannot establish past guild membership.
+    Discord voice observations may also prove membership during the window.
+    Playing on a game server alone does not establish Discord membership.
+    """
+    expected = set()
+    complete = False
+
+    def ids(values):
+        return {str(value) for value in values if str(value).isdigit()}
+
+    if matching_window and event.member_ids is not None:
+        expected.update(ids(_json(event.member_ids, [])))
+        complete = True
+    if matching_window:
+        health = _json(event.healthy_servers, {})
+        roster = health.get("roster")
+        if health.get("roster_basis") == "during_event" and isinstance(roster, dict):
+            expected.update(ids(roster))
+            complete = True
+    if check and check.checked_at and start <= check.checked_at < end:
+        expected.update(ids(_json(check.member_ids, [])))
+        complete = True
+    observed = set(expected)
+    if matching_window:
+        for key, presence in _json(event.attended, {}).items():
+            if not key.startswith("discord:") or not isinstance(presence, dict):
+                continue
+            moment = saved_time(presence.get("at"))
+            if moment and start <= moment < end:
+                observed.update(ids([key.removeprefix("discord:")]))
+        for row in assessments.values():
+            if (
+                row.outcome == "present_voice"
+                and row.attended_at
+                and start <= row.attended_at < end
+            ):
+                observed.add(str(row.discord_id))
+    return expected, observed, complete
+
+
 def assembly_summary(db, users, now):
     day, start, end = latest_assembly(now)
     event = db.get(AssemblyWindow, day)
@@ -91,11 +135,6 @@ def assembly_summary(db, users, now):
     )
     if not isinstance(frozen, dict):
         frozen = {}
-    expected = (
-        set(_json(event.member_ids, []) if matching_window else [])
-        or set(_json(check.member_ids, []) if reports_ready else [])
-        or set(frozen)
-    )
     assessments = (
         {
             r.discord_id: r
@@ -104,6 +143,10 @@ def assembly_summary(db, users, now):
         if matching_window
         else {}
     )
+    expected, observed_members, membership_complete = assembly_membership(
+        event, check, start, end, matching_window, assessments
+    )
+    users = [user for user in users if str(user.discord_id) in observed_members]
     bm_ok, voice_ok = False, False
     if matching_window:
         try:
@@ -147,7 +190,6 @@ def assembly_summary(db, users, now):
             "absent_without_report",
             "unknown",
             "exempted",
-            "not_required",
         )
     }
     for user in users:
@@ -177,8 +219,6 @@ def assembly_summary(db, users, now):
             assessment and assessment.outcome == "exempted"
         ):
             status = "exempted"
-        elif expected and sid not in expected:
-            status = "not_required"
         elif (
             sid in expected
             and reports_ready
@@ -211,6 +251,7 @@ def assembly_summary(db, users, now):
         "window_matches": matching_window,
         "source_status": event.status if event else "missing",
         "groups_basis": "latest_discord_snapshot",
+        "membership_complete": membership_complete,
     }
 
 

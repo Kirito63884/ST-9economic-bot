@@ -26,6 +26,21 @@ files=(
     groups_admin.py
     templates/_admin_groups.html
 )
+services=(balance-app.service discord-bot.service)
+case "${3:-full}" in
+    full) ;;
+    groups-view)
+        # Existing Groups installation: website display only, no bot restart.
+        files=(squad_history_admin.py groups_admin.py templates/_admin_groups.html)
+        services=(balance-app.service)
+        test -f "$app_dir/templates/_admin_groups.html"
+        ;;
+    *) echo "Неизвестный режим установки."; exit 1 ;;
+esac
+python_files=()
+for path in "${files[@]}"; do
+    if [[ "$path" == *.py ]]; then python_files+=("$path"); fi
+done
 test -x "$app_dir/venv/bin/python"
 test -d "$app_dir/templates"
 stage=$(mktemp -d /tmp/squad-history-update.XXXXXX)
@@ -39,10 +54,10 @@ rollback() {
     trap - ERR
     if [[ "$changing" == 1 ]]; then
         echo "Ошибка установки. Восстанавливаем прежние файлы."
-        systemctl stop balance-app.service discord-bot.service || true
+        systemctl stop "${services[@]}" || true
         tar -xzf "$backup" -C "$app_dir" || return 1
         for path in "${absent[@]}"; do rm -f "$app_dir/$path"; done
-        systemctl start balance-app.service discord-bot.service || true
+        systemctl start "${services[@]}" || true
     fi
     echo "Обновление не завершено. Пришлите вывод терминала."
     exit 1
@@ -83,17 +98,17 @@ tar -czf "$backup" -C "$app_dir" "${original[@]}"
 tar -tzf "$backup" >/dev/null
 echo "Резервная копия файлов: $backup"
 changing=1
-systemctl stop balance-app.service discord-bot.service
+systemctl stop "${services[@]}"
 for path in "${files[@]}"; do
     install -o www-data -g www-data -m 644 "$stage/code/$path" "$app_dir/$path"
 done
 (
     cd "$app_dir"
-    runuser -u www-data -- ./venv/bin/python -m py_compile main.py bulk_operations.py squad_history_admin.py groups_admin.py roster_membership.py
+    runuser -u www-data -- ./venv/bin/python -m py_compile "${python_files[@]}"
 )
-systemctl start balance-app.service discord-bot.service
+systemctl start "${services[@]}"
 curl -fsS --max-time 10 --retry 5 --retry-delay 1 --retry-connrefused \
     http://127.0.0.1:8000/ -o /dev/null
-systemctl is-active balance-app.service discord-bot.service
+systemctl is-active "${services[@]}"
 changing=0
 echo "Готово. Обновите админку через Ctrl+F5 → Группы. Состав групп обновляется после синхронизации Discord."
