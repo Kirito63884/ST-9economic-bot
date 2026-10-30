@@ -467,3 +467,17 @@ Combined release on main 7a3232e (2026-10-30):
   new partials. Env/database/collector sentinels remain untouched.
 - One canonical installer and three forwarding entry points prevent mixed game
   modules, user models and Jinja partials. Production was not accessed or updated.
+
+Chess dependency permissions fix (2026-10-30):
+- Full bash scripts/check.sh: 725 passed, two existing deprecation warnings.
+- Reproduced inaccessible chess as a namespace module with __file__=None and
+  missing __version__/Board, matching the production failure symptom.
+- Offline regression tests use the real installed chess wheel and real pip in
+  fresh temporary venvs. Fresh install is world-readable; a prior 077 install
+  (700 directories/600 files) is repaired by a scoped 022 reinstall.
+- CI emulates the separate user's EACCES for the import probe; no actual root
+  or production account is used. The real installer probes www-data before
+  stopping services. Local chess.py shadowing is rejected before code replacement.
+- Private umask remains 077 and .env stays 600. Copy/import/HTTP rollback and
+  dependency-probe refusal preserve source, live-data/collector sentinels; failed
+  dependency preflight never stops services. No production commands executed.

@@ -151,8 +151,42 @@ print("Проверенная резервная копия базы готов�
 PY
 )
 echo "Резервная копия: $backup"
-# Only add the pinned chess library. Existing dependencies are not upgraded.
-"$app_dir/venv/bin/python" -m pip install --disable-pip-version-check chess==1.11.2
+# Private backups keep umask 077. Installed Python packages must be readable by
+# the separate website account, including when pip builds a wheel as root.
+install_chess_dependency() (
+    umask 022
+    "$app_dir/venv/bin/python" -m pip install --disable-pip-version-check --no-deps "$@" chess==1.11.2
+)
+check_chess_dependency() (
+    cd "$app_dir"
+    runuser -u www-data -- ./venv/bin/python - <<'PY_CHECK'
+from importlib.metadata import distribution
+from pathlib import Path
+
+try:
+    import chess
+    package = distribution("chess")
+    expected = Path(package.locate_file("chess/__init__.py")).resolve()
+    actual = getattr(chess, "__file__", None)
+    if not actual or Path(actual).resolve() != expected:
+        raise ValueError("Загрузился другой или недоступный пакет: " + str(actual))
+    if package.version != "1.11.2" or getattr(chess, "__version__", None) != "1.11.2":
+        raise ValueError("Версия chess не соответствует 1.11.2")
+    if chess.Board().legal_moves.count() != 20:
+        raise ValueError("Некорректная начальная позиция шахмат")
+except Exception as exc:
+    raise SystemExit("Проверка chess от имени www-data не пройдена: " + str(exc))
+print("Библиотека chess 1.11.2 доступна пользователю сайта; начальные ходы проверены.")
+PY_CHECK
+)
+install_chess_dependency
+if ! check_chess_dependency; then
+    # pip may report 'already satisfied' for unreadable files left by an older
+    # installer. Reinstall only this pinned package, then recheck the real user.
+    echo "Переустанавливаем chess с правами чтения для пользователя сайта."
+    install_chess_dependency --force-reinstall
+    check_chess_dependency
+fi
 changing=1
 systemctl stop "${services[@]}"
 for path in "${files[@]}"; do
