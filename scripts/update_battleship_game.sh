@@ -35,6 +35,7 @@ files=(
     templates/battleship_lobby.html templates/battleship_table.html
     templates/_battleship_ui.html templates/_battleship_rules.html
     templates/_battleship_shared.js.html templates/_battleship_game.js.html
+    templates/_battleship_ships.js.html templates/_battleship_input.js.html
 )
 services=(balance-app.service)
 stage=$(mktemp -d /tmp/battleship-game.XXXXXX)
@@ -173,5 +174,5 @@ systemctl is-active "${services[@]}"
 changing=0
 echo "Готово. Ctrl+F5 → Игры → Морской бой."
 echo "Классический морской бой на двоих. Равные взносы, победителю весь банк без комиссии."
-echo "Расставьте корабли, подтвердите готовность и запустите бой. Клетку выстрела подтверждайте кнопкой «Огонь»."
+echo "Расставьте корабли, подтвердите готовность и запустите бой. Стреляйте кликом или коротким касанием клетки соперника."
 echo "Перезапущены: ${services[*]}. Сборщики SQSTAT и игрового онлайна не перезапускались."

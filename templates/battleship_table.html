@@ -48,6 +48,11 @@
               <h2>Ваши воды</h2>
               <span class="bs-muted" id="ownStatus"></span>
             </div>
+            <p
+              class="bs-fleet-types"
+              id="fleetTypes"
+              aria-label="Типы вашего флота"
+            ></p>
             <div
               class="bs-grid"
               id="ownGrid"
@@ -98,10 +103,9 @@
               ><span><i class="blue"></i>Промах</span>
             </div>
             <div class="bs-fire">
-              <p id="fireHelp">Выберите клетку и подтвердите выстрел.</p>
-              <button id="fire" class="bs-btn primary" disabled>
-                Выберите клетку
-              </button>
+              <p id="fireHelp">
+                Нажмите на клетку соперника, чтобы выстрелить.
+              </p>
             </div>
           </section>
         </div>
@@ -172,6 +176,12 @@
     </main>
     <script nonce="{{ request.state.csp_nonce }}">
       {% include "_battleship_shared.js.html" %}
+    </script>
+    <script nonce="{{ request.state.csp_nonce }}">
+      {% include "_battleship_ships.js.html" %}
+    </script>
+    <script nonce="{{ request.state.csp_nonce }}">
+      {% include "_battleship_input.js.html" %}
     </script>
     <script nonce="{{ request.state.csp_nonce }}">
       {% include "_battleship_game.js.html" %}

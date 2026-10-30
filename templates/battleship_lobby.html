@@ -25,6 +25,7 @@
       <div class="bs-lobby">
         <section>
           <div class="bs-hero">
+            <div id="heroShips" class="bs-hero-fleet" aria-hidden="true"></div>
             <span class="bs-kicker">Классика · два флота</span>
             <h2>Спрячь корабли.<br />Найди чужие.</h2>
             <p>
@@ -88,9 +89,15 @@
       {% include "_battleship_shared.js.html" %}
     </script>
     <script nonce="{{ request.state.csp_nonce }}">
+      {% include "_battleship_ships.js.html" %}
+    </script>
+    <script nonce="{{ request.state.csp_nonce }}">
       (() => {
         const $ = (id) => document.getElementById(id),
           { api, esc, money, amount } = BattleUI;
+        $("heroShips").innerHTML =
+          BattleShips.model(4, true, "hero-large") +
+          BattleShips.model(2, true, "hero-small");
         const phases = {
           waiting: "Расстановка флотов",
           playing: "Идёт бой",

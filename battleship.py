@@ -358,10 +358,10 @@ class BattleshipTable:
             board = {
                 "id": player["id"],
                 "marks": marks,
-                "sunk_ships": copy.deepcopy(sunk),
             }
-            if player["id"] == uid or self.phase == "finished":
+            if player["id"] == uid:
                 board["fleet"] = copy.deepcopy(player["fleet"])
+                board["sunk_ships"] = copy.deepcopy(sunk)
             boards.append(board)
         return {
             "id": self.id,
@@ -387,9 +387,15 @@ class BattleshipTable:
                     "shots_fired": p["shots_fired"],
                     "hits": p["hits"],
                     "timeouts": p["timeouts"],
-                    "ships_left": len(FLEET) - len(self.sunk_ships(p)),
-                    "decks_left": sum(map(len, p["fleet"]))
-                    - sum(shot["hit"] for shot in p["incoming"].values()),
+                    **(
+                        {
+                            "ships_left": len(FLEET) - len(self.sunk_ships(p)),
+                            "decks_left": sum(map(len, p["fleet"]))
+                            - sum(shot["hit"] for shot in p["incoming"].values()),
+                        }
+                        if p["id"] == uid
+                        else {}
+                    ),
                 }
                 for p in self.players
             ],

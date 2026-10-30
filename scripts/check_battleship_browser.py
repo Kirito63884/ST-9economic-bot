@@ -223,6 +223,9 @@ print(json.dumps(result))
         a.locator("#ready").click()
         b.locator("#ready").click()
         a.wait_for_function("!document.querySelector('#start').disabled")
+        assert a.locator("#ownGrid .bs-ship-model").count() == 10
+        assert a.locator("#enemyGrid .bs-ship-model").count() == 0
+        assert a.locator("#fleetPicks svg").count() == 4
         capture(a, "battleship-placement.png")
         a.locator("#start").click()
         a.wait_for_function("document.querySelector('#waiting').hidden")
@@ -250,8 +253,9 @@ print(json.dumps(result))
         active = pages[actor]
         before = state(active)["revision"]
         active.locator('#enemyGrid [data-cell="' + str(water) + '"]').click()
-        assert state(active)["revision"] == before
-        active.locator("#fire").click()
+        active.wait_for_timeout(100)
+        assert state(active)["revision"] == before + 1
+        assert active.locator("#fire").count() == 0
         active.wait_for_function(
             "!document.querySelector('#turn').textContent.includes('Ваш выстрел')"
         )
@@ -268,10 +272,16 @@ print(json.dumps(result))
         for cell in [cell for ship in ships for cell in ship]:
             button = winpage.locator('#enemyGrid [data-cell="' + str(cell) + '"]')
             button.wait_for(state="visible")
+            previous = state(winpage)["revision"]
             button.click()
-            assert winpage.locator("#fire").is_enabled()
-            winpage.locator("#fire").click()
-            winpage.wait_for_function("document.querySelector('#fire').disabled")
+            winpage.wait_for_function(
+                "cell=>document.querySelector('#enemyGrid [data-cell=\"'+cell+'\"]').disabled",
+                arg=cell,
+            )
+            updated = state(winpage)
+            assert updated["revision"] == previous + (
+                2 if updated["phase"] == "finished" else 1
+            ), (cell, previous, updated["revision"])
         winpage.locator("#result").wait_for(state="visible")
         a.locator("#result").wait_for(state="visible")
         b.locator("#result").wait_for(state="visible")
@@ -279,6 +289,18 @@ print(json.dumps(result))
         assert done["match"]["settled"] and done["match"]["result"]["winner"] == winner
         assert done["match"]["result"]["payouts"] == {str(winner): 10000, str(loser): 0}
         assert state(a)["balance"] + state(b)["balance"] == 150
+        assert a.locator("#enemyGrid .bs-ship-model,#enemyGrid .ship").count() == 0
+        for viewer, page in pages.items():
+            final = state(page)
+            assert all(
+                ("fleet" in board) == (board["id"] == viewer)
+                for board in final["boards"]
+            )
+            assert all(
+                "decks_left" not in player
+                for player in final["players"]
+                if player["id"] != viewer
+            )
         capture(a, "battleship-desktop.png")
         winpage.reload()
         winpage.locator("#result").wait_for(state="visible")
@@ -333,14 +355,54 @@ print(json.dumps(result))
             and active.locator("#enemyPanel").is_visible()
         )
         rev = state(active)["revision"]
-        active.locator('#enemyGrid [data-cell="0"]').tap()
-        assert state(active)["revision"] == rev
-        assert active.locator("#fire").is_enabled()
-        assert active.evaluate("document.documentElement.scrollWidth<=innerWidth+1")
-        capture(active, "battleship-mobile.png")
+        assert active.locator("#fire").count() == 0
+        assert active.locator("#enemyGrid .bs-ship-model").count() == 0
         active.locator("#tabOwn").tap()
         assert active.locator("#enemyPanel").is_hidden()
+        assert active.locator("#ownGrid .bs-ship-model").count() == 10
+        capture(active, "battleship-mobile-own.png")
         active.locator("#tabEnemy").tap()
+        active.locator('#enemyGrid [data-cell="0"]').scroll_into_view_if_needed()
+        cdp = active.context.new_cdp_session(active)
+        point = active.locator('#enemyGrid [data-cell="0"]').bounding_box()
+        x, y = point["x"] + point["width"] / 2, point["y"] + point["height"] / 2
+
+        def touch(kind, points=None):
+            cdp.send(
+                "Input.dispatchTouchEvent", {"type": kind, "touchPoints": points or []}
+            )
+
+        def finger(x, y, uid=1):
+            return {"x": x, "y": y, "id": uid}
+
+        # Leave the board, return, release: no shot, even if the browser emits click.
+        touch("touchStart", [finger(x, y)])
+        touch("touchMove", [finger(x, y - 45)])
+        touch("touchMove", [finger(x, y)])
+        touch("touchEnd")
+        active.wait_for_timeout(150)
+        assert state(active)["revision"] == rev
+        # Long touch and cancelled touch must not fire.
+        active.locator('#enemyGrid [data-cell="0"]').scroll_into_view_if_needed()
+        point = active.locator('#enemyGrid [data-cell="0"]').bounding_box()
+        x, y = point["x"] + point["width"] / 2, point["y"] + point["height"] / 2
+        touch("touchStart", [finger(x, y)])
+        active.wait_for_timeout(800)
+        touch("touchEnd")
+        active.wait_for_timeout(100)
+        assert state(active)["revision"] == rev
+        touch("touchStart", [finger(x, y)])
+        touch("touchCancel")
+        active.wait_for_timeout(100)
+        assert state(active)["revision"] == rev
+        # Two contacts signal a pinch, never a shot.
+        touch("touchStart", [finger(x, y)])
+        touch("touchStart", [finger(x, y), finger(x + 40, y + 40, 2)])
+        touch("touchCancel")
+        active.wait_for_timeout(100)
+        assert state(active)["revision"] == rev
+        assert active.evaluate("document.documentElement.scrollWidth<=innerWidth+1")
+        capture(active, "battleship-mobile.png")
         active.set_viewport_size({"width": 844, "height": 390})
         assert active.evaluate("document.documentElement.scrollWidth<=innerWidth+1")
         capture(active, "battleship-landscape.png")
@@ -355,15 +417,15 @@ print(json.dumps(result))
 
         active.route("**/api/battleship/table/*/state", disconnect)
         active.wait_for_timeout(1500)
-        assert active.locator("#fire").is_disabled()
+        assert active.locator('#enemyGrid [data-cell="0"]').is_disabled()
         offline["enabled"] = False
         active.wait_for_timeout(1500)
-        assert active.locator("#fire").is_enabled()
-        active.locator("#fire").tap()
+        assert active.locator('#enemyGrid [data-cell="0"]').is_enabled()
+        active.locator('#enemyGrid [data-cell="0"]').tap()
         active.wait_for_timeout(150)
         assert state(active)["revision"] == rev + 1
         print(
-            "PASS 390px real touch selection never fires, separate shot confirmation, mobile board tabs, portrait/landscape no overflow, offline guard and reconnect",
+            "PASS direct mobile tap fires once; pan/long touch/pinch/cancel never fire; own-only models, portrait/landscape, offline guard and reconnect",
             flush=True,
         )
         assert not errors, errors

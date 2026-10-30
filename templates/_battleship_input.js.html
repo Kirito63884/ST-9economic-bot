@@ -1,0 +1,138 @@
+/* Direct shots with native keyboard/assistive activation. A pan, pinch,
+ * cancelled pointer or long touch is not a tap and must never fire. */
+const BattleInput = (() => {
+  function bind(root, { enabled, revision, fire }) {
+    let gesture = null,
+      blockedUntil = 0,
+      keyboardCell = null;
+    const cellOf = (node) =>
+      node instanceof Element ? node.closest("button[data-cell]") : null;
+    function cancel() {
+      if (gesture) {
+        gesture.cancelled = true;
+        gesture.allowed = false;
+      }
+      keyboardCell = null;
+      blockedUntil = performance.now() + 600;
+    }
+    root.addEventListener("pointerdown", (event) => {
+      const button = cellOf(event.target);
+      if (!event.isPrimary) {
+        cancel();
+        return;
+      }
+      if (!button || button.disabled || event.button !== 0 || !enabled()) {
+        cancel();
+        return;
+      }
+      blockedUntil = 0;
+      keyboardCell = null;
+      gesture = {
+        id: event.pointerId,
+        cell: Number(button.dataset.cell),
+        x: event.clientX,
+        y: event.clientY,
+        started: performance.now(),
+        type: event.pointerType,
+        revision: revision(),
+        moved: false,
+        cancelled: false,
+        released: false,
+        allowed: false,
+      };
+    });
+    window.addEventListener("pointerdown", (event) => {
+      if (gesture && !gesture.released && event.pointerId !== gesture.id)
+        cancel();
+    });
+    window.addEventListener(
+      "pointermove",
+      (event) => {
+        if (!gesture || gesture.released || event.pointerId !== gesture.id)
+          return;
+        if (
+          Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) >
+          (gesture.type === "touch" ? 10 : 6)
+        )
+          gesture.moved = true;
+      },
+      { passive: true },
+    );
+    window.addEventListener("pointerup", (event) => {
+      if (!gesture || event.pointerId !== gesture.id) return;
+      const button = cellOf(event.target),
+        rect = button?.getBoundingClientRect();
+      const distance = Math.hypot(
+        event.clientX - gesture.x,
+        event.clientY - gesture.y,
+      );
+      gesture.released = true;
+      gesture.allowed =
+        !gesture.cancelled &&
+        !gesture.moved &&
+        distance <= (gesture.type === "touch" ? 10 : 6) &&
+        (gesture.type !== "touch" ||
+          performance.now() - gesture.started < 700) &&
+        button?.dataset.cell === String(gesture.cell) &&
+        root.contains(button) &&
+        event.clientX >= rect.left &&
+        event.clientX <= rect.right &&
+        event.clientY >= rect.top &&
+        event.clientY <= rect.bottom &&
+        revision() === gesture.revision &&
+        enabled();
+      if (!gesture.allowed) blockedUntil = performance.now() + 600;
+    });
+    window.addEventListener("pointercancel", cancel);
+    root.addEventListener("lostpointercapture", (event) => {
+      if (gesture && !gesture.released && event.pointerId === gesture.id)
+        cancel();
+    });
+    root.addEventListener("contextmenu", cancel);
+    root.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        cancel();
+        return;
+      }
+      const button = cellOf(event.target);
+      if (
+        button &&
+        !button.disabled &&
+        (event.key === "Enter" || event.key === " ") &&
+        !event.repeat
+      )
+        keyboardCell = Number(button.dataset.cell);
+    });
+    root.addEventListener("click", (event) => {
+      const button = cellOf(event.target);
+      if (!button || button.disabled || !enabled()) return;
+      const cell = Number(button.dataset.cell);
+      const keyboard =
+        event.detail === 0 &&
+        !event.pointerType &&
+        (keyboardCell === cell ||
+          (!gesture && performance.now() >= blockedUntil));
+      const pointer =
+        gesture?.released &&
+        gesture.allowed &&
+        gesture.cell === cell &&
+        gesture.revision === revision() &&
+        performance.now() - gesture.started < 1500;
+      gesture = null;
+      keyboardCell = null;
+      if (!keyboard && !pointer) {
+        event.preventDefault();
+        return;
+      }
+      fire(cell);
+    });
+    window.addEventListener("scroll", cancel, true);
+    window.addEventListener("blur", cancel);
+    window.addEventListener("resize", cancel);
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) cancel();
+    });
+    return { cancel };
+  }
+  return { bind };
+})();
