@@ -423,3 +423,18 @@ Two-player classic sea battle, 2026-10-30:
   game/runtime APIs retain optional-argument compatibility. Classic fleet/contact/
   hit-turn rules were checked against the cited public rules description.
 - No production installation, wallet actions or Discord messages were executed.
+
+Technical administrator (2026-10-30):
+- Full bash scripts/check.sh: 711 passed, 2 existing deprecation warnings.
+- Owner-only grant/revoke/demotion/delete, CSRF, current permissions, role import
+  rejection, audit records and immediate revocation of pending bulk actions pass.
+- Promotion revokes prior links and requires fresh versioned authentication on
+  ordinary and independent read-only routers. Owner/tech login identities and
+  the owner's session-signing key are protected from delegation bypass.
+- Delegated backup retains wallets while resetting auth secrets; source unchanged.
+- Legacy SQLite migration is idempotent, defaults to no technical administrators
+  and preserves existing wallets/levels. Discord roster cannot archive a tech.
+- Chromium real drawer grant/revoke/confirmation, owner-level wallet controls,
+  stale-session rejection and chief/tech button denial pass; zero page errors.
+- Installer success/copy/import/HTTP rollback verified on isolated fixtures.
+  Production data, services and Discord were not touched.
