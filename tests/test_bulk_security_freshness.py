@@ -2,7 +2,7 @@
 
 import base64
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from itsdangerous import TimestampSigner
@@ -83,8 +83,12 @@ def test_confirmation_actor_expiry_and_permissions(admin_client, make_user):
     admin_client.cookies.set("session", session_cookie(101))
     with SessionLocal.begin() as db:
         for row in db.query(BulkConfirmation):
-            row.expires_at = datetime.now() - timedelta(seconds=1)
+            # SQLite stores naive UTC, regardless of the developer's timezone.
+            row.expires_at = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(
+                seconds=1
+            )
     assert admin_client.post(path, json=payload, headers=headers).status_code == 409
+    assert wallet(102) == 1000
     with SessionLocal.begin() as db:
         db.get(User, 101).is_senior_admin = False
     assert admin_client.post(path, json={**payload, "preview": True}).status_code == 403
