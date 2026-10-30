@@ -156,6 +156,27 @@
     position: relative;
     z-index: 1;
   }
+  .bs-hero-fleet {
+    position: absolute;
+    right: -4%;
+    top: 30px;
+    width: 45%;
+    height: 220px;
+    transform: rotate(-23deg);
+    opacity: 0.85;
+    pointer-events: none;
+  }
+  .bs-hero-fleet svg {
+    display: block;
+    width: 100%;
+    height: 110px;
+    filter: drop-shadow(0 12px 10px #061b34aa);
+  }
+  .bs-hero-fleet svg + svg {
+    width: 62%;
+    margin: -20px 0 0 30%;
+    height: 80px;
+  }
   .bs-list {
     display: grid;
     gap: 12px;
@@ -312,11 +333,16 @@
     align-items: start;
   }
   .bs-board-panel {
-    background: linear-gradient(140deg, #192c42, #152436);
-    border: 1px solid #7eacc737;
+    background:
+      radial-gradient(ellipse at 20% 0%, #30627855, transparent 65%),
+      linear-gradient(140deg, #182e43, #112336);
+    border: 1px solid #7eacc74d;
     border-radius: 22px;
     padding: 22px;
     min-width: 0;
+    box-shadow:
+      0 18px 40px #030e2020,
+      inset 0 1px 0 #bfe6ed10;
   }
   .bs-board-title {
     display: flex;
@@ -337,6 +363,23 @@
     width: 100%;
     max-width: 520px;
     margin: auto;
+    padding: 10px 8px 8px 3px;
+    position: relative;
+    border: 1px solid #7eb8d140;
+    border-radius: 13px;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at 30% 15%, #3185a73b, transparent 65%),
+      repeating-radial-gradient(
+        ellipse at 85% 120%,
+        transparent 0 24px,
+        #a0dcf008 25px,
+        transparent 27px
+      ),
+      linear-gradient(145deg, #103b56, #08283e);
+    box-shadow:
+      inset 0 0 35px #020e1e66,
+      0 0 0 4px #051b2b44;
   }
   .bs-axis {
     display: grid;
@@ -350,16 +393,16 @@
     aspect-ratio: 1;
     padding: 0;
     min-width: 0;
-    border: 1px solid #88b7ce29;
-    border-radius: 5px;
-    background: #17374d;
+    border: 1px solid #8ac7df28;
+    border-radius: 3px;
+    background: #15516e22;
     color: #9ad4df;
     display: grid;
     place-items: center;
     font-size: clamp(14px, 2vw, 24px) !important;
     font-weight: 800 !important;
     position: relative;
-    touch-action: manipulation;
+    touch-action: pan-y pinch-zoom;
   }
   button.bs-cell:not(:disabled) {
     cursor: crosshair;
@@ -369,17 +412,16 @@
     border-color: #aed7e0;
   }
   .bs-cell.ship {
-    background: linear-gradient(135deg, #779ba9, #476879);
-    border-color: #a1bbc3;
-    box-shadow: inset 0 0 0 2px #112e4a66;
+    background: #a7d3d00b;
+    border-color: #b2d4dc55;
   }
   .bs-cell.hit {
-    background: #6c3947;
+    background: #a9544d38;
     border-color: #f18b8d;
     color: #ffbdaf;
   }
   .bs-cell.sunk {
-    background: #523547;
+    background: #572e2844;
     border-color: #cda171;
     color: #f6d3a2;
   }
@@ -391,12 +433,74 @@
   .bs-cell.water {
     color: #537f96;
   }
-  .bs-cell.selected {
+  .bs-cell.pending {
     background: #315564;
     outline: 3px solid #edce91;
     outline-offset: -2px;
     z-index: 1;
     color: #ffe7b5;
+  }
+  .bs-mark {
+    position: relative;
+    z-index: 4;
+    pointer-events: none;
+    text-shadow: 0 1px 3px #061c2d;
+  }
+  .bs-cell.hit .bs-mark,
+  .bs-cell.sunk .bs-mark {
+    color: #ffddbb;
+    text-shadow:
+      0 0 5px #ffb04d,
+      0 0 10px #e04f2e;
+  }
+  .bs-cell.hit::after,
+  .bs-cell.sunk::after {
+    content: "";
+    position: absolute;
+    inset: 15%;
+    border-radius: 50%;
+    z-index: 3;
+    background: radial-gradient(
+      circle,
+      #ffdc8bd9 0,
+      #e55e3e88 30%,
+      #221c2980 55%,
+      transparent 75%
+    );
+    pointer-events: none;
+  }
+  .bs-ship-model {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    z-index: 2;
+    pointer-events: none;
+  }
+  .bs-ship-model svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+  }
+  .bs-ship-model.wreck svg {
+    filter: grayscale(0.7) sepia(0.4) brightness(0.7);
+    opacity: 0.72;
+  }
+  .bs-ship-model.damaged svg {
+    filter: saturate(0.65);
+  }
+  .bs-fleet-types {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 12px;
+    margin: -3px 0 14px;
+    color: #8faabd;
+    font-size: 10px;
+  }
+  .bs-fleet-types b {
+    font-weight: 650;
+    color: #c2d3df;
   }
   .bs-cell.preview {
     background: #648c73 !important;
@@ -457,8 +561,31 @@
     margin: 12px 0;
   }
   .bs-fleet-picks .bs-btn {
-    min-width: 72px;
+    min-width: 100px;
     flex: 1;
+    flex-direction: column;
+    gap: 4px;
+    padding: 10px 8px;
+    background: #102c4055;
+  }
+  .bs-ship-mini {
+    display: block;
+    width: 90px;
+    height: 27px;
+    pointer-events: none;
+  }
+  .bs-ship-mini svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .bs-fleet-picks strong {
+    font-size: 12px;
+  }
+  .bs-fleet-picks small {
+    font-size: 10px;
+    color: #9fb6c7;
+    font-weight: 500;
   }
   .bs-fleet-picks .selected {
     background: #385367;
@@ -473,10 +600,6 @@
     margin-top: 18px;
     border-top: 1px solid var(--bs-line);
     padding-top: 18px;
-  }
-  .bs-fire .bs-btn {
-    width: 100%;
-    margin-top: 8px;
   }
   .bs-fire p {
     color: #adc1d0;
@@ -602,6 +725,12 @@
     }
   }
   @media (max-width: 520px) {
+    .bs-hero-fleet {
+      right: -25%;
+      width: 65%;
+      top: 60px;
+      opacity: 0.35;
+    }
     .bs-page {
       padding: 20px 10px 35px;
     }

@@ -438,3 +438,15 @@ Technical administrator (2026-10-30):
   stale-session rejection and chief/tech button denial pass; zero page errors.
 - Installer success/copy/import/HTTP rollback verified on isolated fixtures.
   Production data, services and Discord were not touched.
+
+Battleship models and direct fire (2026-10-30):
+- Full bash scripts/check.sh: 684 passed, 2 existing deprecation warnings.
+- Chromium two-session paid game, all ships sunk, payout/reload/rematch and
+  mobile zero-stake game pass. Tap fires exactly once; pan, pinch, long touch
+  and cancellation never fire. Own models only, portrait/landscape and offline
+  guards pass; zero browser errors. Screenshots visually inspected.
+- API tests protect opponent fleets, types and deck/ship counts during placement,
+  battle and after completion. Only shot marks reveal combat results.
+- Isolated installer success and copy/preflight/HTTP rollback cases pass; new
+  model/input partials included, live data and collectors unchanged.
+- No production deployment or external wallet/Discord action.
