@@ -40,9 +40,14 @@ def test_rendered_scripts_parse(make_user, login_as):
     client = login_as(uid)
     import main
     from chess_game import ChessTable
+
     main.chess_service.tables["frontend-fixture"] = ChessTable(
         "frontend-fixture", uid, "Имя <script>alert(1)</script>"
     )
+    from database import AppRuntime, SessionLocal
+
+    with SessionLocal.begin() as db:
+        db.get(AppRuntime, 1).payload = main.serialize_runtime()
     routes = [
         "/",
         "/profile",
