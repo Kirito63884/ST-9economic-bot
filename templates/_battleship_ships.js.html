@@ -1,5 +1,5 @@
-/* Original top-down vector vessels. Fleet coordinates are supplied only by
- * the owning player's private state; enemy boards never render this layer. */
+/* Original top-down vector vessels. During a battle only the owning player
+ * receives coordinates; a finished match reveals both fleets to participants. */
 const BattleShips = (() => {
   const types = {
     4: { name: "Линкор", beam: 27, kind: "battleship", guns: 3 },

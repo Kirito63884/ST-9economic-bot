@@ -114,15 +114,20 @@
     const otherMarks = new Map(
       (opponent?.marks || []).map((mark) => [mark.cell, mark.result]),
     );
+    const revealedFleet =
+      state.phase === "finished" ? opponent?.fleet || [] : [];
+    const revealedCells = new Set(revealedFleet.flat());
     grid("enemyGrid", (cell) => ({
-      status: otherMarks.get(cell) || "unknown",
+      status:
+        otherMarks.get(cell) || (revealedCells.has(cell) ? "ship" : "unknown"),
       disabled: !canFire() || !opponent || otherMarks.has(cell),
       pending: pendingShot === cell,
       last:
         state.last_shot?.target === other?.id && state.last_shot?.cell === cell,
     }));
-    // No opponent fleet, model or per-ship class is rendered, even after a win.
     BattleShips.render("ownGrid", ownFleet, own.marks);
+    // Only a finished match reveals the opponent; rematch clears the layer.
+    BattleShips.render("enemyGrid", revealedFleet, opponent?.marks || []);
     $("fleetTypes").innerHTML = [4, 3, 2, 1]
       .map(
         (size) =>
@@ -142,7 +147,9 @@
         ? other.placed
           ? "Флот готов"
           : "Расставляет корабли"
-        : "Расстановка скрыта";
+        : state.phase === "finished"
+          ? "Партия завершена · расстановка открыта"
+          : "Расстановка скрыта";
   }
   function controls() {
     if (!state) return;
@@ -172,7 +179,9 @@
       $("autoFleet").disabled =
       $("clearFleet").disabled =
         !editable;
-    $("rotate").textContent = horizontal ? "↔ Горизонтально" : "↕ Вертикально";
+    $("rotate").textContent = horizontal
+      ? "↔ Горизонтально"
+      : "↕ Вертикально";
     $("saveFleet").disabled = !editable || count !== 10 || !dirty();
     $("revertFleet").hidden = !dirty();
     $("revertFleet").disabled = !editable;
@@ -255,7 +264,7 @@
     $("players").innerHTML = state.players
       .map(
         (p) =>
-          `<article class="bs-player ${p.id === state.actor ? "turn" : ""}"><div class="bs-avatar" aria-hidden="true">${esc(p.name.slice(0, 1).toUpperCase())}</div><div><strong title="${esc(p.name)}">${esc(p.name)}${p.id === state.your_id ? " · вы" : ""}</strong><small>${p.left ? "Покинул стол" : state.phase === "waiting" ? (p.ready ? "Готов к бою" : p.placed ? "Флот расставлен" : "Расставляет корабли") : p.hits + " попаданий / " + p.shots_fired + " выстрелов"}</small></div><span class="bs-score">${state.phase === "waiting" ? "" : p.id === state.your_id ? p.ships_left + " кораблей" : "Флот скрыт"}${p.timeouts ? " · тайм-ауты " + p.timeouts + "/3" : ""}</span></article>`,
+          `<article class="bs-player ${p.id === state.actor ? "turn" : ""}"><div class="bs-avatar" aria-hidden="true">${esc(p.name.slice(0, 1).toUpperCase())}</div><div><strong title="${esc(p.name)}">${esc(p.name)}${p.id === state.your_id ? " · вы" : ""}</strong><small>${p.left ? "Покинул стол" : state.phase === "waiting" ? (p.ready ? "Готов к бою" : p.placed ? "Флот расставлен" : "Расставляет корабли") : p.hits + " попаданий / " + p.shots_fired + " выстрелов"}</small></div><span class="bs-score">${state.phase === "waiting" ? "" : p.id === state.your_id ? p.ships_left + " кораблей" : state.phase === "finished" ? "Флот открыт" : "Флот скрыт"}${p.timeouts ? " · тайм-ауты " + p.timeouts + "/3" : ""}</span></article>`,
       )
       .join("");
     $("turn").textContent =
@@ -537,6 +546,10 @@
     }
   });
   $("leave").addEventListener("click", async () => {
+    if (state?.phase === "finished" && me()?.left) {
+      location.href = "/games/battleship/lobby";
+      return;
+    }
     if (
       !state ||
       busy ||

@@ -34,7 +34,7 @@ files=(
     templates/domino_lobby.html templates/domino_table.html templates/_domino_ui.html
     templates/_domino_rules.html templates/_domino_tiles.js.html templates/_domino_game.js.html
     templates/games.html templates/_site_nav.html templates/profile.html templates/index.html
-    templates/_admin_tables.html
+    templates/_admin_tables.html templates/poker_multiplayer.html
     battleship.py battleship_routes.py
     templates/battleship_lobby.html templates/battleship_table.html
     templates/_battleship_ui.html templates/_battleship_rules.html

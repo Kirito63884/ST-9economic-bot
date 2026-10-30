@@ -218,3 +218,15 @@ def test_stalemate_checkmate_and_insufficient_material_results():
         [],
         "Ничья: недостаточно материала для мата",
     )
+
+
+def test_board_orientation_is_stable_from_waiting_to_playing():
+    table = ChessTable("orientation", 1, "Белые")
+    assert table.public_state(1)["your_side"] == "white"
+    table.add_player(2, "Чёрные")
+    for uid, side in ((1, "white"), (2, "black")):
+        assert table.public_state(uid)["your_side"] == side
+        table.player(uid)["ready"] = True
+    table.start()
+    assert table.public_state(1)["your_side"] == "white"
+    assert table.public_state(2)["your_side"] == "black"

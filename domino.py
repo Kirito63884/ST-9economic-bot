@@ -250,7 +250,9 @@ class DominoTable:
         )
         return True
 
-    def action(self, uid, kind, tile=None, side=None, automatic=False):
+    def action(
+        self, uid, kind, tile=None, side=None, automatic=False, direction="auto"
+    ):
         if self.phase != "playing" or uid != self.actor:
             raise DominoError("Сейчас ход другого игрока", 409)
         if not automatic and self.deadline and time.time() >= self.deadline:
@@ -258,6 +260,8 @@ class DominoTable:
         player = self.player(uid)
         legal = self.legal(uid)
         if kind == "play":
+            if direction not in ("auto", "up", "down"):
+                raise DominoError("Направление: по столу, вверх или вниз")
             if (
                 not isinstance(tile, str)
                 or tile not in legal
@@ -274,7 +278,19 @@ class DominoTable:
                 else:
                     a, b = (a, b) if a == end else (b, a)
             player["hand"].remove(tile)
-            bone = {"id": tile, "left": a, "right": b, "by": uid}
+            # Older saved games have no layout metadata. Give their existing
+            # chain a stable order before appending the new presentation hint.
+            for index, placed in enumerate(self.chain):
+                placed.setdefault("placement_order", index)
+            order = 1 + max((b["placement_order"] for b in self.chain), default=-1)
+            bone = {
+                "id": tile,
+                "left": a,
+                "right": b,
+                "by": uid,
+                "direction": direction,
+                "placement_order": order,
+            }
             if side == "left":
                 self.chain.insert(0, bone)
             else:

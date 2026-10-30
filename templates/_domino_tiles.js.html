@@ -50,6 +50,150 @@ const DominoUI = (() => {
       return "";
     return `<${tag} class="dm-bone ${horizontal ? "horizontal" : ""} ${a === b ? "double" : ""} ${selected ? "selected" : ""} ${legal ? "legal" : ""}" ${button ? `type="button" data-tile="${esc(id)}" aria-pressed="${selected}" ${disabled ? "disabled" : ""}` : 'role="img"'} aria-label="Кость ${a}–${b}${legal ? " · можно ходить" : ""}">${half(a)}${half(b)}</${tag}>`;
   }
+  /* Layout is presentation only: the server still owns matching numbers and
+   * the two legal ends. Build from the opening tile in placement order, so a
+   * new left tile does not reverse everyone else's chosen bends. */
+  function layout(chain, width, compact = false) {
+    const preferredUnit = compact ? 24 : 34;
+    const ordered = chain
+      .map((bone, index) => ({
+        ...bone,
+        order: Number.isInteger(bone.placement_order)
+          ? bone.placement_order
+          : index,
+        index,
+      }))
+      .sort((a, b) => a.order - b.order);
+    if (!ordered.length) return { tiles: [], unit: preferredUnit, height: 0 };
+    const anchor = ordered[0];
+    const directions = { up: [0, -1], down: [0, 1] };
+    let result;
+    // A smaller unit is a last resort for an unusually cramped sequence of
+    // player-chosen bends. Never introduce horizontal scroll or cover a tile.
+    for (let unit = preferredUnit; unit >= 8; unit -= 2) {
+      const bound = Math.max(3, (Math.max(width, 100) - 8) / unit / 2);
+      const verticalBound = Math.max(
+        3,
+        Math.min(440, Math.max(300, width * 0.7)) / unit / 2,
+      );
+      const placed = [];
+      const initialDouble = anchor.left === anchor.right;
+      const ends = {
+        left: { x: initialDouble ? 0 : -0.5, y: 0, dx: -1, dy: 0 },
+        right: { x: initialDouble ? 0 : 0.5, y: 0, dx: 1, dy: 0 },
+      };
+      const initial = {
+        ...anchor,
+        x: 0,
+        y: 0,
+        a: anchor.left,
+        b: anchor.right,
+        angle: initialDouble ? 90 : 0,
+        w: initialDouble ? 1 : 2,
+        h: initialDouble ? 2 : 1,
+      };
+      placed.push(initial);
+      let failed = false;
+      for (const bone of ordered.slice(1)) {
+        const side = bone.index < anchor.index ? "left" : "right";
+        const end = ends[side];
+        const bend = directions[bone.direction];
+        const choices = [
+          bend,
+          [end.dx, end.dy],
+          side === "left" ? [0, -1] : [0, 1],
+          side === "left" ? [0, 1] : [0, -1],
+          [1, 0],
+          [-1, 0],
+        ].filter(Boolean);
+        let candidate;
+        for (const [dx, dy] of choices) {
+          const double = bone.left === bone.right;
+          const input = { x: end.x + end.dx, y: end.y + end.dy };
+          const x = input.x + (double ? 0 : dx / 2);
+          const y = input.y + (double ? 0 : dy / 2);
+          const w = double ? (dx ? 1 : 2) : dx ? 2 : 1;
+          const h = double ? (dx ? 2 : 1) : dx ? 1 : 2;
+          const port = {
+            x: input.x + (double ? 0 : dx),
+            y: input.y + (double ? 0 : dy),
+            dx,
+            dy,
+          };
+          if (
+            x - w / 2 < -bound ||
+            x + w / 2 > bound ||
+            Math.abs(port.x + dx) + 0.5 > bound ||
+            y - h / 2 < -verticalBound ||
+            y + h / 2 > verticalBound ||
+            Math.abs(port.y + dy) + 0.5 > verticalBound
+          )
+            continue;
+          if (
+            placed.some(
+              (p) =>
+                Math.abs(p.x - x) < (p.w + w) / 2 - 0.01 &&
+                Math.abs(p.y - y) < (p.h + h) / 2 - 0.01,
+            )
+          )
+            continue;
+          candidate = {
+            ...bone,
+            x,
+            y,
+            w,
+            h,
+            a: side === "left" ? bone.right : bone.left,
+            b: side === "left" ? bone.left : bone.right,
+            angle: (Math.atan2(dy, dx) * 180) / Math.PI + (double ? 90 : 0),
+            port,
+          };
+          break;
+        }
+        if (!candidate) {
+          failed = true;
+          break;
+        }
+        placed.push(candidate);
+        ends[side] = candidate.port;
+      }
+      if (failed) continue;
+      const minX = Math.min(...placed.map((p) => p.x - p.w / 2));
+      const maxX = Math.max(...placed.map((p) => p.x + p.w / 2));
+      const minY = Math.min(...placed.map((p) => p.y - p.h / 2));
+      const maxY = Math.max(...placed.map((p) => p.y + p.h / 2));
+      result = {
+        unit,
+        height: (maxY - minY) * unit + 16,
+        tiles: placed.map((p) => ({
+          ...p,
+          x: (p.x - (maxX + minX) / 2) * unit + width / 2,
+          y: (p.y - minY) * unit + 8,
+        })),
+      };
+      break;
+    }
+    if (result) return result;
+    // A legacy or adversarial sequence can enclose an end completely. Reflow
+    // that presentation as a continuous vertical chain, keeping every value.
+    const unit = Math.min(preferredUnit, Math.max(8, width / 4));
+    let y = 8;
+    const tiles = chain.map((bone) => {
+      const double = bone.left === bone.right;
+      const h = double ? 1 : 2;
+      const item = {
+        ...bone,
+        x: width / 2,
+        y: y + (h * unit) / 2,
+        a: bone.left,
+        b: bone.right,
+        angle: double ? 0 : 90,
+      };
+      y += h * unit;
+      return item;
+    });
+    return { unit, height: y + 8, tiles };
+  }
   async function api(url, options = {}) {
     const response = await fetch(url, { cache: "no-store", ...options });
     let data;
@@ -72,6 +216,7 @@ const DominoUI = (() => {
   return {
     esc,
     tile,
+    layout,
     api,
     money: (cents) =>
       new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(

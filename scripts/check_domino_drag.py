@@ -137,11 +137,15 @@ def check_browser(FIX, chromium, screenshot_dir):
         page.locator('[data-tile="1-2"]').click()
         assert not calls
         assert page.locator('[data-tile="1-2"]').get_attribute("aria-pressed") == "true"
+        page.locator("#directionLeft").select_option("up")
         page.locator("#playLeft").focus()
         page.keyboard.press("Enter")
         page.wait_for_timeout(100)
         assert (
-            len(calls) == 1 and calls[0]["tile"] == "1-2" and calls[0]["side"] == "left"
+            len(calls) == 1
+            and calls[0]["tile"] == "1-2"
+            and calls[0]["side"] == "left"
+            and calls[0]["direction"] == "up"
         )
         c.close()
         print("PASS click selects, keyboard end button plays once", flush=True)
@@ -191,7 +195,13 @@ def check_browser(FIX, chromium, screenshot_dir):
             page.mouse.up()
             page.wait_for_timeout(100)
             assert calls == [
-                {"revision": rev, "kind": "play", "tile": bone, "side": side}
+                {
+                    "revision": rev,
+                    "kind": "play",
+                    "tile": bone,
+                    "side": side,
+                    "direction": "auto",
+                }
             ], calls
             clean(page)
             c.close()
@@ -281,10 +291,6 @@ def check_browser(FIX, chromium, screenshot_dir):
                 touch("touchMove", x + (dx - x) * step / 7, y + (dy - y) * step / 7)
             assert "over" in page.locator("#dropLeft").get_attribute("class")
             assert page.evaluate("document.documentElement.scrollWidth<=innerWidth+1")
-            if not canceled and screenshot_dir:
-                page.screenshot(
-                    path=str(screenshot_dir / "domino-drag-mobile.png"), full_page=True
-                )
             touch("touchCancel" if canceled else "touchEnd")
             page.wait_for_timeout(100)
             assert len(calls) == (0 if canceled else 1), calls
@@ -294,6 +300,71 @@ def check_browser(FIX, chromium, screenshot_dir):
             c.close()
         print(
             "PASS real 390px touch: tap selects, drag drop plays once, cancellation never plays, no overflow",
+            flush=True,
+        )
+        # Eulerian trail uses every double-six tile once, with matching ends.
+        edges = {(a, b) for a in range(7) for b in range(a, 7)}
+        stack, trail = [0], []
+        while stack:
+            vertex = stack[-1]
+            edge = next((e for e in sorted(edges) if vertex in e), None)
+            if edge is None:
+                trail.append(stack.pop())
+            else:
+                edges.remove(edge)
+                stack.append(edge[1] if edge[0] == vertex else edge[0])
+        trail.reverse()
+        long_chain = [
+            {
+                "id": f"{min(a, b)}-{max(a, b)}",
+                "left": a,
+                "right": b,
+                "by": 101,
+                "placement_order": index,
+                "direction": "up"
+                if index in (3, 8)
+                else "down"
+                if index == 15
+                else "auto",
+            }
+            for index, (a, b) in enumerate(zip(trail, trail[1:]))
+        ]
+        assert len(long_chain) == 28
+        for width in (320, 390, 800, 1280):
+            c, page, s, calls = room(width)
+            s.update(chain=long_chain, revision=s["revision"] + 1)
+            page.wait_for_function(
+                "document.querySelectorAll('#chain .dm-bone').length === 28"
+            )
+            geometry = page.evaluate("""() => {
+                const area = document.querySelector('#chain').getBoundingClientRect();
+                const bones = [...document.querySelectorAll('#chain .dm-bone')].map(e => {
+                    const r = e.getBoundingClientRect();
+                    return {left:r.left, right:r.right, top:r.top, bottom:r.bottom};
+                });
+                return {left:area.left, right:area.right, height:area.height, bones,
+                    overflow:document.documentElement.scrollWidth > innerWidth + 1};
+            }""")
+            assert not geometry["overflow"], geometry
+            assert geometry["height"] < 470, geometry
+            for i, bone in enumerate(geometry["bones"]):
+                assert bone["left"] >= geometry["left"] - 1
+                assert bone["right"] <= geometry["right"] + 1
+                for other in geometry["bones"][i + 1 :]:
+                    assert not (
+                        bone["left"] < other["right"] - 1
+                        and bone["right"] > other["left"] + 1
+                        and bone["top"] < other["bottom"] - 1
+                        and bone["bottom"] > other["top"] + 1
+                    ), geometry
+            if screenshot_dir:
+                page.screenshot(
+                    path=str(screenshot_dir / f"domino-chain-{width}.png"),
+                    full_page=True,
+                )
+            c.close()
+        print(
+            "PASS manual direction is sent; all 28 matching tiles fit without overlap or horizontal scroll at 320–1280px",
             flush=True,
         )
         assert not errors, errors

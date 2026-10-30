@@ -1,59 +1,85 @@
 <!doctype html>
 <html lang="ru">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Шахматный стол — Strike Team 9</title>
-{% include "_site_ui.html" %}{% include "_table_admin_ui.html" %}
-{% include "_chess_ui.html" %}</head>
-<body>{% include "_site_nav.html" %}<main class="chess-page">
-<p>
-<a href="/games/chess/lobby">← Все шахматные столы</a>
-</p>
-<h1>♟ Шахматы</h1>
-<div id="join" hidden>
-<p>Открытый стол: присоединитесь, чтобы увидеть доску и играть.</p>
-<button class="chess-btn" id="joinButton">Присоединиться</button>
-</div>
-<div class="chess-layout">
-<div id="board" class="chess-board" role="grid" aria-label="Шахматная доска">
-</div>
-<aside class="chess-side">
-<div id="players" class="chess-players">
-</div>
-<div id="turn" class="chess-turn">
-</div>
-<div id="message" class="chess-msg" role="status">
-</div>
-<label>Ссылка-приглашение <input id="invite" readonly class="chess-promote" aria-label="Ссылка на стол">
-<button class="chess-btn secondary" id="copyInvite" type="button">Скопировать</button>
-</label>
-<div id="waiting" hidden>
-<p>Оба игрока должны нажать «Готов».</p>
-<button class="chess-btn" id="ready">Готов</button>
-<button class="chess-btn" id="start" hidden>Начать партию</button>
-</div>
-<button class="chess-btn secondary" id="leave">Покинуть стол</button>
-<div id="controls" class="chess-actions" hidden>
-<label>Превращение <select id="promotion" class="chess-promote">
-<option value="q">Ферзь</option>
-<option value="r">Ладья</option>
-<option value="b">Слон</option>
-<option value="n">Конь</option>
-</select>
-</label>
-<button class="chess-btn secondary" id="claim" hidden>Заявить ничью</button>
-<button class="chess-btn secondary" id="offer">Предложить ничью</button>
-<button class="chess-btn secondary" id="accept" hidden>Принять ничью</button>
-<button class="chess-btn secondary" id="resign">Сдаться</button>
-</div>
-<div id="finished" hidden>
-<button class="chess-btn" id="leaveFinished">В лобби</button>
-</div>
-<p class="chess-rules">Белые ходят первыми. Рокировка и взятие на проходе доступны обычным выбором хода. При превращении выберите фигуру в списке. Мат завершает партию победой. Ничья: пат и недостаточный материал; 3 повтора или 50 ходов — по заявке; 5 повторов или 75 ходов — автоматически. Победитель получает общий банк без комиссии, при ничьей взносы возвращаются. Незавершённые взносы возвращаются при закрытии стола через 8 часов без действий участников.</p>
-</aside>
-</div>
-</main>
-<script>const CHESS_TABLE_ID={{ table_id|tojson }};window.ST9_USER_ID={{ user.id|tojson }};</script>{% include "_request_security.html" %}<script>{% include "_chess_table.js.html" %}</script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Шахматный стол — Strike Team 9</title>
+  {% include "_site_ui.html" %}
+  {% include "_table_admin_ui.html" %}
+  {% include "_chess_ui.html" %}
+</head>
+<body>
+  {% include "_site_nav.html" %}
+  <main id="st-content" class="chess-page">
+    <p><a href="/games/chess/lobby">← Все шахматные столы</a></p>
+    <h1>♟ Шахматы</h1>
+    <div id="join" hidden>
+      <p>Открытый стол: присоединитесь, чтобы увидеть доску и играть.</p>
+      <button class="chess-btn" id="joinButton" type="button">Присоединиться</button>
+    </div>
+    <div class="chess-layout">
+      <section aria-label="Игровое поле">
+        <div id="boardFrame" class="chess-board-frame" hidden>
+          <div class="chess-axis chess-files top" aria-hidden="true"></div>
+          <div class="chess-axis chess-ranks left" aria-hidden="true"></div>
+          <div id="board" class="chess-board" role="group" aria-label="Шахматная доска" aria-describedby="boardHelp"></div>
+          <div class="chess-axis chess-ranks right" aria-hidden="true"></div>
+          <div class="chess-axis chess-files bottom" aria-hidden="true"></div>
+        </div>
+        <p id="boardHelp" class="chess-board-help" hidden>
+          Выберите свою фигуру, затем клетку для хода. Точка — свободная клетка,
+          кольцо — взятие. Стрелки на клавиатуре перемещают фокус, Enter выбирает клетку.
+        </p>
+      </section>
+      <aside class="chess-side">
+        <div id="players" class="chess-players"></div>
+        <div id="turn" class="chess-turn" role="status"></div>
+        <div id="message" class="chess-msg" role="status"></div>
+        <label>
+          Ссылка-приглашение
+          <input id="invite" readonly class="chess-promote" aria-label="Ссылка на стол">
+          <button class="chess-btn secondary" id="copyInvite" type="button">Скопировать</button>
+        </label>
+        <div id="waiting" hidden>
+          <p>Оба игрока должны нажать «Готов».</p>
+          <button class="chess-btn" id="ready" type="button">Готов</button>
+          <button class="chess-btn" id="start" type="button" hidden>Начать партию</button>
+        </div>
+        <button class="chess-btn secondary" id="leave" type="button">Покинуть стол</button>
+        <div id="controls" class="chess-actions" hidden>
+          <label>
+            Превращение
+            <select id="promotion" class="chess-promote">
+              <option value="q">Ферзь</option>
+              <option value="r">Ладья</option>
+              <option value="b">Слон</option>
+              <option value="n">Конь</option>
+            </select>
+          </label>
+          <button class="chess-btn secondary" id="claim" type="button" hidden>Заявить ничью</button>
+          <button class="chess-btn secondary" id="offer" type="button">Предложить ничью</button>
+          <button class="chess-btn secondary" id="accept" type="button" hidden>Принять ничью</button>
+          <button class="chess-btn secondary" id="resign" type="button">Сдаться</button>
+        </div>
+        <div id="finished" hidden>
+          <button class="chess-btn" id="leaveFinished" type="button">В лобби</button>
+        </div>
+        <p class="chess-rules">
+          Белые ходят первыми. Рокировка и взятие на проходе доступны обычным выбором хода.
+          При превращении выберите фигуру в списке. Мат завершает партию победой.
+          Ничья: пат и недостаточный материал; 3 повтора или 50 ходов — по заявке;
+          5 повторов или 75 ходов — автоматически.
+          Победитель получает общий банк без комиссии, при ничьей взносы возвращаются.
+          Незавершённые взносы возвращаются при закрытии стола через 8 часов без действий участников.
+        </p>
+      </aside>
+    </div>
+  </main>
+  <script>
+    const CHESS_TABLE_ID = {{ table_id|tojson }};
+    window.ST9_USER_ID = {{ user.id|tojson }};
+  </script>
+  {% include "_request_security.html" %}
+  <script>{% include "_chess_table.js.html" %}</script>
 </body>
 </html>

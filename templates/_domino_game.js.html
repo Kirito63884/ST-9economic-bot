@@ -16,7 +16,8 @@
     fit = false,
     networkMessage = "",
     drag = null,
-    suppressClickUntil = 0;
+    suppressClickUntil = 0,
+    chainWidth = 0;
   const now = () => Date.now() / 1000 + offset;
   const mine = () =>
     state?.phase === "playing" && state.actor === state.your_id;
@@ -50,11 +51,35 @@
       : "";
     controls();
   }
+  function renderChain() {
+    if (!state?.chain.length) return;
+    const area = $("chain");
+    if (!area.clientWidth) return;
+    const layout = DominoUI.layout(state.chain, area.clientWidth, fit);
+    area.style.height = layout.height + "px";
+    area.innerHTML = layout.tiles
+      .map(
+        (bone) =>
+          `<span class="dm-placed" data-chain-id="${esc(bone.id)}" style="left:${bone.x}px;top:${bone.y}px;width:${layout.unit * 2}px;height:${layout.unit}px;transform:translate(-50%,-50%) rotate(${bone.angle}deg)">${tile(
+            bone.id,
+            {
+              horizontal: true,
+              left: bone.a,
+              right: bone.b,
+            },
+          )}</span>`,
+      )
+      .join("");
+  }
+  const direction = (side) =>
+    $(side === "left" ? "directionLeft" : "directionRight").value;
   function controls() {
     if (!state) return;
     if (drag && (!control() || drag.revision !== state.revision)) cancelDrag();
     const can = control(),
       sides = state.legal[selected] || [];
+    $("directionLeft").disabled = !can;
+    $("directionRight").disabled = !can;
     $("playLeft").disabled = !can || !sides.includes("left");
     $("playRight").disabled = !can || !sides.includes("right");
     $("playLeft").textContent =
@@ -148,17 +173,7 @@
         : state.phase === "playing"
           ? "<strong>Начинаем цепочку.</strong>Первую кость ставит старший дубль. Она подсвечена на руке начинающего игрока."
           : "<strong>Хорошая партия.</strong>";
-    const scroll = $("chainScroll"),
-      previous = scroll.scrollLeft;
-    $("chain").innerHTML = state.chain
-      .map((bone) =>
-        tile(bone.id, { horizontal: true, left: bone.left, right: bone.right }),
-      )
-      .join("");
-    scroll.scrollLeft = previous;
-    if (state.last_move?.side === "left") scroll.scrollLeft = 0;
-    if (state.last_move?.side === "right")
-      scroll.scrollLeft = scroll.scrollWidth;
+    renderChain();
     if (state.chain.length) {
       $("leftEnd").textContent = state.chain[0].left;
       $("rightEnd").textContent = state.chain.at(-1).right;
@@ -411,7 +426,13 @@
     const side = dropSide(event.clientX, event.clientY),
       id = drag.tile;
     cancelDrag();
-    if (side) action("action", { kind: "play", tile: id, side });
+    if (side)
+      action("action", {
+        kind: "play",
+        tile: id,
+        side,
+        direction: direction(side),
+      });
   });
   for (const type of ["pointercancel", "lostpointercapture"])
     $("hand").addEventListener(type, (event) => {
@@ -440,7 +461,12 @@
   ])
     $(id).addEventListener("click", () => {
       if (control() && selected)
-        action("action", { kind: "play", tile: selected, side });
+        action("action", {
+          kind: "play",
+          tile: selected,
+          side,
+          direction: direction(side),
+        });
     });
   $("draw").addEventListener("click", () => {
     if (control()) action("action", { kind: "draw" });
@@ -509,9 +535,18 @@
   });
   $("fit").addEventListener("click", () => {
     fit = !fit;
-    $("chain").classList.toggle("fit", fit);
-    $("fit").textContent = fit ? "В одну линию" : "Вся цепочка";
+    $("fit").setAttribute("aria-pressed", String(fit));
+    $("fit").textContent = fit ? "Крупнее" : "Компактнее";
+    renderChain();
   });
+  const chainResize = new ResizeObserver((entries) => {
+    const width = entries[0].contentRect.width;
+    if (Math.abs(width - chainWidth) < 1) return;
+    if (chainWidth) cancelDrag();
+    chainWidth = width;
+    renderChain();
+  });
+  chainResize.observe($("chainScroll"));
   $("invite").addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(location.href);

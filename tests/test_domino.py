@@ -453,3 +453,29 @@ def test_table_scripts_parse_and_private_home_activity_hides_invite(
     row = next(group for group in result["groups"] if group["key"] == "domino-private")
     assert row["url"] == "/games/domino/lobby" and tid not in json.dumps(result)
     assert "hand" not in row and "stock" not in row
+
+
+@pytest.mark.parametrize("direction", ["auto", "up", "down"])
+def test_layout_direction_survives_restore_and_preserves_matching(direction):
+    table = game()
+    table.chain = [{"id": "2-4", "left": 2, "right": 4, "by": 102}]
+    table.actor = 101
+    table.player(101)["hand"] = ["1-2", "3-4", "5-5"]
+    table.action(101, "play", "1-2", "left", direction=direction)
+    restored = DominoTable.from_dict(table.to_dict())
+    assert restored.chain[0]["direction"] == direction
+    assert [b["placement_order"] for b in restored.chain] == [1, 0]
+    assert restored.chain[0]["right"] == restored.chain[1]["left"]
+    assert restored.player(101)["hand"] == ["3-4", "5-5"]
+    assert restored.public_state(102)["chain"] == restored.chain
+
+
+@pytest.mark.parametrize("direction", [None, [], {}, "left", "<script>"])
+def test_bad_layout_direction_does_not_consume_tile_or_turn(direction):
+    table = game()
+    uid = table.actor
+    tile = table.opening_tile
+    before = table.to_dict()
+    with pytest.raises(DominoError):
+        table.action(uid, "play", tile, "right", direction=direction)
+    assert table.to_dict() == before

@@ -1296,6 +1296,60 @@
             }
         </style>
         {% include "_site_ui.html" %}
+        <style>
+            /* Reserve the final slots before the first card arrives. A flop,
+               turn or river must not recenter the cards already on the felt. */
+            .st-poker-page .center-area {
+                width: 382px;
+                max-width: 100%;
+            }
+            .st-poker-page .poker-table-meta {
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                gap: 6px;
+                min-height: 38px;
+            }
+            .st-poker-page .community-cards {
+                display: grid;
+                grid-template-columns: repeat(5, 70px);
+                justify-content: center;
+                width: 382px;
+                min-height: 100px;
+            }
+            .st-poker-page .player-cards {
+                min-height: 58px;
+            }
+            .st-card-flight.mini-card,
+            .st-card-flight.community-card {
+                display: flex;
+            }
+            .st-poker-page .mini-card,
+            .st-poker-page .community-card {
+                flex-shrink: 0;
+                box-sizing: border-box;
+            }
+            @media(min-width:641px) {
+                .st-poker-page .many-players .player-cards {
+                    min-height: 46px;
+                }
+            }
+            @media(max-width:640px) {
+                .st-poker-page .center-area {
+                    width: 100%;
+                }
+                .st-poker-page .community-cards {
+                    grid-template-columns: repeat(5, 38px);
+                    width: 210px;
+                    min-height: 56px;
+                    margin-left: auto;
+                    margin-right: auto;
+                }
+                .st-poker-page .player-cards {
+                    min-height: 38px;
+                }
+            }
+        </style>
         {% include "_card_motion.html" %}
     </head>
     <body class="text-light st-poker-page">
@@ -1363,8 +1417,10 @@
                         <div class="center-area" id="centerArea">
                             <div class="community-cards" id="communityCards"></div>
                             <div class="pot-display" id="potDisplay">Банк, БК: 0</div>
-                            <div class="phase-badge" id="phaseBadge">Ожидание</div>
-                            <div class="blinds-info" id="blindsInfo">Блайнды: -/-</div>
+                            <div class="poker-table-meta">
+                                <div class="phase-badge" id="phaseBadge">Ожидание</div>
+                                <div class="blinds-info" id="blindsInfo">Блайнды: -/-</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -1852,6 +1908,12 @@ function renderState(state) {
         setTimeout(() => (window.location.href = "/games/poker/lobby"), 2000);
         return;
     }
+    // Ignore delayed responses from an older action or previous hand.
+    if (latestTableState && (
+        state.hand_number < latestTableState.hand_number ||
+        (state.hand_number === latestTableState.hand_number &&
+         state.action_revision < latestTableState.action_revision)
+    )) return;
     const motionRoot = document.getElementById("tableInner"),
         snapshot = CardMotion.capture(motionRoot),
         oldState = prevState;
@@ -2328,6 +2390,8 @@ async function leaveTable() {
     }
 }
 
+window.addEventListener("resize", () => CardMotion.clear());
+window.addEventListener("scroll", () => CardMotion.clear(), { passive: true });
 pollState();
 setInterval(updateTurnClock, 250);
 window.addEventListener("offline", () => setConnection(false, "Нет интернета · ждём соединение"));
