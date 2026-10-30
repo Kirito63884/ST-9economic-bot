@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Морской бой — ST-9</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    {% include "_site_ui.html" %}{% include "_battleship_ui.html" %}{% include
+    "_table_admin_ui.html" %}
+  </head>
+  <body>
+    {% include "_site_nav.html" %}
+    <main class="bs-page" id="st-content">
+      <header class="bs-head">
+        <div>
+          <span class="bs-kicker">Strike Team 9 · Морской бой</span>
+          <h1>Тихая вода. Точный выстрел.</h1>
+        </div>
+        <a href="/games" class="bs-btn">Все игры →</a>
+      </header>
+      <p id="error" class="bs-notice" role="alert" hidden></p>
+      <div class="bs-lobby">
+        <section>
+          <div class="bs-hero">
+            <span class="bs-kicker">Классика · два флота</span>
+            <h2>Спрячь корабли.<br />Найди чужие.</h2>
+            <p>
+              Десять кораблей, сто клеток и один победитель. Попадание оставляет
+              инициативу за тобой.
+            </p>
+          </div>
+          <div class="bs-row-head">
+            <h2>Открытые столы</h2>
+            <button class="bs-btn" id="refresh">Обновить</button>
+          </div>
+          <div class="bs-list" id="tables">
+            <div class="bs-empty">Загружаем столы…</div>
+          </div>
+          <div class="mt-4">{% include "_battleship_rules.html" %}</div>
+        </section>
+        <aside class="bs-panel">
+          <span class="bs-kicker">Пригласи соперника</span>
+          <h2 class="mt-2">Создать стол</h2>
+          <form id="create" class="bs-form">
+            <label
+              >Одинаковый взнос каждого, БК<input
+                id="entry"
+                type="number"
+                min="0"
+                step="0.01"
+                value="10"
+                required
+            /></label>
+            <p id="limit" class="bs-limit">Проверяем доступную ставку…</p>
+            <label
+              >Время на выстрел<select id="timer">
+                <option value="45">45 секунд</option>
+                <option value="60" selected>60 секунд</option>
+                <option value="90">90 секунд</option>
+                <option value="120">120 секунд</option>
+              </select></label
+            >
+            <label class="bs-check"
+              ><input type="checkbox" id="private" />Только по
+              приглашению</label
+            >
+            <button
+              class="bs-btn primary"
+              type="submit"
+              id="createButton"
+              disabled
+            >
+              Открыть стол →
+            </button>
+            <span class="bs-muted"
+              >Для бесплатной игры укажите 0 БК. После входа соперника лимит
+              станет равен меньшему из ваших балансов. Деньги списываются только
+              перед боем.</span
+            >
+          </form>
+        </aside>
+      </div>
+    </main>
+    <script nonce="{{ request.state.csp_nonce }}">
+      {% include "_battleship_shared.js.html" %}
+    </script>
+    <script nonce="{{ request.state.csp_nonce }}">
+      (() => {
+        const $ = (id) => document.getElementById(id),
+          { api, esc, money, amount } = BattleUI;
+        const phases = {
+          waiting: "Расстановка флотов",
+          playing: "Идёт бой",
+          finished: "Бой завершён",
+        };
+        let busy = false,
+          loading = false,
+          max = 0,
+          canPlay = false;
+        const notice = (message) => {
+          $("error").textContent = message;
+          $("error").hidden = !message;
+        };
+        async function load() {
+          if (loading || busy) return;
+          loading = true;
+          try {
+            const [data, limit] = await Promise.all([
+              api("/api/battleship/tables"),
+              api("/api/battleship/limits"),
+            ]);
+            max = limit.max_entry_cents;
+            canPlay = limit.can_play;
+            $("entry").max = max / 100;
+            if (!$("create").dataset.loaded) {
+              $("entry").value = Math.min(1000, max) / 100;
+              $("create").dataset.loaded = "1";
+            }
+            $("limit").textContent = canPlay
+              ? "До входа соперника ваш предел — " + money(max)
+              : "Для участия нужен неотрицательный баланс.";
+            $("createButton").disabled = !canPlay;
+            $("tables").innerHTML =
+              data.tables
+                .map(
+                  (t) =>
+                    `<article class="bs-room"><div><h3>${esc(t.creator)}${t.mine ? " · ваш стол" : ""}</h3><p>${t.players}/2 · ${money(t.rules.entry_cents)} с каждого · ${t.rules.turn_seconds} сек.</p><p>${phases[t.phase]}${t.rules.private ? " · по приглашению" : ""}</p></div><div class="bs-actions">${t.mine || (t.phase === "waiting" && t.players < 2) ? `<a class="bs-btn primary" href="/games/battleship/table/${encodeURIComponent(t.id)}">${t.mine ? "Вернуться" : "Войти"}</a>` : ""}${TableAdmin.markup(t, "battleship")}</div></article>`,
+                )
+                .join("") ||
+              '<div class="bs-empty">Свободных столов пока нет. Откройте свой и пригласите соперника.</div>';
+          } catch (error) {
+            notice(error.message);
+          } finally {
+            loading = false;
+          }
+        }
+        $("create").addEventListener("submit", async (event) => {
+          event.preventDefault();
+          if (busy || !canPlay) return;
+          try {
+            const entry = amount($("entry").value);
+            if (entry > max) throw Error("Ставка превышает ваш баланс");
+            busy = true;
+            $("createButton").disabled = true;
+            notice("");
+            const data = await api("/api/battleship/tables", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                rules: {
+                  entry_cents: entry,
+                  turn_seconds: Number($("timer").value),
+                  private: $("private").checked,
+                },
+              }),
+            });
+            location.href =
+              "/games/battleship/table/" + encodeURIComponent(data.table_id);
+          } catch (error) {
+            notice(error.message);
+            busy = false;
+            $("createButton").disabled = !canPlay;
+          }
+        });
+        $("refresh").addEventListener("click", load);
+        document.addEventListener("st-tables-changed", load);
+        const poll = setInterval(() => {
+          if (!document.hidden) load();
+        }, 5000);
+        window.addEventListener("pagehide", () => clearInterval(poll));
+        load();
+      })();
+    </script>
+  </body>
+</html>

@@ -737,6 +737,7 @@
                                         <div class="stat-value" style="color:{{ user.theme_color or '#667eea' }}">
                                             {% if user.favorite_game == "blackjack" %}♠️
                                             {% elif user.favorite_game == "roulette" %}🎡
+                                            {% elif user.favorite_game == "battleship" %}⚓
                                             {% elif user.favorite_game == "domino" %}▣
                                             {% elif user.favorite_game == "durak" %}🂡
                                             {% elif user.favorite_game == "poker" %}🃏
@@ -888,6 +889,7 @@
                                            id="favoriteGameInput"
                                            value="{{ user.favorite_game or '' }}">
                                     <div class="favorite-game-select">
+                                        <button type="button" class="game-option {% if user.favorite_game == 'battleship' %}selected{% endif %}" onclick="selectGame('battleship',this)"><div class="game-option-icon">⚓</div><div class="game-option-name">Морской бой</div></button>
                                         <button type="button" class="game-option {% if user.favorite_game == 'domino' %}selected{% endif %}" onclick="selectGame('domino',this)"><div class="game-option-icon">▣</div><div class="game-option-name">Домино</div></button>
                                         <button type="button"
                                                 class="game-option {% if user.favorite_game == 'durak' %}selected{% endif %}"

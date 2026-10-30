@@ -1,0 +1,607 @@
+/* A cell click selects; only the separate fire button submits a shot.
+ * Unsaved fleet edits survive polling and the other player's actions. */
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const { api, esc, money, coordinate, amount, grid } = BattleUI;
+  const base =
+    "/api/battleship/table/" +
+    encodeURIComponent($("st-content").dataset.tableId);
+  const fleetSizes = [4, 3, 3, 2, 2, 2, 1, 1, 1, 1];
+  let state = null,
+    busy = false,
+    polling = false,
+    closed = false,
+    offset = 0,
+    lastSync = 0;
+  let draft = null,
+    savedFleetKey = "",
+    shipSize = 4,
+    horizontal = true,
+    selected = null;
+  let phaseKey = null,
+    turnKey = null,
+    rulesKey = "",
+    networkMessage = "";
+  const now = () => Date.now() / 1000 + offset;
+  const me = () => state?.players.find((p) => p.id === state.your_id);
+  const enemy = () => state?.players.find((p) => p.id !== state.your_id);
+  const board = (uid) => state?.boards.find((b) => b.id === uid);
+  const fresh = () =>
+    state && !state.expired && !networkMessage && Date.now() - lastSync < 5000;
+  const canEdit = () =>
+    fresh() && state.phase === "waiting" && !busy && !me().ready;
+  const canFire = () =>
+    fresh() &&
+    !busy &&
+    state.phase === "playing" &&
+    state.actor === state.your_id &&
+    now() < state.deadline;
+  const fingerprint = (ships) =>
+    JSON.stringify(
+      ships
+        .map((ship) => [...ship].sort((a, b) => a - b))
+        .sort((a, b) => b.length - a.length || a[0] - b[0]),
+    );
+  const dirty = () => draft !== null && fingerprint(draft) !== savedFleetKey;
+  const notice = (message) => {
+    $("error").textContent = message;
+    $("error").hidden = !message;
+  };
+
+  function tab(mode) {
+    $("boards").dataset.mode = mode;
+    $("tabOwn").classList.toggle("selected", mode === "own");
+    $("tabEnemy").classList.toggle("selected", mode === "enemy");
+    $("tabOwn").setAttribute("aria-pressed", String(mode === "own"));
+    $("tabEnemy").setAttribute("aria-pressed", String(mode === "enemy"));
+  }
+  function candidate(cell) {
+    const row = Math.floor(cell / 10),
+      col = cell % 10;
+    if (horizontal ? col + shipSize > 10 : row + shipSize > 10) return null;
+    return Array.from(
+      { length: shipSize },
+      (_, step) => cell + (horizontal ? step : step * 10),
+    );
+  }
+  function fits(cells) {
+    if (
+      !cells ||
+      (draft || []).filter((ship) => ship.length === shipSize).length >=
+        fleetSizes.filter((n) => n === shipSize).length
+    )
+      return false;
+    return !(draft || []).some((ship) =>
+      ship.some((existing) =>
+        cells.some(
+          (cell) =>
+            Math.abs(Math.floor(existing / 10) - Math.floor(cell / 10)) <= 1 &&
+            Math.abs((existing % 10) - (cell % 10)) <= 1,
+        ),
+      ),
+    );
+  }
+  function clearPreview() {
+    $("ownGrid")
+      .querySelectorAll(".preview,.invalid")
+      .forEach((cell) => cell.classList.remove("preview", "invalid"));
+  }
+  function preview(cell) {
+    clearPreview();
+    if (!canEdit()) return;
+    const cells = candidate(cell),
+      valid = fits(cells);
+    for (const index of cells || [cell])
+      $("ownGrid")
+        .querySelector(`[data-cell="${index}"]`)
+        ?.classList.add(valid ? "preview" : "invalid");
+  }
+  function renderBoards() {
+    if (!state) return;
+    const own = board(state.your_id),
+      other = enemy(),
+      opponent = other ? board(other.id) : null;
+    const ownFleet = state.phase === "waiting" ? draft || [] : own.fleet;
+    const ownCells = new Set(ownFleet.flat()),
+      ownMarks = new Map(own.marks.map((mark) => [mark.cell, mark.result]));
+    grid("ownGrid", (cell) => ({
+      status: ownMarks.get(cell) || (ownCells.has(cell) ? "ship" : "unknown"),
+      disabled: !canEdit(),
+      last:
+        state.last_shot?.target === state.your_id &&
+        state.last_shot.cell === cell,
+    }));
+    const otherCells = new Set((opponent?.fleet || []).flat()),
+      otherMarks = new Map(
+        (opponent?.marks || []).map((mark) => [mark.cell, mark.result]),
+      );
+    grid("enemyGrid", (cell) => ({
+      status:
+        otherMarks.get(cell) || (otherCells.has(cell) ? "ship" : "unknown"),
+      disabled: !canFire() || !opponent || otherMarks.has(cell),
+      selected: selected === cell,
+      last:
+        state.last_shot?.target === other?.id && state.last_shot?.cell === cell,
+    }));
+    $("enemyTitle").textContent = other
+      ? "Флот: " + other.name
+      : "Воды соперника";
+    $("ownStatus").textContent =
+      state.phase === "waiting"
+        ? (draft || []).length + " / 10 кораблей"
+        : me().ships_left + " кораблей · " + me().decks_left + " палуб";
+    $("enemyStatus").textContent = !other
+      ? "Ожидаем соперника"
+      : state.phase === "waiting"
+        ? other.placed
+          ? "Флот готов"
+          : "Расставляет корабли"
+        : other.ships_left + " кораблей · " + other.decks_left + " палуб";
+  }
+  function controls() {
+    if (!state) return;
+    const editable = canEdit(),
+      ready = me().ready,
+      count = (draft || []).length;
+    const remaining = (size) =>
+      fleetSizes.filter((n) => n === size).length -
+      (draft || []).filter((ship) => ship.length === size).length;
+    const picks = [4, 3, 2, 1]
+      .map(
+        (size) =>
+          `<button type="button" data-size="${size}" class="bs-btn ${size === shipSize ? "selected" : ""}" ${!editable || remaining(size) === 0 ? "disabled" : ""} aria-pressed="${size === shipSize}">${"▪".repeat(size)} · ${remaining(size)}</button>`,
+      )
+      .join("");
+    if ($("fleetPicks").innerHTML !== picks) $("fleetPicks").innerHTML = picks;
+    $("placement").hidden = state.phase !== "waiting";
+    $("rotate").disabled =
+      $("autoFleet").disabled =
+      $("clearFleet").disabled =
+        !editable;
+    $("rotate").textContent = horizontal ? "↔ Горизонтально" : "↕ Вертикально";
+    $("saveFleet").disabled = !editable || count !== 10 || !dirty();
+    $("revertFleet").hidden = !dirty();
+    $("revertFleet").disabled = !editable;
+    $("fleetStatus").textContent = ready
+      ? "Флот сохранён. Готовность подтверждена."
+      : dirty()
+        ? `Расставлено ${count}/10. ${count === 10 ? "Сохраните флот перед готовностью." : "Доставьте оставшиеся корабли."}`
+        : count === 10
+          ? "Расстановка сохранена. Можно подтвердить готовность."
+          : "Расставьте все корабли или используйте авторасстановку.";
+    $("ready").textContent = ready ? "Отменить готовность" : "Я готов";
+    $("ready").disabled =
+      busy ||
+      !fresh() ||
+      (!ready && (dirty() || !me().placed || !state.stake_valid));
+    $("start").disabled =
+      busy ||
+      !fresh() ||
+      state.players.length !== 2 ||
+      !state.players.every((p) => p.ready && !p.left) ||
+      !state.stake_valid;
+    $("readyHelp").textContent = state.expired
+      ? "Срок неактивности истёк. Стол будет закрыт."
+      : !state.stake_valid
+        ? "Создателю нужно снизить ставку до доступного лимита."
+        : dirty()
+          ? "Сначала сохраните вашу расстановку."
+          : state.players.length < 2
+            ? "Пригласите соперника. Взносы пока не списываются."
+            : "После готовности обоих игроков создатель запускает бой.";
+    $("limit").textContent =
+      "Взнос каждого — " +
+      money(state.rules.entry_cents) +
+      ". Сейчас максимум — " +
+      money(state.stake_limit_cents) +
+      ". " +
+      (state.players.length < 2
+        ? "После входа соперника лимит пересчитается."
+        : "Лимит равен меньшему из ваших балансов.");
+    $("limit").classList.toggle("invalid", !state.stake_valid);
+    $("entry").max = state.stake_limit_cents / 100;
+    $("applySettings").disabled = $("setMax").disabled = busy || !fresh();
+    $("fire").disabled = !canFire() || selected === null;
+    $("fire").textContent =
+      selected === null
+        ? "Выберите клетку"
+        : "Огонь по " + coordinate(selected);
+    $("fireHelp").textContent =
+      state.phase === "waiting"
+        ? "Корабли соперника скрыты. Бой начнётся после готовности обоих."
+        : state.phase === "finished"
+          ? "Бой завершён. Теперь оба флота открыты."
+          : busy
+            ? "Отправляем действие…"
+            : state.actor !== state.your_id
+              ? "Ход соперника. Наблюдайте за своим флотом."
+              : selected === null
+                ? "Ваш ход: выберите клетку и подтвердите выстрел кнопкой."
+                : "Выбрана " +
+                  coordinate(selected) +
+                  ". Нажмите «Огонь», чтобы выстрелить.";
+    const seconds = Math.max(0, Math.ceil((state.deadline || 0) - now()));
+    $("clock").textContent = state.phase === "playing" ? seconds + " сек." : "";
+    $("clock").classList.toggle(
+      "urgent",
+      state.phase === "playing" && seconds <= 10,
+    );
+    $("leave").disabled = $("rematch").disabled = busy;
+    $("close").hidden = !state.can_close_table;
+    $("close").disabled = busy || !state.can_close;
+    $("close").title = state.can_close
+      ? "Расформировать стол для всех"
+      : "Сначала завершите бой";
+    $("ownGrid")
+      .querySelectorAll("button")
+      .forEach((button) => (button.disabled = !editable));
+    const known = new Set(
+      (enemy() ? board(enemy().id).marks : []).map((mark) => mark.cell),
+    );
+    $("enemyGrid")
+      .querySelectorAll("button")
+      .forEach(
+        (button) =>
+          (button.disabled =
+            !canFire() || known.has(Number(button.dataset.cell))),
+      );
+  }
+  function render() {
+    $("players").innerHTML = state.players
+      .map(
+        (p) =>
+          `<article class="bs-player ${p.id === state.actor ? "turn" : ""}"><div class="bs-avatar" aria-hidden="true">${esc(p.name.slice(0, 1).toUpperCase())}</div><div><strong title="${esc(p.name)}">${esc(p.name)}${p.id === state.your_id ? " · вы" : ""}</strong><small>${p.left ? "Покинул стол" : state.phase === "waiting" ? (p.ready ? "Готов к бою" : p.placed ? "Флот расставлен" : "Расставляет корабли") : p.hits + " попаданий / " + p.shots_fired + " выстрелов"}</small></div><span class="bs-score">${state.phase === "waiting" ? "" : p.ships_left + " кораблей"}${p.timeouts ? " · тайм-ауты " + p.timeouts + "/3" : ""}</span></article>`,
+      )
+      .join("");
+    $("turn").textContent =
+      state.phase === "waiting"
+        ? "Подготовка флотов"
+        : state.phase === "finished"
+          ? "Бой завершён"
+          : state.actor === state.your_id
+            ? "Ваш выстрел"
+            : "Стреляет " +
+              state.players.find((p) => p.id === state.actor).name;
+    $("bank").textContent =
+      "Банк " + money(state.match?.bank_cents ?? state.rules.entry_cents * 2);
+    $("waiting").hidden = state.phase !== "waiting";
+    $("settingsPanel").hidden =
+      state.phase !== "waiting" || state.creator !== state.your_id;
+    $("start").hidden = state.creator !== state.your_id;
+    const rules = JSON.stringify(state.rules);
+    if (rules !== rulesKey) {
+      $("entry").value = state.rules.entry_cents / 100;
+      $("timer").value = state.rules.turn_seconds;
+      $("private").checked = state.rules.private;
+      rulesKey = rules;
+    }
+    $("result").hidden = state.phase !== "finished";
+    $("rematch").hidden = state.creator !== state.your_id;
+    if (state.match?.result) {
+      const result = state.match.result,
+        won = result.winner === state.your_id;
+      $("resultTitle").textContent = won
+        ? "Победа! Ваш флот удержал море."
+        : "Бой окончен";
+      $("resultReason").textContent = result.reason;
+      const payout = result.payouts[String(state.your_id)] || 0;
+      $("payout").textContent =
+        "Получено " +
+        money(payout) +
+        " · результат " +
+        money(payout - state.match.entry_cents);
+    }
+    $("events").innerHTML = [...state.events]
+      .reverse()
+      .map(
+        (event) =>
+          `<p><time>${new Date(event.time * 1000).toLocaleTimeString("ru-RU", { timeZone: "Europe/Moscow", hour: "2-digit", minute: "2-digit" })}</time>${esc(event.text)}</p>`,
+      )
+      .join("");
+    document
+      .querySelectorAll("[data-st-balance]")
+      .forEach((node) => (node.textContent = Number(state.balance).toFixed(2)));
+    renderBoards();
+    controls();
+  }
+  function accept(next) {
+    if (state && next.revision < state.revision) return;
+    const changed =
+      !state ||
+      next.revision !== state.revision ||
+      next.balance !== state.balance ||
+      next.stake_limit_cents !== state.stake_limit_cents ||
+      next.stake_valid !== state.stake_valid ||
+      next.expired !== state.expired;
+    const fleet = next.boards.find((b) => b.id === next.your_id).fleet,
+      key = fingerprint(fleet);
+    if (next.phase === "waiting" && (draft === null || key !== savedFleetKey)) {
+      draft = fleet.map((ship) => [...ship]);
+      savedFleetKey = key;
+    }
+    if (next.phase !== "waiting") draft = null;
+    const nextTurn = [next.match_number, next.phase, next.actor].join(":");
+    if (nextTurn !== turnKey) selected = null;
+    turnKey = nextTurn;
+    if (next.phase !== phaseKey) {
+      tab(next.phase === "waiting" ? "own" : "enemy");
+      phaseKey = next.phase;
+    }
+    const opponent = next.boards.find((b) => b.id !== next.your_id);
+    if (
+      selected !== null &&
+      opponent?.marks.some((mark) => mark.cell === selected)
+    )
+      selected = null;
+    state = next;
+    offset = next.server_time - Date.now() / 1000;
+    lastSync = Date.now();
+    $("game").hidden = false;
+    $("joinPanel").hidden = true;
+    $("connection").classList.remove("offline");
+    $("connection").textContent = "За столом · соединение активно";
+    if (networkMessage && $("error").textContent === networkMessage) notice("");
+    networkMessage = "";
+    if (changed) render();
+    else controls();
+  }
+  async function load(force = false) {
+    if (polling || closed || (busy && !force)) return;
+    polling = true;
+    try {
+      accept(await api(base + "/state"));
+    } catch (error) {
+      if (error.status === 403) {
+        try {
+          const data = await api(base + "/preview");
+          $("game").hidden = true;
+          $("joinPanel").hidden = false;
+          $("joinText").textContent =
+            `${data.players}/2 игроков. Взнос каждого — ${money(data.rules.entry_cents)}. После входа можно согласовать ставку по меньшему балансу.`;
+          $("join").disabled =
+            data.phase !== "waiting" || data.players >= 2 || data.expired;
+        } catch (failure) {
+          notice(failure.message);
+        }
+      } else if (error.status === 404) {
+        closed = true;
+        state = null;
+        clearInterval(pollTimer);
+        clearInterval(clockTimer);
+        $("game").hidden = true;
+        $("joinPanel").hidden = true;
+        notice(
+          "Стол закрыт. Вернитесь в список столов, чтобы начать новый бой.",
+        );
+      } else {
+        networkMessage = error.message;
+        notice(error.message);
+        $("connection").classList.add("offline");
+        $("connection").textContent = "Переподключаемся…";
+        controls();
+      }
+    } finally {
+      polling = false;
+    }
+  }
+  async function action(path, payload = {}) {
+    if (busy || !state || !fresh()) return false;
+    busy = true;
+    notice("");
+    controls();
+    const post = () =>
+      api(base + "/" + path, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ revision: state.revision, ...payload }),
+      });
+    try {
+      let next;
+      try {
+        next = await post();
+      } catch (error) {
+        // Retry only the fixed, idempotent readiness intent after a version race.
+        if (path !== "ready" || error.status !== 409) throw error;
+        accept(await api(base + "/state"));
+        if (state.phase !== "waiting") throw error;
+        next = me().ready === payload.ready ? state : await post();
+      }
+      if (next.players) accept(next);
+      return true;
+    } catch (error) {
+      if (error.status === 409) await load(true);
+      notice(error.message);
+      return false;
+    } finally {
+      busy = false;
+      controls();
+    }
+  }
+  $("ownGrid").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-cell]");
+    if (!button || !canEdit()) return;
+    const cell = Number(button.dataset.cell),
+      existing = draft.findIndex((ship) => ship.includes(cell));
+    if (existing >= 0) {
+      shipSize = draft[existing].length;
+      draft.splice(existing, 1);
+    } else {
+      const cells = candidate(cell);
+      if (!fits(cells)) {
+        notice(
+          "Корабль должен помещаться на поле и не касаться других даже углами.",
+        );
+        return;
+      }
+      draft.push(cells);
+      shipSize =
+        [4, 3, 2, 1].find(
+          (size) =>
+            draft.filter((ship) => ship.length === size).length <
+            fleetSizes.filter((n) => n === size).length,
+        ) || 1;
+    }
+    notice("");
+    renderBoards();
+    controls();
+  });
+  $("ownGrid").addEventListener("pointerover", (event) => {
+    const cell = event.target.closest("button[data-cell]");
+    if (cell && event.pointerType !== "touch")
+      preview(Number(cell.dataset.cell));
+  });
+  $("ownGrid").addEventListener("pointerleave", clearPreview);
+  $("fleetPicks").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-size]");
+    if (!button || button.disabled) return;
+    shipSize = Number(button.dataset.size);
+    clearPreview();
+    controls();
+  });
+  $("rotate").addEventListener("click", () => {
+    if (canEdit()) {
+      horizontal = !horizontal;
+      clearPreview();
+      controls();
+    }
+  });
+  $("clearFleet").addEventListener("click", () => {
+    if (canEdit()) {
+      draft = [];
+      shipSize = 4;
+      renderBoards();
+      controls();
+    }
+  });
+  $("revertFleet").addEventListener("click", () => {
+    if (canEdit()) {
+      draft = board(state.your_id).fleet.map((ship) => [...ship]);
+      renderBoards();
+      controls();
+    }
+  });
+  $("saveFleet").addEventListener("click", () => {
+    if (canEdit() && draft.length === 10)
+      action("fleet", { fleet: draft.map((ship) => [...ship]) });
+  });
+  $("autoFleet").addEventListener("click", () => {
+    if (canEdit()) action("fleet", { random: true });
+  });
+  $("enemyGrid").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-cell]");
+    if (!button || button.disabled || !canFire()) return;
+    selected = Number(button.dataset.cell);
+    renderBoards();
+    controls();
+  });
+  $("fire").addEventListener("click", () => {
+    if (canFire() && selected !== null) action("fire", { cell: selected });
+  });
+  $("ready").addEventListener("click", () =>
+    action("ready", { ready: !me().ready }),
+  );
+  $("start").addEventListener("click", () => action("start"));
+  $("rematch").addEventListener("click", () => action("rematch"));
+  $("setMax").addEventListener("click", () => {
+    $("entry").value = state.stake_limit_cents / 100;
+  });
+  $("settings").addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (busy || !state) return;
+    try {
+      action("settings", {
+        rules: {
+          entry_cents: amount($("entry").value),
+          turn_seconds: Number($("timer").value),
+          private: $("private").checked,
+        },
+      });
+    } catch (error) {
+      notice(error.message);
+    }
+  });
+  $("tabOwn").addEventListener("click", () => tab("own"));
+  $("tabEnemy").addEventListener("click", () => tab("enemy"));
+  $("join").addEventListener("click", async () => {
+    if (busy) return;
+    busy = true;
+    $("join").disabled = true;
+    try {
+      await api(base + "/join", { method: "POST" });
+      busy = false;
+      await load();
+    } catch (error) {
+      notice(error.message);
+    } finally {
+      busy = false;
+      $("join").disabled = false;
+    }
+  });
+  $("leave").addEventListener("click", async () => {
+    if (
+      !state ||
+      busy ||
+      !confirm(
+        state.phase === "playing"
+          ? "Сдаться и выйти? Соперник получит весь банк."
+          : "Выйти со стола?",
+      )
+    )
+      return;
+    if (await action("leave")) location.href = "/games/battleship/lobby";
+  });
+  $("close").addEventListener("click", async () => {
+    if (
+      !state?.can_close ||
+      busy ||
+      !confirm("Расформировать стол для обоих участников?")
+    )
+      return;
+    busy = true;
+    controls();
+    try {
+      await api(
+        "/api/game-tables/battleship/" +
+          encodeURIComponent(state.id) +
+          "/close",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ version: state.close_version }),
+        },
+      );
+      location.href = "/games/battleship/lobby";
+    } catch (error) {
+      notice(error.message);
+      busy = false;
+      await load();
+      controls();
+    }
+  });
+  $("invite").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(location.href);
+      $("invite").textContent = "Ссылка скопирована";
+      setTimeout(() => ($("invite").textContent = "Пригласить друга"), 2000);
+    } catch (_) {
+      notice("Скопируйте ссылку из адресной строки браузера");
+    }
+  });
+  const pollTimer = setInterval(() => {
+    if (!document.hidden) load();
+  }, 1000);
+  const clockTimer = setInterval(() => {
+    if (state && !document.hidden) controls();
+  }, 400);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) load();
+  });
+  window.addEventListener("pagehide", () => {
+    clearInterval(pollTimer);
+    clearInterval(clockTimer);
+  });
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) location.reload();
+  });
+  load();
+})();
