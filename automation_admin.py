@@ -96,6 +96,12 @@ async def _guild_roles(main):
 
 def make_router(get_user, get_db, is_super_admin):
     router = APIRouter()
+    # Register publication settings with the existing automation router so an
+    # installation does not replace main.py or any active game implementation.
+    from main import SECRET_KEY, is_senior_or_super
+    from roster_admin import make_router as make_roster_router
+
+    router.include_router(make_roster_router(get_user, get_db, is_senior_or_super, SECRET_KEY))
 
     def chief(user):
         if not user or not user.is_admin or not is_super_admin(user):
