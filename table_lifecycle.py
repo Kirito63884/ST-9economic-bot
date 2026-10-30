@@ -34,7 +34,8 @@ def expired(table, now=None):
 
 
 def request_activity(
-    method, path, uid, poker, durak, billiards, domino=None, chess=None
+    method, path, uid, poker, durak, billiards, domino=None, chess=None,
+    battleship=None
 ):
     if method != "POST" or not uid:
         return
@@ -43,7 +44,7 @@ def request_activity(
     if (
         len(parts) >= 5
         and parts[:1] == ["api"]
-        and parts[1] in ("poker", "durak", "billiards", "domino", "chess")
+        and parts[1] in ("poker", "durak", "billiards", "domino", "chess", "battleship")
         and parts[2] == "table"
     ):
         game, tid = parts[1], parts[3]
@@ -56,6 +57,8 @@ def request_activity(
         games["domino"] = domino.tables
     if chess is not None:
         games["chess"] = chess.tables
+    if battleship is not None:
+        games["battleship"] = battleship.tables
     if game not in games:
         return
     tables = games[game]

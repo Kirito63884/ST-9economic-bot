@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Морской бой — игровой стол ST-9</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    />
+    {% include "_site_ui.html" %}{% include "_battleship_ui.html" %}
+  </head>
+  <body>
+    {% include "_site_nav.html" %}
+    <main class="bs-page" id="st-content" data-table-id="{{ table_id }}">
+      <header class="bs-head">
+        <div>
+          <span class="bs-kicker">Strike Team 9 · Морской бой</span>
+          <h1>Два флота. Один победитель.</h1>
+        </div>
+        <div class="bs-actions">
+          <button class="bs-btn" id="invite">Пригласить друга</button
+          ><a href="/games/battleship/lobby" class="bs-btn">Все столы →</a>
+        </div>
+      </header>
+      <p class="bs-notice" id="error" role="alert" hidden></p>
+      <section class="bs-panel" id="joinPanel" hidden>
+        <h2>Соперник ждёт вас</h2>
+        <p class="bs-muted" id="joinText"></p>
+        <button id="join" class="bs-btn primary">Присоединиться</button>
+      </section>
+      <section id="game" hidden>
+        <div id="players" class="bs-player-row"></div>
+        <div class="bs-status">
+          <strong id="turn" role="status">Подключение…</strong
+          ><span class="bs-clock" id="clock"></span><span id="bank"></span>
+        </div>
+        <div class="bs-tabs" role="group" aria-label="Выбор игрового поля">
+          <button class="bs-btn selected" id="tabOwn" aria-pressed="true">
+            Мой флот</button
+          ><button class="bs-btn" id="tabEnemy" aria-pressed="false">
+            Поле соперника
+          </button>
+        </div>
+        <div class="bs-boards" id="boards" data-mode="own">
+          <section class="bs-board-panel" id="ownPanel">
+            <div class="bs-board-title">
+              <h2>Ваши воды</h2>
+              <span class="bs-muted" id="ownStatus"></span>
+            </div>
+            <div
+              class="bs-grid"
+              id="ownGrid"
+              role="group"
+              aria-label="Ваш флот, поле 10 на 10"
+            ></div>
+            <div class="bs-legend">
+              <span><i></i>Корабль</span
+              ><span><i class="red"></i>Попадание</span
+              ><span><i class="gold"></i>Потоплен</span
+              ><span><i class="blue"></i>Вода</span>
+            </div>
+            <div class="bs-placement" id="placement">
+              <p>
+                Выберите размер корабля и начальную клетку. Поворот меняет
+                направление. Нажатие на поставленный корабль убирает его.
+              </p>
+              <div class="bs-fleet-picks" id="fleetPicks"></div>
+              <div class="bs-actions">
+                <button id="rotate" class="bs-btn">↔ Горизонтально</button
+                ><button id="autoFleet" class="bs-btn">Авторасстановка</button
+                ><button id="clearFleet" class="bs-btn">Очистить</button>
+              </div>
+              <p class="bs-fleet-status" id="fleetStatus"></p>
+              <div class="bs-actions">
+                <button id="saveFleet" class="bs-btn primary">
+                  Сохранить флот</button
+                ><button id="revertFleet" class="bs-btn" hidden>
+                  Отменить правки
+                </button>
+              </div>
+            </div>
+          </section>
+          <section class="bs-board-panel" id="enemyPanel">
+            <div class="bs-board-title">
+              <h2 id="enemyTitle">Воды соперника</h2>
+              <span class="bs-muted" id="enemyStatus"></span>
+            </div>
+            <div
+              class="bs-grid"
+              id="enemyGrid"
+              role="group"
+              aria-label="Поле соперника, 10 на 10"
+            ></div>
+            <div class="bs-legend">
+              <span><i class="red"></i>Ранен</span
+              ><span><i class="gold"></i>Потоплен</span
+              ><span><i class="blue"></i>Промах</span>
+            </div>
+            <div class="bs-fire">
+              <p id="fireHelp">Выберите клетку и подтвердите выстрел.</p>
+              <button id="fire" class="bs-btn primary" disabled>
+                Выберите клетку
+              </button>
+            </div>
+          </section>
+        </div>
+        <section class="bs-panel bs-result" id="result" hidden>
+          <span class="bs-kicker">Бой завершён</span>
+          <h2 id="resultTitle"></h2>
+          <p id="resultReason" class="bs-muted"></p>
+          <p id="payout"></p>
+          <button class="bs-btn primary" id="rematch" hidden>Ещё бой</button>
+        </section>
+        <div class="bs-battle-bottom">
+          <section class="bs-panel" id="waiting">
+            <h2>Подготовка к бою</h2>
+            <p class="bs-limit" id="limit"></p>
+            <p class="bs-muted" id="readyHelp"></p>
+            <div class="bs-actions">
+              <button class="bs-btn primary" id="ready">Я готов</button
+              ><button class="bs-btn primary" id="start" hidden>
+                Начать бой
+              </button>
+            </div>
+          </section>
+          <section class="bs-panel" id="settingsPanel" hidden>
+            <h2>Условия стола</h2>
+            <form id="settings" class="bs-form">
+              <label
+                >Взнос каждого, БК<input
+                  id="entry"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  required /></label
+              ><button class="bs-btn" id="setMax" type="button">
+                Поставить максимум</button
+              ><label
+                >На выстрел<select id="timer">
+                  <option value="45">45 секунд</option>
+                  <option value="60">60 секунд</option>
+                  <option value="90">90 секунд</option>
+                  <option value="120">120 секунд</option>
+                </select></label
+              ><label class="bs-check"
+                ><input id="private" type="checkbox" />Только по
+                приглашению</label
+              ><button id="applySettings" class="bs-btn" type="submit">
+                Применить условия
+              </button>
+            </form>
+          </section>
+        </div>
+        <div class="bs-footer">
+          <span class="bs-connection" id="connection">Подключение…</span>
+          <div class="bs-actions">
+            <button class="bs-btn danger" id="leave">Выйти со стола</button
+            ><button class="bs-btn danger" id="close" hidden>
+              Расформировать
+            </button>
+          </div>
+        </div>
+        <div class="bs-battle-bottom">
+          <div>{% include "_battleship_rules.html" %}</div>
+          <details class="bs-panel">
+            <summary>Журнал боя</summary>
+            <div class="bs-log" id="events"></div>
+          </details>
+        </div>
+      </section>
+    </main>
+    <script nonce="{{ request.state.csp_nonce }}">
+      {% include "_battleship_shared.js.html" %}
+    </script>
+    <script nonce="{{ request.state.csp_nonce }}">
+      {% include "_battleship_game.js.html" %}
+    </script>
+  </body>
+</html>

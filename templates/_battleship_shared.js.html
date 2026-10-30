@@ -1,0 +1,80 @@
+/* All moves and payouts are decided by the server. User text is escaped. */
+const BattleUI = (() => {
+  const letters = "АБВГДЕЖЗИК";
+  const esc = (value) =>
+    String(value ?? "").replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  const money = (cents) =>
+    new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(
+      cents / 100,
+    ) + " БК";
+  const coordinate = (cell) => letters[cell % 10] + (Math.floor(cell / 10) + 1);
+  function amount(value) {
+    if (!/^\d+(?:\.\d{1,2})?$/.test(String(value)))
+      throw Error("Укажите неотрицательную сумму с точностью до копейки");
+    const cents = Math.round(Number(value) * 100);
+    if (!Number.isSafeInteger(cents) || cents > 100000000000000)
+      throw Error("Слишком большая сумма");
+    return cents;
+  }
+  async function api(url, options = {}) {
+    const response = await fetch(url, { cache: "no-store", ...options });
+    let data;
+    try {
+      data = await response.json();
+    } catch (_) {
+      throw Error("Сервер не ответил. Повторяем соединение…");
+    }
+    if (!response.ok) {
+      const error = Error(
+        typeof data.detail === "string"
+          ? data.detail
+          : "Не удалось выполнить запрос",
+      );
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  }
+  function grid(id, cells) {
+    let html = '<span class="bs-axis" aria-hidden="true"></span>';
+    for (const letter of letters)
+      html += `<span class="bs-axis" aria-hidden="true">${letter}</span>`;
+    for (let row = 0; row < 10; row++) {
+      html += `<span class="bs-axis" aria-hidden="true">${row + 1}</span>`;
+      for (let col = 0; col < 10; col++) {
+        const cell = row * 10 + col,
+          info = cells(cell),
+          status = info.status || "unknown";
+        const symbol =
+          status === "hit" || status === "sunk"
+            ? "×"
+            : status === "miss" || status === "water"
+              ? "·"
+              : info.selected
+                ? "+"
+                : "";
+        const description = {
+          unknown: "неизвестно",
+          ship: "корабль",
+          hit: "попадание",
+          sunk: "потоплен",
+          miss: "промах",
+          water: "вода",
+        }[status];
+        html += `<button type="button" data-cell="${cell}" class="bs-cell ${status} ${info.selected ? "selected" : ""} ${info.last ? "last" : ""}" aria-label="${coordinate(cell)} · ${description}" ${info.disabled ? "disabled" : ""}>${symbol}</button>`;
+      }
+    }
+    document.getElementById(id).innerHTML = html;
+  }
+  return { api, esc, money, coordinate, amount, grid };
+})();
