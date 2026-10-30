@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Шахматы — Strike Team 9</title>
+{% include "_site_ui.html" %}{% include "_table_admin_ui.html" %}
+{% include "_chess_ui.html" %}</head>
+<body>{% include "_site_nav.html" %}<main class="chess-wrap">
+<h1>♟ Шахматы</h1>
+<p>Классическая партия один на один. Белые ходят первыми. Играйте бесплатно или создайте стол со взносом.</p>
+<section class="chess-panel">
+<h2>Создать стол</h2>
+<div class="chess-row">
+<label>Взнос, БК <input id="entry" type="number" min="0" max="1000000" step="1" value="0">
+</label>
+<label>
+<span>Доступ</span>
+<select id="private">
+<option value="false">Открытый стол</option>
+<option value="true">Только по ссылке</option>
+</select>
+</label>
+<button class="chess-btn" id="create">Создать стол</button>
+</div>
+<div id="error" class="chess-error" role="status">
+</div>
+</section>
+<section class="chess-panel">
+<h2>Правила</h2>
+<p>Обычные шахматы: легальные ходы, рокировка, взятие на проходе и превращение пешки в ферзя, ладью, слона или коня. Мат завершает партию победой, пат — ничьей. Недостаточный материал, пятикратное повторение позиции и правило 75 ходов завершают партию автоматически. Игрок может заявить ничью при трёхкратном повторении или правиле 50 ходов; также можно предложить ничью сопернику. Сдача означает поражение. Победитель получает сумму двух взносов без комиссии, при ничьей взносы возвращаются. Стол без действий участников закрывается через 8 часов; взносы незавершённой партии возвращаются.</p>
+</section>
+<section class="chess-panel">
+<h2>Столы</h2>
+<div id="tables" class="chess-list">Загрузка…</div>
+</section>
+</main>
+{% include "_request_security.html" %}<script>{% include "_chess_lobby.js.html" %}</script>
+</body>
+</html>

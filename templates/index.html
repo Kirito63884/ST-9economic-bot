@@ -131,7 +131,7 @@
                 </section>
                 {% endif %}
             </div>
-            <div class="st-shortcuts"><a class="st-shortcut" href="/games/blackjack"><span class="st-shortcut-icon" aria-hidden="true">♠</span><span><strong>Блэкджек</strong><small>Собери 21</small></span></a><a class="st-shortcut" href="/games/roulette"><span class="st-shortcut-icon" aria-hidden="true">◉</span><span><strong>Рулетка</strong><small>Выбери свой цвет</small></span></a><a class="st-shortcut" href="/games/poker/lobby"><span class="st-shortcut-icon" aria-hidden="true">♣</span><span><strong>Покер</strong><small>Сыграй с друзьями</small></span></a><a class="st-shortcut" href="/games/crash"><span class="st-shortcut-icon" aria-hidden="true">↗</span><span><strong>Crash</strong><small>Успей забрать</small></span></a><a class="st-shortcut" href="/games/durak/lobby"><span class="st-shortcut-icon" aria-hidden="true">🂡</span><span><strong>Дурак</strong><small>Свои правила</small></span></a></div>
+            <div class="st-shortcuts"><a class="st-shortcut" href="/games/blackjack"><span class="st-shortcut-icon" aria-hidden="true">♠</span><span><strong>Блэкджек</strong><small>Собери 21</small></span></a><a class="st-shortcut" href="/games/roulette"><span class="st-shortcut-icon" aria-hidden="true">◉</span><span><strong>Рулетка</strong><small>Выбери свой цвет</small></span></a><a class="st-shortcut" href="/games/poker/lobby"><span class="st-shortcut-icon" aria-hidden="true">♣</span><span><strong>Покер</strong><small>Сыграй с друзьями</small></span></a><a class="st-shortcut" href="/games/crash"><span class="st-shortcut-icon" aria-hidden="true">↗</span><span><strong>Crash</strong><small>Успей забрать</small></span></a><a class="st-shortcut" href="/games/chess/lobby"><span class="st-shortcut-icon" aria-hidden="true">♟</span><span><strong>Шахматы</strong><small>Классика один на один</small></span></a><a class="st-shortcut" href="/games/durak/lobby"><span class="st-shortcut-icon" aria-hidden="true">🂡</span><span><strong>Дурак</strong><small>Свои правила</small></span></a></div>
             {% include "_home_activity.html" %}
             <div data-st-tab-group="home">
                 <div class="st-tabs" role="tablist" aria-label="Разделы">
@@ -407,6 +407,7 @@ function renderProfile(d) {
         poker: "🃏 Покер",
         durak: "🂡 Дурак",
         domino: "▣ Домино",
+        chess: "♟ Шахматы",
         crash: "📈 Crash",
     };
     const favGame = d.favorite_game ? favoriteGames[d.favorite_game] : null;

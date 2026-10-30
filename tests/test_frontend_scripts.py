@@ -38,6 +38,11 @@ def test_rendered_scripts_parse(make_user, login_as):
         display_name="O'Brien <script>alert(1)</script>",
     )
     client = login_as(uid)
+    import main
+    from chess_game import ChessTable
+    main.chess_service.tables["frontend-fixture"] = ChessTable(
+        "frontend-fixture", uid, "Имя <script>alert(1)</script>"
+    )
     routes = [
         "/",
         "/profile",
@@ -54,6 +59,8 @@ def test_rendered_scripts_parse(make_user, login_as):
         "/games/durak/lobby",
         "/games/billiards/lobby",
         "/games/domino/lobby",
+        "/games/chess/lobby",
+        "/games/chess/table/frontend-fixture",
         "/medals",
         f"/medals/progress/{uid}",
         "/squad",

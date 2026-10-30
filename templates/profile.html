@@ -739,6 +739,7 @@
                                             {% elif user.favorite_game == "roulette" %}🎡
                                             {% elif user.favorite_game == "domino" %}▣
                                             {% elif user.favorite_game == "durak" %}🂡
+                                            {% elif user.favorite_game == "chess" %}♟
                                             {% elif user.favorite_game == "poker" %}🃏
                                             {% elif user.favorite_game == "crash" %}📈
                                             {% else %}
@@ -889,6 +890,7 @@
                                            value="{{ user.favorite_game or '' }}">
                                     <div class="favorite-game-select">
                                         <button type="button" class="game-option {% if user.favorite_game == 'domino' %}selected{% endif %}" onclick="selectGame('domino',this)"><div class="game-option-icon">▣</div><div class="game-option-name">Домино</div></button>
+                                        <button type="button" class="game-option {% if user.favorite_game == 'chess' %}selected{% endif %}" onclick="selectGame('chess',this)"><div class="game-option-icon">♟</div><div class="game-option-name">Шахматы</div></button>
                                         <button type="button"
                                                 class="game-option {% if user.favorite_game == 'durak' %}selected{% endif %}"
                                                 onclick="selectGame('durak',this)">
