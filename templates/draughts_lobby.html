@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Русские шашки — Strike Team 9</title>
+{% include "_site_ui.html" %}{% include "_table_admin_ui.html" %}
+{% include "_draughts_ui.html" %}</head>
+<body>{% include "_site_nav.html" %}<main id="st-content" class="draughts-wrap">
+<h1>◉ Русские шашки</h1>
+<p>Русские шашки один на один: обязательный бой, летающие дамки и превращение во время серии. Белые ходят первыми. Играйте бесплатно или создайте стол со взносом.</p>
+<section class="draughts-panel">
+<h2>Создать стол</h2>
+<div class="draughts-row">
+<label>Взнос, БК <input id="entry" type="number" min="0" max="1000000" step="0.01" value="0">
+</label>
+<label>
+<span>Доступ</span>
+<select id="private">
+<option value="false">Открытый стол</option>
+<option value="true">Только по ссылке</option>
+</select>
+</label>
+<button class="draughts-btn" id="create">Создать стол</button>
+</div>
+<div id="error" class="draughts-error" role="status">
+</div>
+</section>
+{% include "_draughts_rules.html" %}
+<section class="draughts-panel">
+<h2>Столы</h2>
+<div id="tables" class="draughts-list">Загрузка…</div>
+</section>
+</main>
+{% include "_request_security.html" %}<script>{% include "_draughts_lobby.js.html" %}</script>
+</body>
+</html>

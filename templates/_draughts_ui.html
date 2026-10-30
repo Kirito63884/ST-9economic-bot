@@ -1,0 +1,316 @@
+<style>
+  .draughts-wrap,
+  .draughts-page {
+    max-width: 1100px;
+    margin: 28px auto;
+    padding: 18px;
+    color: #edf2fa;
+  }
+
+  .draughts-panel,
+  .draughts-side {
+    background: #172338;
+    border: 1px solid #31435c;
+    border-radius: 16px;
+    padding: 20px;
+  }
+
+  .draughts-panel {
+    margin: 16px 0;
+  }
+
+  .draughts-row,
+  .draughts-actions {
+    display: flex;
+    align-items: end;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .draughts-row label,
+  .draughts-side label {
+    display: grid;
+    gap: 6px;
+  }
+
+  .draughts-row input,
+  .draughts-row select,
+  .draughts-promote {
+    border: 1px solid #52627b;
+    border-radius: 9px;
+    padding: 10px;
+    background: #0d1727;
+    color: #fff;
+  }
+
+  .draughts-btn {
+    border: 0;
+    border-radius: 9px;
+    padding: 10px 14px;
+    background: #d7b879;
+    color: #15202b;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .draughts-btn.secondary {
+    background: #33445f;
+    color: #edf2fa;
+  }
+
+  .draughts-error,
+  .draughts-msg {
+    min-height: 26px;
+    color: #ffd6a0;
+  }
+
+  .draughts-list {
+    display: grid;
+    gap: 12px;
+  }
+
+  .draughts-table {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    border-radius: 12px;
+    padding: 15px;
+    background: #101b2c;
+  }
+
+  .draughts-table p,
+  .draughts-rules {
+    color: #b7c4d8;
+  }
+
+  .draughts-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 650px) minmax(260px, 1fr);
+    align-items: start;
+    gap: 20px;
+  }
+
+  .draughts-side {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .draughts-side input {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* The frame owns the size. Sidebar text and pieces cannot size the rows. */
+  .draughts-board-frame {
+    display: grid;
+    grid-template-columns: 22px minmax(0, 1fr) 22px;
+    grid-template-rows: 22px minmax(0, 1fr) 22px;
+    width: 100%;
+    aspect-ratio: 1;
+    align-self: start;
+    border-radius: 10px;
+    background: #263349;
+    box-shadow: 0 16px 40px #0006;
+  }
+
+  .draughts-board-frame[hidden] {
+    display: none;
+  }
+
+  .draughts-axis {
+    display: grid;
+    place-items: center;
+    color: #edf2fa;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 1;
+    user-select: none;
+  }
+
+  .draughts-files {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    grid-column: 2;
+  }
+
+  .draughts-files.top {
+    grid-row: 1;
+  }
+
+  .draughts-files.bottom {
+    grid-row: 3;
+  }
+
+  .draughts-ranks {
+    grid-template-rows: repeat(8, minmax(0, 1fr));
+    grid-row: 2;
+  }
+
+  .draughts-ranks.left {
+    grid-column: 1;
+  }
+
+  .draughts-ranks.right {
+    grid-column: 3;
+  }
+
+  .draughts-board {
+    grid-column: 2;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    grid-template-rows: repeat(8, minmax(0, 1fr));
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    container-type: inline-size;
+  }
+
+  .draughts-square {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-width: 0;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    font-size: clamp(18px, 6vw, 64px);
+    font-size: clamp(18px, 10cqi, 64px);
+    line-height: 1;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .draughts-square.light {
+    cursor: default;
+    background: #e6d7b7;
+  }
+
+  .draughts-square.dark {
+    background: #64816f;
+  }
+
+  .draughts-piece {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 74%;
+    height: 74%;
+    border-radius: 50%;
+    border: 3px solid #a78c58;
+    background: radial-gradient(circle at 35% 25%, #fffbe7, #ddc992);
+    box-shadow: inset 0 0 0 3px #fff8, inset 0 0 0 6px #987d4c66, 0 3px 2px #0006;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .draughts-piece.black-piece {
+    border-color: #a3b3ac;
+    background: radial-gradient(circle at 35% 25%, #52676e, #101c2a 75%);
+    box-shadow: inset 0 0 0 3px #7e959566, inset 0 0 0 6px #07111988, 0 3px 2px #0006;
+  }
+
+  .draughts-piece.king {
+    border-color: #f4ca6b;
+  }
+
+  .draughts-piece svg {
+    width: 64%;
+    height: 64%;
+    fill: #f1c35e;
+    stroke: #59411d;
+    stroke-width: 1.5;
+  }
+
+  .draughts-piece.taken {
+    opacity: .35;
+  }
+
+  .draughts-piece.taken::after {
+    content: "×";
+    position: absolute;
+    color: #ff6262;
+    font: 700 30px/1 sans-serif;
+  }
+
+  .draughts-square .draughts-piece[hidden] {
+    display: none;
+  }
+
+  .draughts-history {
+    max-height: 210px;
+    overflow: auto;
+    padding-left: 28px;
+    color: #c3cfdf;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .draughts-square.selected {
+    box-shadow: inset 0 0 0 4px #553400, inset 0 0 0 7px #ffda70;
+  }
+
+  /* A dark centre and bright border stay distinct on both square colours. */
+  .draughts-square.target::after {
+    content: "";
+    position: absolute;
+    width: 25%;
+    height: 25%;
+    border: 2px solid #a6fcff;
+    border-radius: 50%;
+    background: #073e50;
+    box-shadow: 0 0 0 2px #102b38;
+    pointer-events: none;
+  }
+
+  .draughts-square.target-capture::after {
+    inset: 5%;
+    width: auto;
+    height: auto;
+    border: 4px solid #073e50;
+    background: transparent;
+    box-shadow: inset 0 0 0 2px #a6fcff, 0 0 0 2px #a6fcff;
+  }
+
+  .draughts-square:focus-visible {
+    z-index: 2;
+    outline: 3px solid #fff;
+    outline-offset: -3px;
+  }
+
+  .draughts-board-help {
+    margin: 12px 0 0;
+    color: #b7c4d8;
+    font-size: 13px;
+  }
+
+  .draughts-players {
+    line-height: 1.8;
+  }
+
+  .draughts-turn {
+    margin: 12px 0;
+    font-size: 1.15rem;
+    font-weight: 700;
+  }
+
+  @media (max-width: 760px) {
+    .draughts-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .draughts-page,
+    .draughts-wrap {
+      margin: 12px auto;
+      padding: 10px;
+    }
+
+  }
+
+  @media (max-width: 650px) {
+    .draughts-table {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
+</style>

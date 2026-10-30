@@ -1,0 +1,448 @@
+(() => {
+  const tid = DRAUGHTS_TABLE_ID;
+  const base = "/api/draughts/table/" + encodeURIComponent(tid);
+  const files = "abcdefgh";
+  const esc = (value) =>
+    String(value).replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  let state = null,
+    selected = null,
+    busy = false,
+    joined = false,
+    boardKey = null,
+    orientation = null,
+    refreshing = false,
+    actionEpoch = 0;
+  const el = (id) => document.getElementById(id);
+  async function api(path, options = {}) {
+    const response = await fetch(base + path, {
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...window.ST9_REQUEST_HEADERS,
+      },
+      ...options,
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const error = new Error(data.detail || "Ошибка запроса");
+      error.status = response.status;
+      throw error;
+    }
+    return data;
+  }
+  function setState(next) {
+    if (state && next.revision < state.revision) return;
+    if (
+      !state ||
+      JSON.stringify(state.position) !== JSON.stringify(next.position) ||
+      state.phase !== next.phase ||
+      state.actor !== next.actor
+    )
+      selected = null;
+    state = next;
+    if (state.pending) selected = state.pending.at;
+    if (!(state.legal_moves || []).some((move) => move.from === selected))
+      selected = null;
+    joined = true;
+    draw();
+  }
+  function renderBoard() {
+    const key = JSON.stringify([
+      state.position,
+      state.pending,
+      state.your_side,
+      state.legal_moves,
+      selected,
+    ]);
+    if (key === boardKey) return;
+    boardKey = key;
+    const pieces = state.position;
+    const black = state.your_side === "black";
+    const rankOrder = black
+      ? [1, 2, 3, 4, 5, 6, 7, 8]
+      : [8, 7, 6, 5, 4, 3, 2, 1];
+    const fileOrder = black ? [...files].reverse() : [...files];
+    const board = el("board");
+    if (orientation !== state.your_side || board.children.length !== 64) {
+      orientation = state.your_side;
+      document.querySelectorAll(".draughts-files").forEach((axis) => {
+        axis.innerHTML = fileOrder
+          .map((file) => `<span>${file}</span>`)
+          .join("");
+      });
+      document.querySelectorAll(".draughts-ranks").forEach((axis) => {
+        axis.innerHTML = rankOrder
+          .map((rank) => `<span>${rank}</span>`)
+          .join("");
+      });
+      board.innerHTML = rankOrder
+        .flatMap((rank) =>
+          fileOrder.map(
+            (file) =>
+              `<button type="button" data-square="${file}${rank}" class="draughts-square"><span class="draughts-piece" aria-hidden="true"></span></button>`,
+          ),
+        )
+        .join("");
+    }
+    const targets = new Set(
+      (state.legal_moves || [])
+        .filter((move) => move.from === selected)
+        .map((move) => move.to),
+    );
+    board.querySelectorAll("[data-square]").forEach((button) => {
+      const sq = button.dataset.square;
+      const piece = pieces[sq];
+      const target = targets.has(sq);
+      const capture =
+        target &&
+        (state.legal_moves || []).some(
+          (m) => m.from === selected && m.to === sq && m.capture,
+        );
+      const light = (files.indexOf(sq[0]) + Number(sq[1])) % 2 === 0;
+      button.className = [
+        "draughts-square",
+        light ? "light" : "dark",
+        sq === selected ? "selected" : "",
+        target ? "target" : "",
+        capture ? "target-capture" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      button.setAttribute("aria-pressed", String(sq === selected));
+      const description = piece
+        ? `${piece.toLowerCase() === "w" ? "белые" : "чёрные"}, ${piece === piece.toUpperCase() ? "дамка" : "шашка"}`
+        : "пусто";
+      button.setAttribute(
+        "aria-label",
+        `${sq}: ${description}${
+          target ? (capture ? ", доступно взятие" : ", доступен ход") : ""
+        }`,
+      );
+      const symbol = button.firstElementChild;
+      symbol.hidden = !piece;
+      const king = piece && piece === piece.toUpperCase();
+      symbol.className =
+        "draughts-piece " +
+        (piece?.toLowerCase() === "w" ? "white-piece" : "black-piece") +
+        (king ? " king" : "") +
+        (state.pending?.captured.includes(sq) ? " taken" : "");
+      const crown = king
+        ? '<svg viewBox="0 0 40 40" aria-hidden="true"><path d="M7 27L4 12l10 8 6-15 6 15 10-8-3 15zM8 31h24v4H8z"/></svg>'
+        : "";
+      if (symbol.innerHTML !== crown) symbol.innerHTML = crown;
+    });
+  }
+  el("board").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-square]");
+    if (button) clickSquare(button.dataset.square);
+  });
+  el("board").addEventListener("keydown", (event) => {
+    const button = event.target.closest("[data-square]");
+    if (!button) return;
+    const buttons = [...el("board").children];
+    const index = buttons.indexOf(button);
+    const row = Math.floor(index / 8),
+      column = index % 8;
+    const next = {
+      ArrowLeft: row * 8 + Math.max(0, column - 1),
+      ArrowRight: row * 8 + Math.min(7, column + 1),
+      ArrowUp: Math.max(0, row - 1) * 8 + column,
+      ArrowDown: Math.min(7, row + 1) * 8 + column,
+    }[event.key];
+    if (next !== undefined) {
+      event.preventDefault();
+      buttons[next].focus();
+    } else if (event.key === "Escape") {
+      selected = state?.pending?.at || null;
+      renderBoard();
+    }
+  });
+  async function clickSquare(square) {
+    if (
+      busy ||
+      !state ||
+      state.phase !== "playing" ||
+      state.actor !== window.ST9_USER_ID
+    )
+      return;
+    const legal = state.legal_moves || [];
+    if (state.pending) selected = state.pending.at;
+    if (!selected) {
+      if (legal.some((m) => m.from === square)) {
+        selected = square;
+        renderBoard();
+      }
+      return;
+    }
+    const move = legal.find((m) => m.from === selected && m.to === square);
+    if (!move) {
+      if (!state.pending)
+        selected = legal.some((m) => m.from === square) ? square : null;
+      renderBoard();
+      return;
+    }
+    await send("move", { from: move.from, to: move.to });
+  }
+  function draw() {
+    if (!state) return;
+    el("boardFrame").hidden = !joined;
+    el("boardHelp").hidden = !joined;
+    el("join").hidden = joined;
+    el("leave").hidden = !joined;
+    el("board").setAttribute("aria-busy", String(busy));
+    renderBoard();
+    const players = state.players;
+    el("bank").textContent =
+      `Взнос каждого: ${state.rules.entry_cents / 100} БК · Банк: ${(state.match?.bank_cents ?? state.rules.entry_cents * 2) / 100} БК`;
+    document.querySelectorAll("[data-st-balance]").forEach((node) => {
+      node.textContent = Number(state.balance).toFixed(2);
+    });
+    el("settings").hidden =
+      state.phase !== "waiting" || state.creator !== window.ST9_USER_ID;
+    el("saveStake").disabled = busy;
+    if (document.activeElement !== el("stake"))
+      el("stake").value = state.rules.entry_cents / 100;
+    el("players").innerHTML = players
+      .map(
+        (p, i) =>
+          `${i === 0 ? "◉ Белые" : "◉ Чёрные"}: ${esc(p.name)}${p.ready ? " ✓ готов" : ""}`,
+      )
+      .join("<br>");
+    el("turn").textContent =
+      state.phase === "playing"
+        ? (state.turn === "white" ? "Ход белых" : "Ход чёрных") +
+          (state.pending
+            ? " · продолжите серию той же шашкой"
+            : state.must_capture
+              ? " · взятие обязательно"
+              : "")
+        : state.phase === "finished"
+          ? state.reason
+          : "Ожидание игроков";
+    el("waiting").hidden = !(state.phase === "waiting" && joined);
+    el("controls").hidden = !(state.phase === "playing" && joined);
+    el("finished").hidden = state.phase !== "finished";
+    el("accept").hidden =
+      state.draw_offer === null || state.draw_offer === window.ST9_USER_ID;
+    el("ready").textContent = players.find((p) => p.id === window.ST9_USER_ID)
+      ?.ready
+      ? "Вы готовы ✓"
+      : "Готов";
+    el("start").hidden =
+      state.creator !== window.ST9_USER_ID ||
+      state.players.length !== 2 ||
+      !state.players.every((p) => p.ready);
+    el("ready").disabled =
+      busy || !!players.find((p) => p.id === window.ST9_USER_ID)?.ready;
+    el("start").disabled = busy;
+    el("offer").disabled =
+      busy ||
+      state.actor !== window.ST9_USER_ID ||
+      state.draw_offer !== null ||
+      !!state.pending;
+    ["accept", "resign", "leave", "leaveFinished", "rematch", "close"].forEach(
+      (id) => {
+        el(id).disabled = busy;
+      },
+    );
+    el("rematch").hidden =
+      state.phase !== "finished" ||
+      state.creator !== window.ST9_USER_ID ||
+      state.players.some((p) => p.left);
+    el("close").hidden = !state.can_close_table;
+    el("close").disabled = busy || !state.can_close;
+    el("counts").textContent = ["white", "black"]
+      .map(
+        (side) =>
+          `${side === "white" ? "Белые" : "Чёрные"}: ${state.counts[side].men} простых · ${state.counts[side].kings} дамок`,
+      )
+      .join(" / ");
+    el("history").innerHTML = state.history
+      .slice(-100)
+      .map(
+        (m) =>
+          `<li>${m.side === "white" ? "Белые" : "Чёрные"}: ${m.path.join(m.captured.length ? " × " : " — ")}${m.promoted ? " · дамка" : ""}</li>`,
+      )
+      .join("");
+    if (state.phase === "finished")
+      el("message").textContent =
+        state.reason +
+        (state.match?.result?.winners?.length
+          ? " · Победитель: " +
+            players.find((p) => p.id === state.match.result.winners[0])?.name
+          : "");
+  }
+  async function refresh() {
+    if (busy || refreshing) return;
+    refreshing = true;
+    const epoch = actionEpoch;
+    try {
+      const preview = await api("/preview");
+      if (epoch !== actionEpoch) return;
+      if (preview.in_table) {
+        const next = await api("/state");
+        if (epoch === actionEpoch) setState(next);
+      } else {
+        joined = false;
+        state = null;
+        selected = null;
+        boardKey = null;
+        el("boardFrame").hidden = true;
+        el("boardHelp").hidden = true;
+        el("join").hidden = preview.phase !== "waiting";
+        ["leave", "waiting", "controls", "finished"].forEach((id) => {
+          el(id).hidden = true;
+        });
+        el("players").textContent = "";
+        el("turn").textContent =
+          `${preview.players}/2 игроков · взнос ${preview.rules.entry_cents / 100} БК`;
+      }
+    } catch (e) {
+      if (epoch === actionEpoch) el("message").textContent = e.message;
+    } finally {
+      refreshing = false;
+    }
+  }
+  async function mutate(path, payload = {}, exit = false) {
+    if (busy) return;
+    busy = true;
+    actionEpoch += 1;
+    el("joinButton").disabled = true;
+    el("message").textContent = "";
+    if (state) draw();
+    let failed = false;
+    try {
+      const post = (body) =>
+        api(path, { method: "POST", body: JSON.stringify(body) });
+      let next;
+      try {
+        next = await post(payload);
+      } catch (error) {
+        // Only readiness is a repeatable fixed intent. Never retry moves,
+        // starts, rematches or wallet operations after a version conflict.
+        if (path !== "/ready" || error.status !== 409) throw error;
+        const fresh = await api("/state");
+        setState(fresh);
+        if (fresh.phase !== "waiting") throw error;
+        next = fresh.players.find((p) => p.id === window.ST9_USER_ID)?.ready
+          ? fresh
+          : await post({ ...payload, revision: fresh.revision });
+      }
+      if (exit) {
+        location.href = "/games/draughts/lobby";
+        return;
+      }
+      if (next.position) setState(next);
+    } catch (e) {
+      failed = true;
+      el("message").textContent = e.message;
+    } finally {
+      busy = false;
+      el("joinButton").disabled = false;
+      if (state) draw();
+    }
+    if (failed || !state) await refresh();
+  }
+  async function send(kind, move) {
+    if (!state) return;
+    await mutate("/action", {
+      revision: state.revision,
+      kind,
+      ...(move ? { move } : {}),
+    });
+  }
+  el("saveStake").addEventListener("click", () => {
+    if (!state) return;
+    const entry = Number(el("stake").value) * 100;
+    if (
+      !Number.isFinite(entry) ||
+      Math.abs(entry - Math.round(entry)) > 0.000001
+    ) {
+      el("message").textContent = "Укажите сумму с точностью до копейки";
+      return;
+    }
+    mutate("/settings", {
+      revision: state.revision,
+      rules: { ...state.rules, entry_cents: Math.round(entry) },
+    });
+  });
+  el("joinButton").addEventListener("click", () => mutate("/join"));
+  el("ready").addEventListener("click", () => {
+    if (state) mutate("/ready", { revision: state.revision, ready: true });
+  });
+  el("start").addEventListener("click", () => {
+    if (state) mutate("/start", { revision: state.revision });
+  });
+  el("rematch").addEventListener("click", () => {
+    if (state) mutate("/rematch", { revision: state.revision });
+  });
+  el("close").addEventListener("click", async () => {
+    if (!state?.can_close || busy || !confirm("Расформировать стол?")) return;
+    busy = true;
+    try {
+      await fetch(
+        "/api/game-tables/draughts/" + encodeURIComponent(tid) + "/close",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...window.ST9_REQUEST_HEADERS,
+          },
+          body: JSON.stringify({ version: state.close_version }),
+        },
+      ).then(async (response) => {
+        const data = await response.json();
+        if (!response.ok)
+          throw new Error(data.detail || "Не удалось закрыть стол");
+      });
+      location.href = "/games/draughts/lobby";
+    } catch (e) {
+      el("message").textContent = e.message;
+    } finally {
+      busy = false;
+      draw();
+    }
+  });
+  el("offer").addEventListener("click", () => send("offer_draw"));
+  el("accept").addEventListener("click", () => send("accept_draw"));
+  el("resign").addEventListener("click", () => {
+    if (confirm("Сдаться? Победу и банк получит соперник.")) send("resign");
+  });
+  function leave() {
+    if (!state) return;
+    if (
+      state.phase === "playing" &&
+      !confirm(
+        "Покинуть партию? Это засчитает поражение, соперник получит банк.",
+      )
+    )
+      return;
+    mutate("/leave", { revision: state.revision }, true);
+  }
+  el("leave").addEventListener("click", leave);
+  el("leaveFinished").addEventListener("click", leave);
+  el("invite").value =
+    location.origin + "/games/draughts/table/" + encodeURIComponent(tid);
+  el("copyInvite").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(el("invite").value);
+      el("message").textContent = "Ссылка скопирована";
+    } catch {
+      el("invite").select();
+      document.execCommand("copy");
+      el("message").textContent = "Ссылка скопирована";
+    }
+  });
+  refresh();
+  setInterval(refresh, 2000);
+})();
