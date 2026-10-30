@@ -377,3 +377,16 @@ Collaboration setup, 2026-10-30:
 - Live GitHub settings API is denied by the cloud network policy. Invitations,
   protection activation and hosted PR/CI results require the repository owner;
   checked-in policy and CODEOWNERS alone do not enable branch protection.
+
+Timezone-independent bulk confirmation expiry test, 2026-10-30:
+- Reproduced the reported 200-versus-409 failure on main 62a98e5 with
+  TZ=Europe/Moscow. The fixture used local datetime.now() for a naive-UTC field,
+  leaving the supposed expired receipt almost three hours in the future.
+- The fixture now writes UTC explicitly. The failed expired request additionally
+  checks that the recipient balance stays unchanged. Application expiry checks,
+  transaction locks and dependencies are unchanged.
+- Full scripts/check.sh with TZ=Europe/Moscow: 632 passed, two existing dependency
+  warnings; Ruff and shell checks pass. Bulk/security/freshness module in UTC:
+  23 passed. Workflow YAML parses and an explicit Moscow-time regression step is
+  added to the existing checks job, preserving its required status-check name.
+- Test/CI/documentation change only; no production installation required.
