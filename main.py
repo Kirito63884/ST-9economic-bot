@@ -81,6 +81,8 @@ from billiards import BilliardsError
 from billiards_routes import BilliardsService, build_router as build_billiards_router
 from domino import DominoError
 from domino_routes import DominoService, build_router as build_domino_router
+from battleship import BattleshipError
+from battleship_routes import BattleshipService, build_router as build_battleship_router
 from bulk_operations import bulk_preview
 from runtime import (
     initialize_database,
@@ -159,6 +161,7 @@ async def lifespan(app):
         asyncio.create_task(durak_timeout_checker()),
         asyncio.create_task(billiards_timeout_checker()),
         asyncio.create_task(domino_timeout_checker()),
+        asyncio.create_task(battleship_timeout_checker()),
         asyncio.create_task(squad_schedule_checker()),
         asyncio.create_task(medal_checker()),
     ]
@@ -199,6 +202,7 @@ crash_games = {}
 durak_service = DurakService()
 billiards_service = BilliardsService()
 domino_service = DominoService()
+battleship_service = BattleshipService()
 
 
 @app.exception_handler(DurakError)
@@ -213,6 +217,11 @@ async def billiards_error_handler(request, exc):
 
 @app.exception_handler(DominoError)
 async def domino_error_handler(request, exc):
+    return JSONResponse({"detail": str(exc)}, status_code=exc.status)
+
+
+@app.exception_handler(BattleshipError)
+async def battleship_error_handler(request, exc):
     return JSONResponse({"detail": str(exc)}, status_code=exc.status)
 
 
@@ -351,6 +360,7 @@ async def durable_request(request: Request, call_next):
             request_activity(
                 request.method, request.url.path, uid,
                 poker_tables, durak_service, billiards_service, domino_service,
+                battleship=battleship_service,
             )
             if uid:
                 user = (
@@ -687,6 +697,10 @@ async def fetch_required_role_members() -> list[dict]:
 
 def get_user_activity(user_id: int) -> dict:
     activity = {"game": None, "details": None}
+    for table in battleship_service.tables.values():
+        player = table.player(user_id)
+        if player and not player["left"] and table.phase == "playing":
+            return {"game": "battleship", "details": f"Морской бой · банк {table.match['bank_cents'] / 100:.2f} БК"}
     for table in domino_service.tables.values():
         player = table.player(user_id)
         if player and not player["left"] and table.phase == "playing":
@@ -1164,7 +1178,7 @@ async def update_profile(
     if bio is not None:
         user.bio = bio.strip()[:500] if bio.strip() else None
     if favorite_game is not None:
-        valid = ["blackjack", "roulette", "poker", "crash", "durak", "billiards", "domino", ""]
+        valid = ["blackjack", "roulette", "poker", "crash", "durak", "billiards", "domino", "battleship", ""]
         user.favorite_game = favorite_game if favorite_game in valid else None
     if avatar_emoji is not None:
         user.avatar_emoji = avatar_emoji.strip()[:10] if avatar_emoji.strip() else None
@@ -2895,6 +2909,7 @@ def detach_user_from_games(db, user):
     durak_service.detach(user.id, db)
     billiards_service.detach(user.id, db)
     domino_service.detach(user.id, db)
+    battleship_service.detach(user.id, db)
     game = active_games.pop(user.id, None)
     if game and game["status"] in {"playing", "showdown"}:
         user.balance += game["bet"]
@@ -4870,6 +4885,7 @@ def serialize_runtime():
         },
         "requests": table_requests,
         "domino": {tid: table.to_dict() for tid, table in domino_service.tables.items()},
+        "battleship": {tid: table.to_dict() for tid, table in battleship_service.tables.items()},
         "durak": {tid: table.to_dict() for tid, table in durak_service.tables.items()},
         "billiards": {
             tid: table.to_dict() for tid, table in billiards_service.tables.items()
@@ -4924,6 +4940,7 @@ def restore_runtime(payload):
     durak_service.restore(data.get("durak", {}), gap if gap > 5 else 0)
     billiards_service.restore(data.get("billiards", {}), gap if gap > 5 else 0)
     domino_service.restore(data.get("domino", {}), gap if gap > 5 else 0)
+    battleship_service.restore(data.get("battleship", {}), gap if gap > 5 else 0)
 
 
 async def game_settlement_checker():
@@ -4998,6 +5015,24 @@ async def domino_timeout_checker():
         except Exception:
             logger.exception("Failed to read domino tables")
 
+
+async def battleship_timeout_checker():
+    while True:
+        await asyncio.sleep(1)
+        try:
+            async with transaction(serialize_runtime, restore_runtime):
+                ids = list(battleship_service.tables)
+            for tid in ids:
+                try:
+                    async with transaction(serialize_runtime, restore_runtime) as db:
+                        battleship_service.tick_table(tid, db)
+                except Exception:
+                    logger.exception("Failed to settle battleship table %s", tid)
+        except Exception:
+            logger.exception("Failed to read battleship tables")
+
+
+app.include_router(build_battleship_router(battleship_service, get_user, get_db, templates, is_super_admin))
 
 app.include_router(build_domino_router(domino_service, get_user, get_db, templates, is_super_admin))
 
@@ -5090,6 +5125,7 @@ app.include_router(
         billiards_service,
         log_game,
         domino=domino_service,
+        battleship=battleship_service,
     )
 )
 # ST9_TABLE_ADMIN_END
@@ -5105,6 +5141,7 @@ app.include_router(
         durak_service,
         billiards_service,
         domino=domino_service,
+        battleship=battleship_service,
     )
 )
 from admin_presence import make_router as make_presence_router
