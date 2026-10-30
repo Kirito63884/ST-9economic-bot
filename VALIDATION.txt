@@ -390,3 +390,49 @@ Timezone-independent bulk confirmation expiry test, 2026-10-30:
   23 passed. Workflow YAML parses and an explicit Moscow-time regression step is
   added to the existing checks job, preserving its required status-check name.
 - Test/CI/documentation change only; no production installation required.
+
+Two-player classic sea battle, 2026-10-30:
+- Full scripts/check.sh with TZ=Europe/Moscow: 684 passed, two existing dependency
+  warnings. Fifty-two new cases cover 100 generated valid fleets, invalid geometry,
+  exact fleet composition, readiness, random first player, extra shots on hits,
+  misses, sinking/perimeter water, repeated/late/wrong-turn shots, timeouts,
+  surrender, restoration/rematch and initial/final fleet privacy.
+- Actual HTTP/SQLite checks verify the equal-stake cap is the lesser participant
+  balance (unrelated zero/negative users do not affect it), changing wallets after
+  readiness blocks start, zero stakes work and negative entrants are rejected.
+  Escrow freezes the accepted stake even when the remaining wallet reaches zero.
+  CSRF, membership including chief denial, malformed fields and stale repeats are
+  rejected. Winner gets the entire bank once; net history and eight-hour refunds
+  are correct. An impossible final payout rolls back the shot and can be retried
+  after fixing the wallet. Private activity does not reveal the invitation ID.
+- scripts/check_battleship_browser.py passes using a fresh local fixture database:
+  two signed sessions create/join, rotate/remove/place ships manually, reject
+  touching, retain unsaved draft across the opponent's updates, lower the stake,
+  ready/start, miss then sink the entire fleet, settle, reload, rematch and close.
+  Real 390px touch verifies a cell tap never fires, a separate button sends one
+  shot, mobile board tabs, portrait/landscape without page overflow, offline guard
+  and reconnect. Hostile player names remain literal. Zero browser page errors.
+  Optional runner never uses production credentials/data or background integrations.
+- Eight isolated installer paths cover success/copy/preflight/HTTP failure for
+  current versus older assembly-policy files, source rollback/new-file removal,
+  untouched env/database/collector sentinels and correct conditional bot restart.
+  Separate real SQLite backup/quick_check and AST guard checks reject unsupported
+  saved game keys and missing other-game modules before replacing working code.
+- Ruff E9/F, rendered JavaScript, installer shell/embedded Python syntax and git
+  whitespace checks pass. New production dependencies/schema: none. Existing
+  game/runtime APIs retain optional-argument compatibility. Classic fleet/contact/
+  hit-turn rules were checked against the cited public rules description.
+- No production installation, wallet actions or Discord messages were executed.
+
+Chess integration review (2026-10-30):
+- Full bash scripts/check.sh: 695 passed, 2 existing deprecation warnings.
+- Both chess and sea battle survive shared runtime restore, appear in the game
+  catalog and administrative table list; private naval state remains protected.
+- Added HTTP checks for wallet changes before start, CSRF/malformed fields,
+  stale requests, draw refund once and rollback of a mating move when payout fails.
+- Real Chromium: two sessions create/join/ready/start; mouse and 390px touch moves,
+  board orientation, reload, draw/refund and leave pass. Zero page errors.
+- Source installer success/copy/import/health rollback paths preserve live env,
+  database and collectors; SQLite backup and runtime/import guards now precede
+  file replacement. Installer also carries the naval integration dependencies.
+- No production deployment or Discord actions.

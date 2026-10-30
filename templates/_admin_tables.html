@@ -26,7 +26,7 @@ async function loadAdminTables() {
             ? data.tables
                   .map(
                       (t) =>
-                          `<article class="st-admin-table-row"><div><strong>${({poker:"Покер",durak:"Дурак",billiards:"Бильярд",domino:"Домино",chess:"Шахматы"})[t.game] || "Игра"} · ${TableAdmin.esc(t.creator)}</strong><p>${t.players} игроков · ${t.private ? "Закрытый" : "Открытый"} · ${t.can_delete ? "Можно удалить" : "Идёт игра"}</p></div>${TableAdmin.markup(t, t.game)}</article>`,
+                          `<article class="st-admin-table-row"><div><strong>${({poker:"Покер",durak:"Дурак",billiards:"Бильярд",domino:"Домино",battleship:"Морской бой",chess:"Шахматы"})[t.game] || "Игра"} · ${TableAdmin.esc(t.creator)}</strong><p>${t.players} игроков · ${t.private ? "Закрытый" : "Открытый"} · ${t.can_delete ? "Можно удалить" : "Идёт игра"}</p></div>${TableAdmin.markup(t, t.game)}</article>`,
                   )
                   .join("")
             : '<div class="empty-state">Столов пока нет</div>';

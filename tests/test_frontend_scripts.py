@@ -43,6 +43,8 @@ def test_rendered_scripts_parse(make_user, login_as):
     main.chess_service.tables["frontend-fixture"] = ChessTable(
         "frontend-fixture", uid, "Имя <script>alert(1)</script>"
     )
+    from conftest import save_state
+    save_state()  # Middleware restores the durable snapshot before every request.
     routes = [
         "/",
         "/profile",
