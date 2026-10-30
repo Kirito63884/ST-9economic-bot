@@ -17,12 +17,16 @@ test -f "$app_dir/main.py"
 test -f "$app_dir/wallet_history.py"
 files=(
     main.py database.py backup_routes.py roster_membership.py requirements.txt
+    monopoly_board.py monopoly_game.py monopoly_routes.py
+    templates/monopoly_lobby.html templates/monopoly_table.html
+    templates/_monopoly_ui.html templates/_monopoly_rules.html
+    templates/_monopoly_lobby.js.html templates/_monopoly_table.js.html
     chess_game.py chess_routes.py
     templates/chess_lobby.html templates/chess_table.html
     templates/_chess_ui.html templates/_chess_lobby.js.html templates/_chess_table.js.html
     assembly_attendance.py assembly_waivers.py groups_admin.py assembly_reports.py
     medals_routes.py protocol_rankings.py
-    templates/admin.html templates/_assembly_waiver.html templates/_admin_group_reports.html
+    templates/admin.html templates/admin_logs.html templates/_assembly_waiver.html templates/_admin_group_reports.html
     templates/_admin_audit.html templates/_admin_hub.html templates/_statistics_freshness.html
     templates/medals.html templates/_admin_medals.html templates/_award_design.html
     templates/_medals_style.html templates/_award_catalog.html templates/_award_gallery_style.html
@@ -212,11 +216,20 @@ from chess_routes import ChessService
 from battleship import BattleshipTable
 from battleship_routes import BattleshipService
 import main  # Verify all entry-point imports without starting background workers.
+from monopoly_game import MonopolyTable
+from monopoly_routes import MonopolyService
+from database import AppRuntime, SessionLocal
+with SessionLocal() as db:
+    saved = db.get(AppRuntime, 1)
+    if saved:
+        main.restore_runtime(saved.payload or "{}")
+for name in ("monopoly_lobby.html", "monopoly_table.html", "_monopoly_ui.html", "_monopoly_rules.html", "_monopoly_lobby.js.html", "_monopoly_table.js.html"):
+    main.templates.env.get_template(name)
 from table_lifecycle import IDLE_SECONDS
 from table_admin import management
 from protocol_rankings import CATEGORIES
 from medals_routes import catalog_context
-print("Шахматы, морской бой и технический администратор доступны. Никому автоматически права не назначены.")
+print("Монополия, прежние игры, сохранённые партии и шаблоны проверены. Права не менялись.")
 PY
 )
 systemctl start "${services[@]}"
@@ -224,7 +237,7 @@ curl -fsS --max-time 10 --retry 6 --retry-delay 1 --retry-connrefused \
     http://127.0.0.1:8000/ -o /dev/null
 systemctl is-active "${services[@]}"
 changing=0
-echo "Готово. Ctrl+F5 → Игры: Шахматы / Морской бой."
+echo "Готово. Ctrl+F5 → Игры → Монополия (2–10 игроков)."
 echo "Техадмин: Админка → Игроки → Открыть → Права доступа. Назначение/снятие — только владельцу."
 echo "После назначения техадмин входит заново. Балансы и существующие роли не изменены."
 echo "Перезапущены: ${services[*]}. Сборщики SQSTAT и игрового онлайна не перезапускались."

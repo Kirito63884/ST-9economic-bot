@@ -39,6 +39,8 @@ def test_rendered_scripts_parse(make_user, login_as):
     )
     client = login_as(uid)
     import main
+    from monopoly_game import MonopolyTable
+    main.monopoly_service.tables["frontend-fixture"] = MonopolyTable("frontend-fixture", uid, "Имя <script>alert(1)</script>")
     from chess_game import ChessTable
 
     main.chess_service.tables["frontend-fixture"] = ChessTable(
@@ -64,6 +66,8 @@ def test_rendered_scripts_parse(make_user, login_as):
         "/games/durak/lobby",
         "/games/billiards/lobby",
         "/games/domino/lobby",
+        "/games/monopoly/lobby",
+        "/games/monopoly/table/frontend-fixture",
         "/games/chess/lobby",
         "/games/chess/table/frontend-fixture",
         "/medals",

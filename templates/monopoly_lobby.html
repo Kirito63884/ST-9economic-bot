@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Монополия — Strike Team 9</title>
+    {% include "_site_ui.html" %}{% include "_table_admin_ui.html" %}{% include
+    "_monopoly_ui.html" %}
+  </head>
+  <body>
+    {% include "_site_nav.html" %}
+    <main id="st-content" class="mono-page">
+      <p class="mono-kicker">Игры сообщества · 2–10 игроков</p>
+      <h1>▦ Монополия</h1>
+      <p class="mono-muted">
+        Соберите свой город. Торгуйтесь, стройте и останьтесь последним
+        небанкротом.
+      </p>
+      <section class="mono-panel">
+        <h2>Новый стол</h2>
+        <div class="mono-row">
+          <label
+            >Мест за столом
+            <select id="capacity">
+              {% for count in range(2, 11) %}
+              <option value="{{ count }}" {{ 'selected' if count == 10 else '' }}>
+                {{ count }}
+              </option>
+              {% endfor %}
+            </select></label
+          >
+          <label
+            >Равный взнос, БК
+            <input
+              id="entry"
+              type="number"
+              value="0"
+              min="0"
+              max="1000000"
+              step="0.01"
+          /></label>
+          <label
+            >Доступ
+            <select id="private">
+              <option value="false">Открытый</option>
+              <option value="true">По ссылке</option>
+            </select></label
+          >
+          <button id="create" class="mono-btn" type="button">
+            Создать стол →
+          </button>
+        </div>
+        <p class="mono-muted">
+          0 БК — бесплатная партия. Внутри игры у каждого отдельные 1500 игровых
+          денег.
+        </p>
+        <div id="error" class="mono-message" role="status"></div>
+      </section>
+      <section class="mono-panel">
+        <h2>За каким столом сыграем?</h2>
+        <div id="tables">Загрузка…</div>
+      </section>
+      {% include "_monopoly_rules.html" %}
+    </main>
+    {% include "_request_security.html" %}
+    <script>
+      {% include "_monopoly_lobby.js.html" %}
+    </script>
+  </body>
+</html>
