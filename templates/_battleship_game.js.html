@@ -1,8 +1,8 @@
-/* A cell click selects; only the separate fire button submits a shot.
- * Unsaved fleet edits survive polling and the other player's actions. */
+/* A deliberate cell click/tap sends one shot; scrolling never fires.
+ * Detailed vessel models belong only to the owning player. */
 (() => {
   const $ = (id) => document.getElementById(id);
-  const { api, esc, money, coordinate, amount, grid } = BattleUI;
+  const { api, esc, money, amount, grid } = BattleUI;
   const base =
     "/api/battleship/table/" +
     encodeURIComponent($("st-content").dataset.tableId);
@@ -17,9 +17,9 @@
     savedFleetKey = "",
     shipSize = 4,
     horizontal = true,
-    selected = null;
+    pendingShot = null;
   let phaseKey = null,
-    turnKey = null,
+    picksKey = "",
     rulesKey = "",
     networkMessage = "";
   const now = () => Date.now() / 1000 + offset;
@@ -111,18 +111,24 @@
         state.last_shot?.target === state.your_id &&
         state.last_shot.cell === cell,
     }));
-    const otherCells = new Set((opponent?.fleet || []).flat()),
-      otherMarks = new Map(
-        (opponent?.marks || []).map((mark) => [mark.cell, mark.result]),
-      );
+    const otherMarks = new Map(
+      (opponent?.marks || []).map((mark) => [mark.cell, mark.result]),
+    );
     grid("enemyGrid", (cell) => ({
-      status:
-        otherMarks.get(cell) || (otherCells.has(cell) ? "ship" : "unknown"),
+      status: otherMarks.get(cell) || "unknown",
       disabled: !canFire() || !opponent || otherMarks.has(cell),
-      selected: selected === cell,
+      pending: pendingShot === cell,
       last:
         state.last_shot?.target === other?.id && state.last_shot?.cell === cell,
     }));
+    // No opponent fleet, model or per-ship class is rendered, even after a win.
+    BattleShips.render("ownGrid", ownFleet, own.marks);
+    $("fleetTypes").innerHTML = [4, 3, 2, 1]
+      .map(
+        (size) =>
+          `<span><b>${BattleShips.label(size)}</b> · ${fleetSizes.filter((n) => n === size).length}</span>`,
+      )
+      .join("");
     $("enemyTitle").textContent = other
       ? "Флот: " + other.name
       : "Воды соперника";
@@ -136,7 +142,7 @@
         ? other.placed
           ? "Флот готов"
           : "Расставляет корабли"
-        : other.ships_left + " кораблей · " + other.decks_left + " палуб";
+        : "Расстановка скрыта";
   }
   function controls() {
     if (!state) return;
@@ -146,13 +152,21 @@
     const remaining = (size) =>
       fleetSizes.filter((n) => n === size).length -
       (draft || []).filter((ship) => ship.length === size).length;
-    const picks = [4, 3, 2, 1]
-      .map(
-        (size) =>
-          `<button type="button" data-size="${size}" class="bs-btn ${size === shipSize ? "selected" : ""}" ${!editable || remaining(size) === 0 ? "disabled" : ""} aria-pressed="${size === shipSize}">${"▪".repeat(size)} · ${remaining(size)}</button>`,
-      )
-      .join("");
-    if ($("fleetPicks").innerHTML !== picks) $("fleetPicks").innerHTML = picks;
+    const nextPicksKey = JSON.stringify([
+      editable,
+      shipSize,
+      ...[4, 3, 2, 1].map(remaining),
+    ]);
+    if (nextPicksKey !== picksKey) {
+      const picks = [4, 3, 2, 1]
+        .map(
+          (size) =>
+            `<button type="button" data-size="${size}" class="bs-btn ${size === shipSize ? "selected" : ""}" ${!editable || remaining(size) === 0 ? "disabled" : ""} aria-pressed="${size === shipSize}"><span class="bs-ship-mini" aria-hidden="true">${BattleShips.model(size, true, "pick-" + size)}</span><strong>${BattleShips.label(size)}</strong><small>${size} ${size === 1 ? "палуба" : "палубы"} · осталось ${remaining(size)}</small></button>`,
+        )
+        .join("");
+      $("fleetPicks").innerHTML = picks;
+      picksKey = nextPicksKey;
+    }
     $("placement").hidden = state.phase !== "waiting";
     $("rotate").disabled =
       $("autoFleet").disabled =
@@ -201,25 +215,16 @@
     $("limit").classList.toggle("invalid", !state.stake_valid);
     $("entry").max = state.stake_limit_cents / 100;
     $("applySettings").disabled = $("setMax").disabled = busy || !fresh();
-    $("fire").disabled = !canFire() || selected === null;
-    $("fire").textContent =
-      selected === null
-        ? "Выберите клетку"
-        : "Огонь по " + coordinate(selected);
     $("fireHelp").textContent =
       state.phase === "waiting"
-        ? "Корабли соперника скрыты. Бой начнётся после готовности обоих."
+        ? "Расстановка соперника скрыта. После старта нажмите на клетку, чтобы выстрелить."
         : state.phase === "finished"
-          ? "Бой завершён. Теперь оба флота открыты."
+          ? "Бой завершён. На карте остались результаты выстрелов."
           : busy
-            ? "Отправляем действие…"
+            ? "Выстрел отправлен…"
             : state.actor !== state.your_id
               ? "Ход соперника. Наблюдайте за своим флотом."
-              : selected === null
-                ? "Ваш ход: выберите клетку и подтвердите выстрел кнопкой."
-                : "Выбрана " +
-                  coordinate(selected) +
-                  ". Нажмите «Огонь», чтобы выстрелить.";
+              : "Ваш ход: один клик или короткое касание клетки — один выстрел.";
     const seconds = Math.max(0, Math.ceil((state.deadline || 0) - now()));
     $("clock").textContent = state.phase === "playing" ? seconds + " сек." : "";
     $("clock").classList.toggle(
@@ -250,7 +255,7 @@
     $("players").innerHTML = state.players
       .map(
         (p) =>
-          `<article class="bs-player ${p.id === state.actor ? "turn" : ""}"><div class="bs-avatar" aria-hidden="true">${esc(p.name.slice(0, 1).toUpperCase())}</div><div><strong title="${esc(p.name)}">${esc(p.name)}${p.id === state.your_id ? " · вы" : ""}</strong><small>${p.left ? "Покинул стол" : state.phase === "waiting" ? (p.ready ? "Готов к бою" : p.placed ? "Флот расставлен" : "Расставляет корабли") : p.hits + " попаданий / " + p.shots_fired + " выстрелов"}</small></div><span class="bs-score">${state.phase === "waiting" ? "" : p.ships_left + " кораблей"}${p.timeouts ? " · тайм-ауты " + p.timeouts + "/3" : ""}</span></article>`,
+          `<article class="bs-player ${p.id === state.actor ? "turn" : ""}"><div class="bs-avatar" aria-hidden="true">${esc(p.name.slice(0, 1).toUpperCase())}</div><div><strong title="${esc(p.name)}">${esc(p.name)}${p.id === state.your_id ? " · вы" : ""}</strong><small>${p.left ? "Покинул стол" : state.phase === "waiting" ? (p.ready ? "Готов к бою" : p.placed ? "Флот расставлен" : "Расставляет корабли") : p.hits + " попаданий / " + p.shots_fired + " выстрелов"}</small></div><span class="bs-score">${state.phase === "waiting" ? "" : p.id === state.your_id ? p.ships_left + " кораблей" : "Флот скрыт"}${p.timeouts ? " · тайм-ауты " + p.timeouts + "/3" : ""}</span></article>`,
       )
       .join("");
     $("turn").textContent =
@@ -320,19 +325,11 @@
       savedFleetKey = key;
     }
     if (next.phase !== "waiting") draft = null;
-    const nextTurn = [next.match_number, next.phase, next.actor].join(":");
-    if (nextTurn !== turnKey) selected = null;
-    turnKey = nextTurn;
+    if (state && next.revision !== state.revision) shotInput.cancel();
     if (next.phase !== phaseKey) {
       tab(next.phase === "waiting" ? "own" : "enemy");
       phaseKey = next.phase;
     }
-    const opponent = next.boards.find((b) => b.id !== next.your_id);
-    if (
-      selected !== null &&
-      opponent?.marks.some((mark) => mark.cell === selected)
-    )
-      selected = null;
     state = next;
     offset = next.server_time - Date.now() / 1000;
     lastSync = Date.now();
@@ -487,15 +484,17 @@
   $("autoFleet").addEventListener("click", () => {
     if (canEdit()) action("fleet", { random: true });
   });
-  $("enemyGrid").addEventListener("click", (event) => {
-    const button = event.target.closest("button[data-cell]");
-    if (!button || button.disabled || !canFire()) return;
-    selected = Number(button.dataset.cell);
-    renderBoards();
-    controls();
-  });
-  $("fire").addEventListener("click", () => {
-    if (canFire() && selected !== null) action("fire", { cell: selected });
+  const shotInput = BattleInput.bind($("enemyGrid"), {
+    enabled: canFire,
+    revision: () => state?.revision,
+    fire: async (cell) => {
+      pendingShot = cell;
+      renderBoards();
+      await action("fire", { cell });
+      pendingShot = null;
+      renderBoards();
+      controls();
+    },
   });
   $("ready").addEventListener("click", () =>
     action("ready", { ready: !me().ready }),

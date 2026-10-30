@@ -423,3 +423,47 @@ Two-player classic sea battle, 2026-10-30:
   game/runtime APIs retain optional-argument compatibility. Classic fleet/contact/
   hit-turn rules were checked against the cited public rules description.
 - No production installation, wallet actions or Discord messages were executed.
+
+Technical administrator (2026-10-30):
+- Full bash scripts/check.sh: 711 passed, 2 existing deprecation warnings.
+- Owner-only grant/revoke/demotion/delete, CSRF, current permissions, role import
+  rejection, audit records and immediate revocation of pending bulk actions pass.
+- Promotion revokes prior links and requires fresh versioned authentication on
+  ordinary and independent read-only routers. Owner/tech login identities and
+  the owner's session-signing key are protected from delegation bypass.
+- Delegated backup retains wallets while resetting auth secrets; source unchanged.
+- Legacy SQLite migration is idempotent, defaults to no technical administrators
+  and preserves existing wallets/levels. Discord roster cannot archive a tech.
+- Chromium real drawer grant/revoke/confirmation, owner-level wallet controls,
+  stale-session rejection and chief/tech button denial pass; zero page errors.
+- Installer success/copy/import/HTTP rollback verified on isolated fixtures.
+  Production data, services and Discord were not touched.
+
+Battleship models and direct fire (2026-10-30):
+- Full bash scripts/check.sh: 684 passed, 2 existing deprecation warnings.
+- Chromium two-session paid game, all ships sunk, payout/reload/rematch and
+  mobile zero-stake game pass. Tap fires exactly once; pan, pinch, long touch
+  and cancellation never fire. Own models only, portrait/landscape and offline
+  guards pass; zero browser errors. Screenshots visually inspected.
+- API tests protect opponent fleets, types and deck/ship counts during placement,
+  battle and after completion. Only shot marks reveal combat results.
+- Isolated installer success and copy/preflight/HTTP rollback cases pass; new
+  model/input partials included, live data and collectors unchanged.
+- No production deployment or external wallet/Discord action.
+
+Combined release on main 7a3232e (2026-10-30):
+- Full bash scripts/check.sh: 722 passed; two existing deprecation warnings.
+- All three real Chromium runners pass on this combined code: naval paid victory
+  and touch/scroll guards; chess mouse/touch/reload/draw refund; owner-only tech
+  delegation and fresh authentication. Zero browser page errors.
+- The canonical installer was executed on synthetic copies of the actual old
+  main with two paid games and live wallets. Success preserves both banks,
+  positions and wallets; added columns and owner-only tech assignment work via HTTP.
+- Forced HTTP failure restores old source while preserving both games/wallets
+  and compatible added columns. Snapshot/source unknown-game and missing-module
+  guards fail before stopping services or replacing files. Real SQLite backup
+  quick_check passes. Selected code matches the new source exactly on success.
+- Additional isolated copy/import failure paths restore originals and remove
+  new partials. Env/database/collector sentinels remain untouched.
+- One canonical installer and three forwarding entry points prevent mixed game
+  modules, user models and Jinja partials. Production was not accessed or updated.

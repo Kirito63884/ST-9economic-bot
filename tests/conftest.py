@@ -73,11 +73,20 @@ def make_user():
 
 
 def session_cookie(uid):
+    with SessionLocal() as db:
+        user = db.get(User, uid)
+        auth_version = user.auth_version if user else 0
     return (
         TimestampSigner(main.SECRET_KEY)
         .sign(
             base64.b64encode(
-                json.dumps({"user_id": uid, "csrf_token": "test-csrf-token"}).encode()
+                json.dumps(
+                    {
+                        "user_id": uid,
+                        "csrf_token": "test-csrf-token",
+                        "auth_version": auth_version,
+                    }
+                ).encode()
             )
         )
         .decode()

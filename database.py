@@ -65,6 +65,8 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     is_senior_admin = Column(Boolean, default=False)
     is_chief_admin = Column(Boolean, default=False)
+    is_tech_admin = Column(Boolean, default=False)
+    auth_version = Column(Integer, default=0)
     profile_public = Column(Boolean, default=True)
     bio = Column(String(500), nullable=True)
     favorite_game = Column(String, nullable=True)
@@ -199,6 +201,8 @@ def run_migrations():
         "is_admin": False,
         "is_senior_admin": False,
         "is_chief_admin": False,
+        "is_tech_admin": False,
+        "auth_version": 0,
         "daily_streak": 0,
         "balance": 1000.0,
     }

@@ -46,11 +46,12 @@ const BattleUI = (() => {
     return data;
   }
   function grid(id, cells) {
-    let html = '<span class="bs-axis" aria-hidden="true"></span>';
-    for (const letter of letters)
-      html += `<span class="bs-axis" aria-hidden="true">${letter}</span>`;
+    let html =
+      '<span class="bs-axis bs-chart-origin" style="grid-column:1;grid-row:1" aria-hidden="true">⌖</span>';
+    for (let col = 0; col < 10; col++)
+      html += `<span class="bs-axis" style="grid-column:${col + 2};grid-row:1" aria-hidden="true">${letters[col]}</span>`;
     for (let row = 0; row < 10; row++) {
-      html += `<span class="bs-axis" aria-hidden="true">${row + 1}</span>`;
+      html += `<span class="bs-axis" style="grid-column:1;grid-row:${row + 2}" aria-hidden="true">${row + 1}</span>`;
       for (let col = 0; col < 10; col++) {
         const cell = row * 10 + col,
           info = cells(cell),
@@ -60,8 +61,8 @@ const BattleUI = (() => {
             ? "×"
             : status === "miss" || status === "water"
               ? "·"
-              : info.selected
-                ? "+"
+              : info.pending
+                ? "⌖"
                 : "";
         const description = {
           unknown: "неизвестно",
@@ -71,7 +72,7 @@ const BattleUI = (() => {
           miss: "промах",
           water: "вода",
         }[status];
-        html += `<button type="button" data-cell="${cell}" class="bs-cell ${status} ${info.selected ? "selected" : ""} ${info.last ? "last" : ""}" aria-label="${coordinate(cell)} · ${description}" ${info.disabled ? "disabled" : ""}>${symbol}</button>`;
+        html += `<button type="button" data-cell="${cell}" style="grid-column:${col + 2};grid-row:${row + 2}" class="bs-cell ${status} ${info.pending ? "pending" : ""} ${info.last ? "last" : ""}" aria-label="${coordinate(cell)} · ${description}" ${info.disabled ? "disabled" : ""}><span class="bs-mark" aria-hidden="true">${symbol}</span></button>`;
       }
     }
     document.getElementById(id).innerHTML = html;

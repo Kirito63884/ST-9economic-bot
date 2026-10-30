@@ -264,6 +264,35 @@ async def durable_request(request: Request, call_next):
     # Origin checks remain an independent layer, including same-site subdomains.
     uid = request.session.get("user_id")
     if uid:
+        # Also covers read-only/streaming routers that authenticate without get_user.
+        with SessionLocal() as auth_db:
+            auth = (
+                auth_db.query(User.is_tech_admin, User.auth_version)
+                .filter(User.id == uid)
+                .first()
+            )
+        if (
+            auth
+            and auth.is_tech_admin
+            and request.session.get("auth_version") != auth.auth_version
+        ):
+            request.session.clear()
+            uid = None
+            if request.url.path not in {
+                "/login",
+                "/auth/callback",
+                "/auth/link",
+                "/logout",
+            }:
+                if request.method == "GET" and not request.url.path.startswith("/api/"):
+                    return RedirectResponse("/login", status_code=303)
+                return JSONResponse(
+                    {
+                        "detail": "После назначения техническим администратором войдите заново."
+                    },
+                    status_code=403,
+                )
+    if uid:
         csrf = request.session.setdefault("csrf_token", secrets.token_urlsafe(32))
         if (
             request.method not in {"GET", "HEAD", "OPTIONS"}
@@ -369,7 +398,7 @@ async def durable_request(request: Request, call_next):
             request_activity(
                 request.method, request.url.path, uid,
                 poker_tables, durak_service, billiards_service, domino_service,
-                chess_service,
+                chess=chess_service,
                 battleship=battleship_service,
             )
             if uid:
@@ -484,32 +513,60 @@ def ensure_one_table(user_id, except_table=None):
 
 async def get_user(request: Request, db: Session = Depends(get_db)):
     uid = request.session.get("user_id")
-    return (
+    user = (
         db.query(User).filter(User.deleted_at.is_(None)).filter(User.id == uid).first()
         if uid
         else None
     )
+    # Promotion must not elevate sessions obtained through an old delegated login.
+    if (
+        is_technical_admin(user)
+        and request.session.get("auth_version") != user.auth_version
+    ):
+        return None
+    return user
 
 
 def require_admin(user=Depends(get_user)):
-    if not user or not user.is_admin:
+    if not user or not (user.is_admin or has_owner_access(user)):
         raise HTTPException(status_code=403, detail="Нет прав администратора")
     return user
 
 
 def is_owner_admin(user):
-    return user and user.discord_id == ADMIN_DISCORD_ID
+    # This identity boundary is deliberately distinct from delegated site powers.
+    return bool(user and ADMIN_DISCORD_ID and user.discord_id == ADMIN_DISCORD_ID)
+
+
+def is_technical_admin(user):
+    return bool(user and getattr(user, "is_tech_admin", False))
+
+
+def has_owner_access(user):
+    """All site operations; delegation itself still requires the real owner."""
+    return bool(is_owner_admin(user) or is_technical_admin(user))
+
+
+def protect_login_identity(actor, discord_id, db):
+    """A delegated admin must not mint a session with greater authority."""
+    target = db.query(User).filter(User.discord_id == discord_id).first()
+    if discord_id == ADMIN_DISCORD_ID and not is_owner_admin(actor):
+        raise HTTPException(403, "Вход владельца защищён.")
+    if is_technical_admin(target) and not (
+        is_owner_admin(actor) or actor.id == target.id
+    ):
+        raise HTTPException(403, "Вход технического администратора защищён.")
 
 
 def is_super_admin(user):
     return bool(
-        user and (is_owner_admin(user) or (user.is_admin and user.is_chief_admin))
+        user and (has_owner_access(user) or (user.is_admin and user.is_chief_admin))
     )
 
 
 def can_edit_user(actor, target):
     return bool(
-        actor and target and (not is_owner_admin(target) or is_owner_admin(actor))
+        actor and target and (not is_owner_admin(target) or has_owner_access(actor))
     )
 
 
@@ -517,7 +574,7 @@ def protect_owner(actor, target):
     if not can_edit_user(actor, target):
         raise HTTPException(
             403,
-            "Аккаунт владельца защищён: менять его баланс, ник и права может только он сам.",
+            "Аккаунт владельца защищён: менять его баланс и ник может только владелец или технический администратор.",
         )
 
 
@@ -909,6 +966,7 @@ async def callback(request: Request, code: str = "", state: str = ""):
         request.session.clear()
         db.flush()
         request.session["user_id"] = user.id
+        request.session["auth_version"] = user.auth_version
         return RedirectResponse("/")
 
 
@@ -987,8 +1045,10 @@ async def link_login_post(
                 f"Вход по одноразовой ссылке: {link.source}; инициатор Discord ID {link.issued_by}",
             )
             uid = user.id
+            auth_version = user.auth_version
         request.session.clear()
         request.session["user_id"] = uid
+        request.session["auth_version"] = auth_version
         return RedirectResponse(
             "/",
             status_code=303,
@@ -1007,6 +1067,13 @@ def require_link_issuer(request, db):
         if request.session.get("user_id")
         else None
     )
+    if (
+        is_technical_admin(actor)
+        and request.session.get("auth_version") != actor.auth_version
+    ):
+        raise HTTPException(
+            403, "После назначения техническим администратором войдите заново."
+        )
     if not actor or actor.deleted_at or not actor.is_admin or not is_super_admin(actor):
         raise HTTPException(
             403, "Ссылки для других игроков выдаёт только главный администратор"
@@ -1023,10 +1090,7 @@ async def admin_issue_login_link(request: Request):
         discord_id = validate_discord_id(body.get("discord_id"))
         async with transaction(serialize_runtime, restore_runtime) as db:
             actor = require_link_issuer(request, db)
-            if discord_id == ADMIN_DISCORD_ID and not is_owner_admin(actor):
-                raise HTTPException(
-                    403, "Ссылку для входа владельца может получить только он сам."
-                )
+            protect_login_identity(actor, discord_id, db)
         site_origin()
         membership = await check_discord_membership(discord_id)
         if not membership["allowed"]:
@@ -1040,8 +1104,7 @@ async def admin_issue_login_link(request: Request):
             )
         async with transaction(serialize_runtime, restore_runtime) as db:
             actor = require_link_issuer(request, db)
-            if discord_id == ADMIN_DISCORD_ID and not is_owner_admin(actor):
-                raise HTTPException(403, "Вход владельца защищён.")
+            protect_login_identity(actor, discord_id, db)
             _, url = issue_login_link(db, discord_id, "admin", actor.discord_id)
             target = db.query(User).filter(User.discord_id == discord_id).first()
             if target is None:
@@ -1074,8 +1137,7 @@ async def admin_revoke_login_links(request: Request, db: Session = Depends(get_d
         discord_id = validate_discord_id(body.get("discord_id"))
     except LoginLinkError as exc:
         raise HTTPException(exc.status_code, str(exc))
-    if discord_id == ADMIN_DISCORD_ID and not is_owner_admin(actor):
-        raise HTTPException(403, "Вход владельца защищён.")
+    protect_login_identity(actor, discord_id, db)
     count = revoke_login_links(db, discord_id)
     log_game(
         db,
@@ -1436,6 +1498,7 @@ async def admin(
             "is_senior_or_super": is_senior_or_super(admin),
             "is_super": is_super_admin(admin),
             "is_owner": bool(is_owner_admin(admin)),
+            "has_owner_access": has_owner_access(admin),
             "archived_users": archived,
             "cargo_users": cargo_users,
             "cargo_moved_at": cargo_moved_at,
@@ -2275,6 +2338,10 @@ async def delete_user(
         raise HTTPException(404)
     if target.discord_id == ADMIN_DISCORD_ID:
         raise HTTPException(403, "Нельзя удалить главного админа")
+    if is_technical_admin(target) and not is_owner_admin(admin):
+        raise HTTPException(
+            403, "Удалить технического администратора может только владелец."
+        )
     if target.is_chief_admin and not is_super_admin(admin):
         raise HTTPException(
             403,
@@ -2315,8 +2382,34 @@ async def toggle_admin(
         raise HTTPException(404)
     if target.id == super_admin.id or target.discord_id == ADMIN_DISCORD_ID:
         raise HTTPException(400, "Нельзя изменить права")
+    if (
+        action in {"make_tech", "remove_tech"} or is_technical_admin(target)
+    ) and not is_owner_admin(super_admin):
+        raise HTTPException(
+            403,
+            "Назначить или снять технического администратора может только владелец.",
+        )
+    if action == "remove_tech" and not is_technical_admin(target):
+        raise HTTPException(409, "У игрока нет роли технического администратора.")
     admin_name = super_admin.display_name or super_admin.username
-    if action == "make_chief":
+    was_tech = is_technical_admin(target)
+    if action == "make_tech":
+        target.auth_version = (target.auth_version or 0) + 1
+        revoke_login_links(db, target.discord_id)
+        target.is_tech_admin = True
+        target.is_admin = target.is_senior_admin = target.is_chief_admin = True
+        msg = (
+            f"{target.display_name or target.username} теперь технический администратор"
+        )
+        details = f"Владелец {admin_name} назначил техническим администратором"
+    elif action == "remove_tech":
+        target.is_tech_admin = False
+        target.is_admin = target.is_senior_admin = target.is_chief_admin = True
+        msg = "Роль технического администратора снята; сохранены права главного администратора"
+        details = (
+            f"Владелец {admin_name} снял технического администратора, оставив главным"
+        )
+    elif action == "make_chief":
         target.is_admin = target.is_senior_admin = target.is_chief_admin = True
         msg = (
             f"👑 {target.display_name or target.username} теперь главный администратор"
@@ -2344,6 +2437,10 @@ async def toggle_admin(
         details = f"⬇️ Супер-админ {admin_name} снял права"
     else:
         raise HTTPException(400, "Неверное действие")
+    if action not in {"make_tech", "remove_tech"}:
+        target.is_tech_admin = False
+        if was_tech:
+            details += "; снята роль технического администратора"
     log_game(db, uid, "admin", "role_change", 0, details)
     db.flush()
     return {
@@ -2351,6 +2448,7 @@ async def toggle_admin(
         "is_admin": target.is_admin,
         "is_senior_admin": target.is_senior_admin,
         "is_chief_admin": target.is_chief_admin,
+        "is_tech_admin": target.is_tech_admin,
         "message": msg,
     }
 
@@ -3006,8 +3104,8 @@ def apply_discord_membership(db, user, membership):
                 request["display_name"] = user.display_name or user.username
     for table in durak_service.tables.values():
         durak_service.refresh(table, db)
-    if user.discord_id == ADMIN_DISCORD_ID:
-        return  # Owner's name syncs too; role removal cannot lock out the owner.
+    if has_owner_access(user):
+        return  # Discord sync cannot revoke the site owner or technical admin role.
     if not membership["allowed"] and user.deleted_at is None:
         detach_user_from_games(db, user)
         revoke_login_links(db, user.discord_id)

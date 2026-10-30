@@ -213,7 +213,13 @@ def test_hit_sunk_retains_turn_miss_passes_and_known_water_cannot_be_shot():
     table.fire(101, 3)
     assert table.actor == 101 and table.last_shot["result"] == "sunk"
     enemy = table.public_state(101)["boards"][1]
-    assert enemy["sunk_ships"] == [[0, 1, 2, 3]]
+    assert "sunk_ships" not in enemy
+    assert {mark["cell"] for mark in enemy["marks"] if mark["result"] == "sunk"} == {
+        0,
+        1,
+        2,
+        3,
+    }
     assert any(
         mark["cell"] == 4 and mark["result"] == "water" for mark in enemy["marks"]
     )
@@ -226,25 +232,31 @@ def test_hit_sunk_retains_turn_miss_passes_and_known_water_cannot_be_shot():
     assert table.actor == 102 and table.last_shot["result"] == "miss"
 
 
-def test_privacy_during_placement_battle_and_final_reveal():
+def test_privacy_during_placement_battle_and_after_finish():
     table = game()
     for viewer in (101, 102):
         state = table.public_state(viewer)
         own = next(b for b in state["boards"] if b["id"] == viewer)
         opponent = next(b for b in state["boards"] if b["id"] != viewer)
         assert own["fleet"] == validate_fleet(copy.deepcopy(LAYOUT))
-        assert "fleet" not in opponent and opponent["sunk_ships"] == []
+        assert "fleet" not in opponent and "sunk_ships" not in opponent
         assert all(
             "fleet" not in player and "incoming" not in player
             for player in state["players"]
         )
         assert state["match"]["result"] is None
+        enemy_player = next(
+            player for player in state["players"] if player["id"] != viewer
+        )
+        assert "ships_left" not in enemy_player and "decks_left" not in enemy_player
     table.fire(101, 0)
-    assert table.public_state(101)["boards"][1]["sunk_ships"] == []
+    assert "sunk_ships" not in table.public_state(101)["boards"][1]
     for cell in [cell for ship in LAYOUT for cell in ship if cell != 0]:
         table.fire(101, cell)
     assert table.phase == "finished" and table.match["result"]["winner"] == 101
-    assert all("fleet" in b for b in table.public_state(101)["boards"])
+    assert all(
+        ("fleet" in b) == (b["id"] == 101) for b in table.public_state(101)["boards"]
+    )
     before = table.to_dict()
     with pytest.raises(BattleshipError):
         table.fire(101, 90)
@@ -445,7 +457,7 @@ def test_api_secrets_auth_csrf_fields_replay_and_final_once_only_payout(
     assert wallet(actor) == 100.01
     with SessionLocal() as db:
         assert db.query(GameHistory).filter_by(game_type="battleship").count() == 2
-    assert all("fleet" in b for b in state["boards"])
+    assert all(("fleet" in b) == (b["id"] == actor) for b in state["boards"])
     assert main.battleship_service.table(tid).phase == "finished"
 
 
@@ -468,7 +480,6 @@ def test_private_room_listing_and_fleet_edit_does_not_reveal_coordinates(
     assert next(b for b in state["boards"] if b["id"] == 101) == {
         "id": 101,
         "marks": [],
-        "sunk_ships": [],
     }
     assert (
         client.post(

@@ -1,0 +1,115 @@
+/* Original top-down vector vessels. Fleet coordinates are supplied only by
+ * the owning player's private state; enemy boards never render this layer. */
+const BattleShips = (() => {
+  const types = {
+    4: { name: "Линкор", beam: 27, kind: "battleship", guns: 3 },
+    3: { name: "Крейсер", beam: 24, kind: "cruiser", guns: 2 },
+    2: { name: "Эсминец", beam: 20, kind: "destroyer", guns: 1 },
+    1: { name: "Катер", beam: 15, kind: "boat", guns: 1 },
+  };
+  const label = (size) => types[size]?.name || "Корабль";
+  function model(size, horizontal = false, prefix = "vessel") {
+    const type = types[size];
+    if (!type) return "";
+    const height = size * 80,
+      beam = type.beam,
+      left = 40 - beam,
+      right = 40 + beam;
+    const id = String(prefix).replace(/[^a-zA-Z0-9_-]/g, "");
+    const deckTop = size === 1 ? 13 : 19,
+      deckBottom = height - 13;
+    const hull = `M40 4 C${40 + beam * 0.65} 17 ${right} ${height * 0.19} ${right} ${height * 0.29} L${right - 2} ${height - 18} Q40 ${height + 1} ${left + 2} ${height - 18} L${left} ${height * 0.29} C${left} ${height * 0.19} ${40 - beam * 0.65} 17 40 4Z`;
+    const deck = `M40 ${deckTop} Q${right - 6} ${height * 0.2} ${right - 6} ${height * 0.31} L${right - 8} ${deckBottom} Q40 ${height - 6} ${left + 8} ${deckBottom} L${left + 6} ${height * 0.31} Q${left + 6} ${height * 0.2} 40 ${deckTop}Z`;
+    const turret = (y, aft = false, guns = type.guns) => {
+      const width = size === 1 ? 10 : 17,
+        direction = aft ? 1 : -1;
+      return `<g class="bs-turret"><ellipse cx="40" cy="${y + 2}" rx="${width / 2 + 3}" ry="${width / 2 + 3}" fill="#162737" opacity=".75"/><circle cx="40" cy="${y}" r="${width / 2 + 1}" fill="#455b66" stroke="#9dacaa" stroke-width="1"/><rect x="${40 - width / 2}" y="${y - 6}" width="${width}" height="12" rx="3" fill="url(#${id}-metal)" stroke="#2b414d" stroke-width="1"/>${Array.from(
+        { length: guns },
+        (_, i) => {
+          const x = 40 + (i - (guns - 1) / 2) * 4;
+          return `<path d="M${x} ${y + direction * 3}v${direction * (size === 1 ? 9 : 17)}" stroke="#202f38" stroke-width="3.5"/><path d="M${x - 0.6} ${y + direction * 4}v${direction * (size === 1 ? 8 : 15)}" stroke="#c3c9bf" stroke-width="1"/>`;
+        },
+      ).join("")}</g>`;
+    };
+    const windows = (y, width = 20) =>
+      Array.from(
+        { length: 4 },
+        (_, i) =>
+          `<rect x="${40 - width / 2 + i * (width / 4)}" y="${y}" width="${width / 4 - 1}" height="3" rx=".5" fill="#8ec9d0"/>`,
+      ).join("");
+    let details = "";
+    if (size === 1) {
+      details = `${turret(25, false, 1)}<rect x="30" y="37" width="20" height="14" rx="3" fill="url(#${id}-metal)" stroke="#233a48"/>${windows(38, 16)}<path d="M40 46v14m-6-8h12" stroke="#273e4a" stroke-width="1.7"/><rect x="34" y="58" width="12" height="6" rx="2" fill="#263c4a"/>`;
+    } else {
+      const bridge = height * 0.43,
+        bridgeWidth = size === 2 ? 23 : 30;
+      details = `${turret(height * 0.21, false)}<rect x="${40 - bridgeWidth / 2}" y="${bridge - 4}" width="${bridgeWidth}" height="${size === 2 ? 23 : 32}" rx="4" fill="#263c49" opacity=".7"/><rect x="${40 - bridgeWidth / 2}" y="${bridge - 8}" width="${bridgeWidth}" height="${size === 2 ? 22 : 30}" rx="4" fill="url(#${id}-metal)" stroke="#2a424e" stroke-width="1.5"/>${windows(bridge - 5, bridgeWidth - 5)}<rect x="33" y="${bridge - 15}" width="14" height="10" rx="2" fill="#a5b5b4" stroke="#344c58"/><path d="M40 ${bridge - 16}v-17m-12 6h24m-21-4 9-5 9 5" fill="none" stroke="#a6c1c4" stroke-width="1.5"/><rect x="33" y="${height * 0.59}" width="14" height="${size === 2 ? 9 : 15}" rx="4" fill="#8b9a95" stroke="#2b404c"/><ellipse cx="40" cy="${height * 0.59 + 3}" rx="5" ry="2.2" fill="#192e3b"/><rect x="${left + 7}" y="${height * 0.48}" width="5" height="${size === 2 ? 16 : 23}" rx="2" fill="#c6c5af" stroke="#5a737d"/><rect x="${right - 12}" y="${height * 0.48}" width="5" height="${size === 2 ? 16 : 23}" rx="2" fill="#c6c5af" stroke="#5a737d"/>`;
+      details +=
+        size === 4
+          ? `${turret(height * 0.73, true)}${turret(height * 0.88, true)}`
+          : size === 3
+            ? turret(height * 0.81, true)
+            : `<g transform="translate(40 ${height * 0.79}) rotate(30)"><rect x="-12" y="-5" width="24" height="10" rx="4" fill="#536e77" stroke="#a4b5b6"/><path d="M-8-3h16M-8 0h16M-8 3h16" stroke="#233b49" stroke-width="1.2"/></g>`;
+    }
+    const plating = Array.from({ length: size * 3 }, (_, index) => {
+      const y = 30 + (index * (height - 48)) / (size * 3);
+      return `<path d="M${left + 6} ${y}H${right - 6}" stroke="#536a71" stroke-width=".6" opacity=".35"/>`;
+    }).join("");
+    const view = horizontal ? `0 0 ${height} 80` : `0 0 80 ${height}`;
+    const transform = horizontal ? `translate(${height} 0) rotate(90)` : "";
+    return `<svg class="bs-vessel-svg" viewBox="${view}" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${type.name}, ${size} ${size === 1 ? "палуба" : "палубы"}"><defs><linearGradient id="${id}-hull" x1="0" x2="1"><stop stop-color="#1c3443"/><stop offset=".25" stop-color="#aab8b5"/><stop offset=".48" stop-color="#748b8f"/><stop offset=".8" stop-color="#394f5c"/><stop offset="1" stop-color="#112c3e"/></linearGradient><linearGradient id="${id}-deck" x1="0" x2="1"><stop stop-color="#b0b4a2"/><stop offset=".5" stop-color="#8d9b91"/><stop offset="1" stop-color="#64797c"/></linearGradient><linearGradient id="${id}-metal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#d5dcd3"/><stop offset=".45" stop-color="#879e9e"/><stop offset="1" stop-color="#405b68"/></linearGradient></defs><g transform="${transform}"><ellipse cx="40" cy="${height * 0.54}" rx="${beam + 4}" ry="${height * 0.45}" fill="#031b2d" opacity=".5"/><path class="bs-hull" d="${hull}" fill="url(#${id}-hull)" stroke="#b8d0d0" stroke-width="1.2"/><path d="${deck}" fill="url(#${id}-deck)" stroke="#263f4e" stroke-width="1"/>${plating}<path d="M40 10v${size === 1 ? 7 : 18}" stroke="#ced0b9" stroke-width="1"/><path d="M${left + 4} ${height * 0.32}v${height * 0.48}M${right - 4} ${height * 0.32}v${height * 0.48}" stroke="#d5dcca" stroke-width=".7" opacity=".7"/>${details}<path d="M${left + 10} ${height - 15}h${beam * 2 - 20}" stroke="#c2cbc0" stroke-width="1"/><rect x="37" y="${height - 10}" width="6" height="4" rx="1" fill="#bc9b65"/></g></svg>`;
+  }
+  function render(gridId, ships, marks = []) {
+    const root = document.getElementById(gridId);
+    root.querySelectorAll(".bs-ship-model").forEach((node) => node.remove());
+    const hits = new Set(
+      marks
+        .filter((mark) => mark.result === "hit" || mark.result === "sunk")
+        .map((mark) => mark.cell),
+    );
+    ships.forEach((ship, index) => {
+      if (
+        !types[ship.length] ||
+        ship.some((cell) => !Number.isInteger(cell) || cell < 0 || cell >= 100)
+      )
+        return;
+      const cells = [...ship].sort((a, b) => a - b),
+        start = cells[0];
+      const horizontal =
+        ship.length > 1 &&
+        Math.floor(cells[0] / 10) === Math.floor(cells.at(-1) / 10);
+      const damage = cells.filter((cell) => hits.has(cell)).length;
+      const overlay = document.createElement("span");
+      overlay.className =
+        "bs-ship-model " +
+        types[ship.length].kind +
+        (damage === ship.length ? " wreck" : damage ? " damaged" : "");
+      overlay.setAttribute("aria-hidden", "true");
+      overlay.dataset.shipSize = ship.length;
+      overlay.style.gridColumn = `${(start % 10) + 2} / span ${horizontal ? ship.length : 1}`;
+      overlay.style.gridRow = `${Math.floor(start / 10) + 2} / span ${horizontal ? 1 : ship.length}`;
+      overlay.innerHTML = model(
+        ship.length,
+        horizontal,
+        `${gridId}-${index}-${start}`,
+      );
+      root.append(overlay);
+      for (const cell of cells) {
+        const button = root.querySelector(`[data-cell="${cell}"]`);
+        if (button) {
+          button.title =
+            label(ship.length) +
+            " · " +
+            ship.length +
+            " " +
+            (ship.length === 1 ? "палуба" : "палубы");
+          button.setAttribute(
+            "aria-label",
+            button.getAttribute("aria-label") + " · " + label(ship.length),
+          );
+        }
+      }
+    });
+  }
+  return { model, render, label };
+})();

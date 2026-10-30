@@ -27,6 +27,14 @@ def make_backup_router(is_super_admin, is_owner_admin=None):
                 .first()
             )
             if (
+                user
+                and getattr(user, "is_tech_admin", False)
+                and request.session.get("auth_version") != user.auth_version
+            ):
+                raise HTTPException(
+                    403, "После назначения техническим администратором войдите заново."
+                )
+            if (
                 not user
                 or not user.is_admin
                 or not (user.is_senior_admin or is_super_admin(user))
