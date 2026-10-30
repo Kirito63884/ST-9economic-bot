@@ -450,3 +450,20 @@ Battleship models and direct fire (2026-10-30):
 - Isolated installer success and copy/preflight/HTTP rollback cases pass; new
   model/input partials included, live data and collectors unchanged.
 - No production deployment or external wallet/Discord action.
+
+Combined release on main 7a3232e (2026-10-30):
+- Full bash scripts/check.sh: 722 passed; two existing deprecation warnings.
+- All three real Chromium runners pass on this combined code: naval paid victory
+  and touch/scroll guards; chess mouse/touch/reload/draw refund; owner-only tech
+  delegation and fresh authentication. Zero browser page errors.
+- The canonical installer was executed on synthetic copies of the actual old
+  main with two paid games and live wallets. Success preserves both banks,
+  positions and wallets; added columns and owner-only tech assignment work via HTTP.
+- Forced HTTP failure restores old source while preserving both games/wallets
+  and compatible added columns. Snapshot/source unknown-game and missing-module
+  guards fail before stopping services or replacing files. Real SQLite backup
+  quick_check passes. Selected code matches the new source exactly on success.
+- Additional isolated copy/import failure paths restore originals and remove
+  new partials. Env/database/collector sentinels remain untouched.
+- One canonical installer and three forwarding entry points prevent mixed game
+  modules, user models and Jinja partials. Production was not accessed or updated.

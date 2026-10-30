@@ -97,3 +97,7 @@ python -m ruff check . --select E9,F
 Для небольшого сообщества выбран общий сериализуемый снимок игр в одной строке БД. Это обеспечивает согласованность с балансом и работу после перезапуска; при большой нагрузке такой способ потребует отдельного проектирования хранения и блокировок.
 
 OAuth `state` следует [официальной рекомендации Discord](https://github.com/discord/discord-api-docs/blob/main/developers/topics/oauth2.mdx). Запуск и остановка фоновых задач используют [lifespan FastAPI](https://fastapi.tiangolo.com/advanced/events/).
+
+Совместимый выпуск шахмат, новых моделей морского боя и технического администратора:
+[GAMES_ACCESS_UPDATE.md](GAMES_ACCESS_UPDATE.md). Установщик:
+`scripts/update_games_and_access.sh` с полным SHA согласованного main.

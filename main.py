@@ -398,7 +398,7 @@ async def durable_request(request: Request, call_next):
             request_activity(
                 request.method, request.url.path, uid,
                 poker_tables, durak_service, billiards_service, domino_service,
-                chess_service,
+                chess=chess_service,
                 battleship=battleship_service,
             )
             if uid:
