@@ -1924,9 +1924,9 @@
     </head>
     <body>
         {% include "_request_security.html" %}
-        {% set is_super = is_owner or (user.is_admin and user.is_chief_admin) %}
+        {% set is_super = has_owner_access or (user.is_admin and user.is_chief_admin) %}
         {% set is_senior_or_super = is_super or user.is_senior_admin %}
-        {% macro role(u) %}{% if u.discord_id == admin_discord_id %}<span class="role-pill role-owner">Владелец</span>{% elif u.is_chief_admin %}<span class="role-pill role-owner">Главный админ</span>{% elif u.is_senior_admin %}<span class="role-pill role-admin">Старший админ</span>{% elif u.is_admin %}<span class="role-pill role-admin">Младший админ</span>{% else %}<span class="role-pill">Игрок</span>{% endif %}{% endmacro %}
+        {% macro role(u) %}{% if u.discord_id == admin_discord_id %}<span class="role-pill role-owner">Владелец</span>{% elif u.is_tech_admin %}<span class="role-pill role-owner">Технический админ</span>{% elif u.is_chief_admin %}<span class="role-pill role-owner">Главный админ</span>{% elif u.is_senior_admin %}<span class="role-pill role-admin">Старший админ</span>{% elif u.is_admin %}<span class="role-pill role-admin">Младший админ</span>{% else %}<span class="role-pill">Игрок</span>{% endif %}{% endmacro %}
         <div class="toast-container"
              id="toastContainer"
              role="status"
@@ -2250,7 +2250,7 @@
 </nav>
                 <div class="sidebar-bottom">
                     <div class="user-name">{{ user.display_name or user.username }}</div>
-                    <div class="small muted mt-1">{% if is_owner %}Владелец{% elif is_super %}Главный администратор{% elif user.is_senior_admin %}Старший администратор{% else %}Младший администратор{% endif %}</div>
+                    <div class="small muted mt-1">{% if is_owner %}Владелец{% elif user.is_tech_admin %}Технический администратор{% elif is_super %}Главный администратор{% elif user.is_senior_admin %}Старший администратор{% else %}Младший администратор{% endif %}</div>
                     <a href="/">← Вернуться на сайт</a>
                 </div>
             </aside>
@@ -2311,6 +2311,7 @@
                                         aria-label="Фильтр прав">
                                     <option value="all">Все права</option>
                                     <option value="admin">Администраторы</option>
+                                    <option value="tech">Технические админы</option>
                                     <option value="chief">Главные админы</option>
                                     <option value="senior">Старшие админы</option>
                                     <option value="junior">Младшие админы</option>
@@ -2364,13 +2365,13 @@
                                         data-registered="{{ u.registered_at.isoformat() + 'Z' if u.registered_at else '' }}"
                                         data-game-name="{{ player_squad[u.id].name or '' }}"
                                         data-search="{{ u.discord_id }} {{ u.username }} {{ u.guild_nickname or '' }} {{ u.id }} {{ user_role_labels[u.id]|join(' ') }}"
-                                        data-role="{{ 'owner' if u.discord_id == admin_discord_id else ('chief' if u.is_chief_admin else ('senior' if u.is_senior_admin else ('junior' if u.is_admin else 'player'))) }}"
+                                        data-role="{{ 'owner' if u.discord_id == admin_discord_id else ('tech' if u.is_tech_admin else ('chief' if u.is_chief_admin else ('senior' if u.is_senior_admin else ('junior' if u.is_admin else 'player')))) }}"
                                         data-discord-roles="{{ user_role_ids[u.id]|join(' ') }}"
                                         data-role-rank="{{ user_role_ranks[u.id] }}"
                                         data-name="{{ u.display_name or u.username }}"
                                         data-balance="{{ u.balance }}">
                                         <td class="checkbox-cell">
-                                            {% if is_senior_or_super and (is_owner or u.discord_id != admin_discord_id) %}
+                                            {% if is_senior_or_super and (has_owner_access or u.discord_id != admin_discord_id) %}
                                             <input type="checkbox"
                                                    class="user-check"
                                                    value="{{ u.id }}"
@@ -2889,7 +2890,7 @@
                     Ник на Discord-сервере: {{ u.guild_nickname }}{% endif %}
                 </div>
                 <div class="action-row mt-3">
-                    <a href="/admin/logs/{{ u.id }}" class="btn">История операций ↗</a><a href="/medals/progress/{{ u.id }}" class="btn">Медали и прогресс ↗</a><button class="btn" onclick="showIdentityHistory({{ u.id }})">Привязки Discord/Steam</button>{% if is_super and (is_owner or u.discord_id != admin_discord_id) %}<button class="btn"
+                    <a href="/admin/logs/{{ u.id }}" class="btn">История операций ↗</a><a href="/medals/progress/{{ u.id }}" class="btn">Медали и прогресс ↗</a><button class="btn" onclick="showIdentityHistory({{ u.id }})">Привязки Discord/Steam</button>{% if is_super and (is_owner or u.discord_id != admin_discord_id) and (is_owner or not u.is_tech_admin or u.id == user.id) %}<button class="btn"
         data-discord-id="{{ u.discord_id }}"
         onclick="issuePlayerLogin(this.dataset.discordId)">Ссылка для входа</button>{% endif %}
                 </div>
@@ -2940,7 +2941,7 @@
                         </div>
                     </details>
                 </fieldset>
-                <fieldset class="editor-field" {% if not is_owner and u.discord_id == admin_discord_id %}disabled{% endif %}>
+                <fieldset class="editor-field" {% if not has_owner_access and u.discord_id == admin_discord_id %}disabled{% endif %}>
                     <label class="form-label" for="balance_{{ u.id }}">Баланс</label>
                     <div class="field-row">
                         <input type="number"
@@ -2958,7 +2959,7 @@
        placeholder="Например: участие в тренировке">
                     <p class="hint">Устанавливает итоговый баланс игрока, включая отрицательное значение.</p>
                 </fieldset>
-                <fieldset class="editor-field" {% if not is_owner and u.discord_id == admin_discord_id %}disabled{% endif %}>
+                <fieldset class="editor-field" {% if not has_owner_access and u.discord_id == admin_discord_id %}disabled{% endif %}>
                     <label class="form-label" for="name_{{ u.id }}">Имя на сайте</label>
                     <div class="field-row">
                         <input type="text"
@@ -2998,11 +2999,15 @@
                     <p class="hint">До 1000 символов. Игрок не видит эту заметку.</p>
                 </fieldset>
                 {% endif %}
-                {% if is_super and u.id != user.id and u.discord_id != admin_discord_id %}
+                {% if is_super and u.id != user.id and u.discord_id != admin_discord_id and (is_owner or not u.is_tech_admin) %}
                 <fieldset class="editor-field">
                     <h3>Права доступа</h3>
                     <p class="hint">Изменение применяется после подтверждения.</p>
                     <div class="action-row">
+                        {% if is_owner %}
+                        {% if u.is_tech_admin %}<button class="btn btn-toggle btn-outline-danger" data-uid="{{ u.id }}" data-action="remove_tech">Снять техадмина → главный</button>
+                        {% else %}<button class="btn btn-toggle" data-uid="{{ u.id }}" data-action="make_tech">Технический администратор</button>{% endif %}
+                        {% endif %}
                         {% if u.is_chief_admin %}<button class="btn btn-toggle"
         data-uid="{{ u.id }}"
         data-action="make_senior">Сделать старшим</button><button class="btn btn-toggle btn-outline-danger"
@@ -3025,7 +3030,7 @@
                     </div>
                 </fieldset>
                 {% endif %}
-                {% if is_senior_or_super and u.id != user.id and u.discord_id != admin_discord_id and (is_super or not u.is_chief_admin) %}
+                {% if is_senior_or_super and u.id != user.id and u.discord_id != admin_discord_id and (is_super or not u.is_chief_admin) and (is_owner or not u.is_tech_admin) %}
                 <div class="danger-zone">
                     <h3>Удаление профиля</h3>
                     <p>Удаляет профиль окончательно. Это действие не помещает игрока в недельный архив.</p>
@@ -4576,6 +4581,8 @@ async function saveAllChanges() {
 
 async function toggleAdmin(uid, action) {
     const actionNames = {
+        make_tech: "выдать ПОЛНЫЕ права ТЕХНИЧЕСКОГО администратора (как у владельца)",
+        remove_tech: "снять ТЕХНИЧЕСКОГО администратора и оставить главным админом",
         make_chief: "сделать ГЛАВНЫМ админом",
         make_senior: "сделать СТАРШИМ админом",
         make_junior: "сделать МЛАДШИМ админом",

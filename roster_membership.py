@@ -300,6 +300,12 @@ def sync_snapshot(db, roles, members, required_role_id=None, now=None):
                 restored += 1
             _queue_membership_check(db, sid, now)
         elif has_cargo and user is not None:
+            if getattr(user, "is_tech_admin", False) or (
+                os.getenv("ADMIN_DISCORD_ID") and sid == os.getenv("ADMIN_DISCORD_ID")
+            ):
+                # Site delegation is controlled by the owner, not Discord roles.
+                user.username, user.guild_nickname = username, display
+                continue
             state = _state(db, user, now)
             if state.status != "cargo200":
                 state.cargo200_at = now
