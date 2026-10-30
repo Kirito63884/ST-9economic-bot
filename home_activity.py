@@ -11,7 +11,8 @@ FAVICON = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect w
 
 
 def activity(
-    db, blackjack, crash, poker, durak, billiards=None, domino=None, battleship=None, *, now=None
+    db, blackjack, crash, poker, durak, billiards=None, domino=None,
+    battleship=None, chess=None, *, now=None
 ):
     now = time.time() if now is None else now
     threshold = datetime.fromtimestamp(now) - timedelta(minutes=5)
@@ -143,11 +144,29 @@ def activity(
         if table.phase != "playing":
             continue
         private = table.rules["private"]
-        creator = next((p["name"] for p in table.players if p["id"] == table.creator), "сообщества")
+        creator = next(
+            (p["name"] for p in table.players if p["id"] == table.creator),
+            "сообщества",
+        )
         add(
             "battleship-private" if private else "battleship:" + tid,
             "Морской бой · закрытые столы" if private else "Морской бой · стол " + creator,
             "/games/battleship/lobby" if private else "/games/battleship/table/" + tid,
+            [p["id"] for p in table.players if not p["left"]],
+        )
+
+    for tid, table in sorted(chess.tables.items()) if chess is not None else []:
+        if table.phase != "playing":
+            continue
+        private = table.rules["private"]
+        creator = next(
+            (p["name"] for p in table.players if p["id"] == table.creator),
+            "сообщества",
+        )
+        add(
+            "chess-private" if private else "chess:" + tid,
+            "Шахматы · закрытые столы" if private else "Шахматы · стол " + creator,
+            "/games/chess/lobby" if private else "/games/chess/table/" + tid,
             [p["id"] for p in table.players if not p["left"]],
         )
 
@@ -179,13 +198,18 @@ def activity(
     }
 
 
-def make_router(get_db, blackjack, crash, poker, durak, billiards=None, domino=None, battleship=None):
+def make_router(
+    get_db, blackjack, crash, poker, durak, billiards=None, domino=None,
+    battleship=None, chess=None
+):
     router = APIRouter()
 
     @router.get("/api/home/activity")
     def current_activity(response: Response, db=Depends(get_db)):
         response.headers["Cache-Control"] = "no-store"
-        return activity(db, blackjack, crash, poker, durak, billiards, domino, battleship)
+        return activity(
+            db, blackjack, crash, poker, durak, billiards, domino, battleship, chess
+        )
 
     @router.get("/favicon.svg", include_in_schema=True)
     def favicon():

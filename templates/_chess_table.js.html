@@ -1,0 +1,87 @@
+(() => {
+  const tid = CHESS_TABLE_ID;
+  const base = "/api/chess/table/" + encodeURIComponent(tid);
+  const files = "abcdefgh";
+  const esc = value => String(value).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const glyphs = {K:"♔",Q:"♕",R:"♖",B:"♗",N:"♘",P:"♙",k:"♚",q:"♛",r:"♜",b:"♝",n:"♞",p:"♟"};
+  let state = null, selected = null, busy = false, joined = false;
+  const el = id => document.getElementById(id);
+  async function api(path, options = {}) {
+    const response = await fetch(base + path, {credentials:"same-origin",headers:{"Content-Type":"application/json",...window.ST9_REQUEST_HEADERS},...options});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Ошибка запроса");
+    return data;
+  }
+  function fenPieces(fen) {
+    const ranks = fen.split(" ")[0].split("/"); const pieces = {};
+    ranks.forEach((rank, row) => { let file = 0; for (const c of rank) { if (/\d/.test(c)) file += Number(c); else { pieces[files[file] + (8-row)] = c; file += 1; } } });
+    return pieces;
+  }
+  function renderBoard() {
+    const pieces = fenPieces(state.fen), black = state.your_side === "black";
+    const rankOrder = black ? [1,2,3,4,5,6,7,8] : [8,7,6,5,4,3,2,1];
+    const fileOrder = black ? [...files].reverse() : [...files];
+    const legal = state.legal_moves || [];
+    el("board").innerHTML = rankOrder.flatMap((rank, ri) => fileOrder.map((file, fi) => {
+      const sq = file + rank, light = (files.indexOf(file) + rank) % 2 === 0;
+      const targets = legal.filter(m => m.slice(0,2) === selected);
+      const target = targets.some(m => m.slice(2,4) === sq);
+      return `<button type="button" role="gridcell" aria-label="${sq}" data-square="${sq}" class="chess-square ${light ? "light" : "dark"} ${sq === selected ? "selected" : ""} ${target ? "target" : ""}">${glyphs[pieces[sq]] || ""}</button>`;
+    })).join("");
+    el("board").querySelectorAll("[data-square]").forEach(button => button.addEventListener("click", () => clickSquare(button.dataset.square, pieces)));
+  }
+  async function clickSquare(square, pieces) {
+    if (!state || state.phase !== "playing" || state.actor === null) return;
+    const legal = state.legal_moves || [];
+    if (!selected) { if (legal.some(m => m.slice(0,2) === square)) { selected = square; renderBoard(); } return; }
+    const matches = legal.filter(m => m.slice(0,2) === selected && m.slice(2,4) === square);
+    if (!matches.length) { selected = legal.some(m => m.slice(0,2) === square) ? square : null; renderBoard(); return; }
+    let move = matches[0];
+    if (matches.some(m => m.length === 5)) move = matches.find(m => m[4] === el("promotion").value) || matches[0];
+    selected = null;
+    await send("move", move);
+  }
+  function draw() {
+    if (!state) return;
+    renderBoard();
+    const players = state.players;
+    el("players").innerHTML = players.map((p, i) => `${i === 0 ? "♔ Белые" : "♚ Чёрные"}: ${esc(p.name)}${p.ready ? " ✓ готов" : ""}`).join("<br>");
+    el("turn").textContent = state.phase === "playing" ? (state.check ? "Шах! " : "") + (state.turn === "white" ? "Ход белых" : "Ход чёрных") : state.phase === "finished" ? state.reason : "Ожидание игроков";
+    el("waiting").hidden = !(state.phase === "waiting" && joined);
+    el("controls").hidden = !(state.phase === "playing" && joined);
+    el("finished").hidden = state.phase !== "finished";
+    el("claim").hidden = !state.can_claim_draw;
+    el("accept").hidden = state.draw_offer === null || state.draw_offer === window.ST9_USER_ID;
+    el("ready").textContent = players.find(p => p.id === window.ST9_USER_ID)?.ready ? "Вы готовы ✓" : "Готов";
+    el("start").hidden = state.players[0]?.id !== window.ST9_USER_ID || state.players.length !== 2 || !state.players.every(p => p.ready);
+    if (state.phase === "finished") el("message").textContent = state.reason + (state.match?.result?.winners?.length ? " · Победитель: " + players.find(p => p.id === state.match.result.winners[0])?.name : "");
+  }
+  async function refresh() {
+    try {
+      const preview = await api("/preview");
+      joined = preview.in_table;
+      el("join").hidden = joined || preview.phase !== "waiting";
+      el("leave").hidden = !joined;
+      if (joined) { state = await api("/state"); draw(); }
+      else { el("board").innerHTML = ""; el("turn").textContent = `${preview.players}/2 игроков · взнос ${preview.rules.entry_cents/100} БК`; }
+    } catch (e) { el("message").textContent = e.message; }
+  }
+  async function send(kind, move) {
+    if (busy || !state) return; busy = true; el("message").textContent = "";
+    try { state = await api("/action", {method:"POST",body:JSON.stringify({revision:state.revision,kind,...(move ? {move} : {})})}); draw(); }
+    catch (e) { el("message").textContent = e.message; await refresh(); }
+    finally { busy = false; }
+  }
+  el("joinButton").addEventListener("click", async () => { try { await api("/join", {method:"POST",body:"{}"}); await refresh(); } catch(e) { el("message").textContent=e.message; } });
+  el("ready").addEventListener("click", async () => { try { state=await api("/ready",{method:"POST",body:JSON.stringify({revision:state.revision,ready:true})}); draw(); } catch(e) { el("message").textContent=e.message; } });
+  el("start").addEventListener("click", async () => { try { state=await api("/start",{method:"POST",body:JSON.stringify({revision:state.revision})}); draw(); } catch(e) { el("message").textContent=e.message; } });
+  el("claim").addEventListener("click", () => send("claim_draw"));
+  el("offer").addEventListener("click", () => send("offer_draw"));
+  el("accept").addEventListener("click", () => send("accept_draw"));
+  el("resign").addEventListener("click", () => send("resign"));
+  async function leave() { if (!state) return; try { await api("/leave",{method:"POST",body:JSON.stringify({revision:state.revision})}); location.href="/games/chess/lobby"; } catch(e) { el("message").textContent=e.message; } }
+  el("leave").addEventListener("click", leave); el("leaveFinished").addEventListener("click", leave);
+  el("invite").value = location.origin + "/games/chess/table/" + encodeURIComponent(tid);
+  el("copyInvite").addEventListener("click", async () => { try { await navigator.clipboard.writeText(el("invite").value); el("message").textContent = "Ссылка скопирована"; } catch { el("invite").select(); document.execCommand("copy"); el("message").textContent = "Ссылка скопирована"; } });
+  refresh(); setInterval(refresh, 2000);
+})();
