@@ -254,9 +254,12 @@ def test_privacy_during_placement_battle_and_after_finish():
     for cell in [cell for ship in LAYOUT for cell in ship if cell != 0]:
         table.fire(101, cell)
     assert table.phase == "finished" and table.match["result"]["winner"] == 101
-    assert all(
-        ("fleet" in b) == (b["id"] == 101) for b in table.public_state(101)["boards"]
-    )
+    for viewer in (101, 102):
+        assert all(
+            b["fleet"] == validate_fleet(copy.deepcopy(LAYOUT))
+            for b in table.public_state(viewer)["boards"]
+        )
+    assert all("fleet" not in b for b in table.public_state(999)["boards"])
     before = table.to_dict()
     with pytest.raises(BattleshipError):
         table.fire(101, 90)
@@ -457,7 +460,7 @@ def test_api_secrets_auth_csrf_fields_replay_and_final_once_only_payout(
     assert wallet(actor) == 100.01
     with SessionLocal() as db:
         assert db.query(GameHistory).filter_by(game_type="battleship").count() == 2
-    assert all(("fleet" in b) == (b["id"] == actor) for b in state["boards"])
+    assert all("fleet" in b for b in state["boards"])
     assert main.battleship_service.table(tid).phase == "finished"
 
 
@@ -671,3 +674,39 @@ def test_rendered_table_and_lobby_scripts_parse(make_user, login_as):
                 ["node", "--check"], input=script, text=True, capture_output=True
             )
             assert result.returncode == 0, result.stderr
+
+
+def test_finished_reveal_survives_restore_but_rematch_hides_new_fleet():
+    table = game()
+    table.finish(102, "Победа соперника")
+    table.match["settled"] = True
+    restored = BattleshipTable.from_dict(table.to_dict())
+    for uid in (101, 102):
+        assert all("fleet" in b for b in restored.public_state(uid)["boards"])
+    restored.rematch()
+    restored.set_fleet(101, copy.deepcopy(LAYOUT))
+    assert "fleet" not in next(
+        b for b in restored.public_state(102)["boards"] if b["id"] == 101
+    )
+
+
+def test_surrendered_participant_can_review_finished_fleets_but_not_play(
+    make_user, login_as
+):
+    client, path, tid = room(make_user, login_as, entry=0)
+    prepare(client, path)
+    request(client, path, "start")
+    request(client, path, "leave")
+    state = client.get(path + "/state")
+    assert state.status_code == 200
+    assert state.json()["phase"] == "finished"
+    assert all("fleet" in b for b in state.json()["boards"])
+    assert (
+        client.post(
+            path + "/fire", json={"revision": state.json()["revision"], "cell": 50}
+        ).status_code
+        == 403
+    )
+    make_user(103, is_admin=True, is_chief_admin=True)
+    client.cookies.set("session", session_cookie(103))
+    assert client.get(path + "/state").status_code == 403

@@ -215,9 +215,10 @@ class ChessTable:
 
     def public_state(self, uid):
         board = self.board if self.phase == "playing" else chess.Board(self.fen)
+        participants = self.match["participants"] if self.match else self.players
         side = (
             chess.WHITE
-            if self.match and uid == self.match["participants"][0]["id"]
+            if participants and uid == participants[0]["id"]
             else chess.BLACK
         )
         legal = (

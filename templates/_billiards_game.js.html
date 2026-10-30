@@ -37,7 +37,10 @@
   let busy = false,
     polling = false,
     syncedAt = 0,
-    offset = 0,
+    clockBase = Date.now() / 1000,
+    clockStarted = performance.now(),
+    clockReady = false,
+    lastClock = 0,
     lastRevision = -1,
     lastTurn = null,
     networkMessage = "";
@@ -46,7 +49,9 @@
     power = 0.55,
     disposed = false,
     closed = false;
-  let lastRenderKey = null;
+  let lastRenderKey = null,
+    scoreMarkup = null,
+    lastMotionState = null;
   let lastUiPaint = 0,
     heardShot = null,
     heardPockets = new Set(),
@@ -67,6 +72,7 @@
   $("sensitivityValue").textContent = Math.round(sensitivity * 100) + "%";
 
   async function api(url, options = {}) {
+    const sentAt = performance.now();
     const response = await fetch(url, { cache: "no-store", ...options });
     let data;
     try {
@@ -83,13 +89,23 @@
       error.status = response.status;
       throw error;
     }
+    data._receivedAt = performance.now();
+    data._roundTrip = data._receivedAt - sentAt;
     return data;
   }
   function error(message) {
     $("error").textContent = message;
     $("error").hidden = !message;
   }
-  const now = () => Date.now() / 1000 + offset;
+  // A poll must never rewind a shot. performance.now also survives changes to
+  // the device's wall clock without jumping balls or the turn timer.
+  const now = () => {
+    lastClock = Math.max(
+      lastClock,
+      clockBase + (performance.now() - clockStarted) / 1000,
+    );
+    return lastClock;
+  };
   const moving = () =>
     Boolean(state?.last_shot && now() < state.last_shot.available_at);
   const playing = () => state?.phase === "playing";
@@ -228,7 +244,7 @@
             state.match?.bank_cents ??
               state.rules.entry_cents * state.rules.max_players,
           );
-    $("scores").innerHTML =
+    const markup =
       playerMarkup(primary, 0) +
       `<div class="pool-center"><div id="clock" class="pool-clock"><span>—</span></div><div class="pool-bank">${state.rules.mode === "practice" ? bank : "Банк " + bank}</div></div>` +
       (others.length
@@ -236,6 +252,18 @@
         : state.rules.mode === "practice"
           ? '<div class="pool-seat opponent"><div class="pool-seat-text"><strong>Свободная практика</strong><small>15 шаров · без соперника</small></div></div>'
           : playerMarkup(null, 1));
+    if (markup !== scoreMarkup) {
+      const holder = document.createElement("div");
+      holder.innerHTML = markup;
+      const center = $("scores").querySelector(".pool-center");
+      if (center) {
+        center.querySelector(".pool-bank").textContent =
+          state.rules.mode === "practice" ? bank : "Банк " + bank;
+        holder.querySelector(".pool-center").replaceWith(center);
+      }
+      $("scores").replaceChildren(...holder.childNodes);
+      scoreMarkup = markup;
+    }
     // Rotation supports six seats; let extra players share a second scoreboard row.
     $("scores").style.gridTemplateColumns =
       others.length > 1 ? "repeat(3,minmax(0,1fr))" : "";
@@ -321,9 +349,24 @@
     lastRevision = next.revision;
     state = next;
     syncedAt = Date.now();
-    offset = Number.isFinite(next.server_time)
-      ? next.server_time - Date.now() / 1000
-      : 0;
+    if (Number.isFinite(next.server_time)) {
+      const received = next._receivedAt ?? performance.now();
+      const sample =
+        next.server_time +
+        (next._roundTrip || 0) / 2000 +
+        (performance.now() - received) / 1000;
+      const current = now();
+      if (!clockReady) {
+        clockBase = sample;
+        clockStarted = performance.now();
+        lastClock = sample;
+        clockReady = true;
+      } else {
+        // Smooth small network-delay variations instead of restarting playback
+        // at a different frame on every poll. The clock remains monotonic.
+        clockBase += clamp((sample - current) * 0.15, -0.025, 0.025);
+      }
+    }
     const turnKey = [
       next.match_number,
       next.actor,
@@ -579,6 +622,10 @@
   function frame() {
     if (disposed) return;
     if (state && !document.hidden) {
+      if (moving() !== lastMotionState) {
+        lastMotionState = moving();
+        paintPanels();
+      }
       if (performance.now() - lastUiPaint > 90) {
         refreshControls();
         lastUiPaint = performance.now();

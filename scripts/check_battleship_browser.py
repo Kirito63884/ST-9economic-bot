@@ -289,13 +289,11 @@ print(json.dumps(result))
         assert done["match"]["settled"] and done["match"]["result"]["winner"] == winner
         assert done["match"]["result"]["payouts"] == {str(winner): 10000, str(loser): 0}
         assert state(a)["balance"] + state(b)["balance"] == 150
-        assert a.locator("#enemyGrid .bs-ship-model,#enemyGrid .ship").count() == 0
+        assert a.locator("#enemyGrid .bs-ship-model").count() == 10
+        assert b.locator("#enemyGrid .bs-ship-model").count() == 10
         for viewer, page in pages.items():
             final = state(page)
-            assert all(
-                ("fleet" in board) == (board["id"] == viewer)
-                for board in final["boards"]
-            )
+            assert all("fleet" in board for board in final["boards"])
             assert all(
                 "decks_left" not in player
                 for player in final["players"]
@@ -311,6 +309,8 @@ print(json.dumps(result))
         assert not state(a)["boards"][0]["fleet"] and all(
             not player["ready"] for player in state(a)["players"]
         )
+        for page in pages.values():
+            assert page.locator("#enemyGrid .bs-ship-model").count() == 0
         a.on("dialog", lambda dialog: dialog.accept())
         a.locator("#close").click()
         a.wait_for_url("**/games/battleship/lobby")

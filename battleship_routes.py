@@ -337,7 +337,15 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
     ):
         require(user)
         response.headers["Cache-Control"] = "private, no-store"
-        return view(service.member(tid, user.id), user, db)
+        table = service.table(tid)
+        finished_participant = (
+            table.phase == "finished"
+            and table.match
+            and any(p["id"] == user.id for p in table.match["participants"])
+        )
+        if not finished_participant:
+            service.member(tid, user.id)
+        return view(table, user, db)
 
     @router.post("/api/battleship/table/{tid}/fleet")
     async def fleet(

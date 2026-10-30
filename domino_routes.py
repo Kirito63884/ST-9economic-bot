@@ -341,9 +341,15 @@ def build_router(service, get_user, get_db, templates, may_manage=lambda user: F
     ):
         require(user)
         table = service.member(tid, user.id)
-        data = await body(request, ["revision", "kind", "tile", "side"])
+        data = await body(request, ["revision", "kind", "tile", "side", "direction"])
         revision(table, data)
-        table.action(user.id, data.get("kind"), data.get("tile"), data.get("side"))
+        table.action(
+            user.id,
+            data.get("kind"),
+            data.get("tile"),
+            data.get("side"),
+            direction=data.get("direction", "auto"),
+        )
         service.settle(table, db)
         return view(table, user, db)
 

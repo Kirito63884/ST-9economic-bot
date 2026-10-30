@@ -334,6 +334,11 @@ class BattleshipTable:
         self.touch("Новый бой. Расставьте корабли и подтвердите готовность")
 
     def public_state(self, uid):
+        reveal = (
+            self.phase == "finished"
+            and self.match
+            and any(p["id"] == uid for p in self.match["participants"])
+        )
         boards = []
         for player in self.players:
             sunk = self.sunk_ships(player)
@@ -359,7 +364,7 @@ class BattleshipTable:
                 "id": player["id"],
                 "marks": marks,
             }
-            if player["id"] == uid:
+            if player["id"] == uid or reveal:
                 board["fleet"] = copy.deepcopy(player["fleet"])
                 board["sunk_ships"] = copy.deepcopy(sunk)
             boards.append(board)

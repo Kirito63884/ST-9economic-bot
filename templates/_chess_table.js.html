@@ -32,7 +32,18 @@
     selected = null,
     busy = false,
     joined = false,
-    boardKey = null;
+    boardKey = null,
+    orientation = null,
+    refreshing = false,
+    actionEpoch = 0;
+  const pieceNames = {
+    k: "король",
+    q: "ферзь",
+    r: "ладья",
+    b: "слон",
+    n: "конь",
+    p: "пешка",
+  };
   const el = (id) => document.getElementById(id);
   async function api(path, options = {}) {
     const response = await fetch(base + path, {
@@ -62,6 +73,23 @@
     });
     return pieces;
   }
+  function setState(next) {
+    if (state && next.revision < state.revision) return;
+    if (
+      !state ||
+      state.fen !== next.fen ||
+      state.phase !== next.phase ||
+      state.actor !== next.actor
+    )
+      selected = null;
+    state = next;
+    if (
+      !(state.legal_moves || []).some((move) => move.slice(0, 2) === selected)
+    )
+      selected = null;
+    joined = true;
+    draw();
+  }
   function renderBoard() {
     const key = JSON.stringify([
       state.fen,
@@ -71,34 +99,110 @@
     ]);
     if (key === boardKey) return;
     boardKey = key;
-    const pieces = fenPieces(state.fen),
-      black = state.your_side === "black";
+    const pieces = fenPieces(state.fen);
+    const black = state.your_side === "black";
     const rankOrder = black
       ? [1, 2, 3, 4, 5, 6, 7, 8]
       : [8, 7, 6, 5, 4, 3, 2, 1];
     const fileOrder = black ? [...files].reverse() : [...files];
-    const legal = state.legal_moves || [];
-    el("board").innerHTML = rankOrder
-      .flatMap((rank, ri) =>
-        fileOrder.map((file, fi) => {
-          const sq = file + rank,
-            light = (files.indexOf(file) + rank) % 2 === 0;
-          const targets = legal.filter((m) => m.slice(0, 2) === selected);
-          const target = targets.some((m) => m.slice(2, 4) === sq);
-          return `<button type="button" role="gridcell" aria-label="${sq}" data-square="${sq}" class="chess-square ${light ? "light" : "dark"} ${sq === selected ? "selected" : ""} ${target ? "target" : ""}">${glyphs[pieces[sq]] || ""}</button>`;
-        }),
-      )
-      .join("");
-    el("board")
-      .querySelectorAll("[data-square]")
-      .forEach((button) =>
-        button.addEventListener("click", () =>
-          clickSquare(button.dataset.square, pieces),
-        ),
+    const board = el("board");
+    if (orientation !== state.your_side || board.children.length !== 64) {
+      orientation = state.your_side;
+      document.querySelectorAll(".chess-files").forEach((axis) => {
+        axis.innerHTML = fileOrder
+          .map((file) => `<span>${file}</span>`)
+          .join("");
+      });
+      document.querySelectorAll(".chess-ranks").forEach((axis) => {
+        axis.innerHTML = rankOrder
+          .map((rank) => `<span>${rank}</span>`)
+          .join("");
+      });
+      board.innerHTML = rankOrder
+        .flatMap((rank) =>
+          fileOrder.map(
+            (file) =>
+              `<button type="button" data-square="${file}${rank}" class="chess-square"><span class="chess-piece" aria-hidden="true"></span></button>`,
+          ),
+        )
+        .join("");
+    }
+    const targets = new Set(
+      (state.legal_moves || [])
+        .filter((move) => move.slice(0, 2) === selected)
+        .map((move) => move.slice(2, 4)),
+    );
+    board.querySelectorAll("[data-square]").forEach((button) => {
+      const sq = button.dataset.square;
+      const piece = pieces[sq];
+      const target = targets.has(sq);
+      // A pawn's diagonal move into an empty square is en passant.
+      const capture =
+        target &&
+        (piece ||
+          (pieces[selected]?.toLowerCase() === "p" && selected[0] !== sq[0]));
+      const light = (files.indexOf(sq[0]) + Number(sq[1])) % 2 === 0;
+      button.className = [
+        "chess-square",
+        light ? "light" : "dark",
+        sq === selected ? "selected" : "",
+        target ? "target" : "",
+        capture ? "target-capture" : "",
+      ]
+        .filter(Boolean)
+        .join(" ");
+      button.setAttribute("aria-pressed", String(sq === selected));
+      const description = piece
+        ? `${piece === piece.toUpperCase() ? "белые" : "чёрные"}, ${pieceNames[piece.toLowerCase()]}`
+        : "пусто";
+      button.setAttribute(
+        "aria-label",
+        `${sq}: ${description}${
+          target ? (capture ? ", доступно взятие" : ", доступен ход") : ""
+        }`,
       );
+      const symbol = button.firstElementChild;
+      symbol.textContent = glyphs[piece] || "";
+      symbol.className =
+        "chess-piece " +
+        (piece && piece === piece.toUpperCase()
+          ? "white-piece"
+          : "black-piece");
+    });
   }
-  async function clickSquare(square, pieces) {
-    if (!state || state.phase !== "playing" || state.actor === null) return;
+  el("board").addEventListener("click", (event) => {
+    const button = event.target.closest("[data-square]");
+    if (button) clickSquare(button.dataset.square);
+  });
+  el("board").addEventListener("keydown", (event) => {
+    const button = event.target.closest("[data-square]");
+    if (!button) return;
+    const buttons = [...el("board").children];
+    const index = buttons.indexOf(button);
+    const row = Math.floor(index / 8),
+      column = index % 8;
+    const next = {
+      ArrowLeft: row * 8 + Math.max(0, column - 1),
+      ArrowRight: row * 8 + Math.min(7, column + 1),
+      ArrowUp: Math.max(0, row - 1) * 8 + column,
+      ArrowDown: Math.min(7, row + 1) * 8 + column,
+    }[event.key];
+    if (next !== undefined) {
+      event.preventDefault();
+      buttons[next].focus();
+    } else if (event.key === "Escape") {
+      selected = null;
+      renderBoard();
+    }
+  });
+  async function clickSquare(square) {
+    if (
+      busy ||
+      !state ||
+      state.phase !== "playing" ||
+      state.actor !== window.ST9_USER_ID
+    )
+      return;
     const legal = state.legal_moves || [];
     if (!selected) {
       if (legal.some((m) => m.slice(0, 2) === square)) {
@@ -123,6 +227,11 @@
   }
   function draw() {
     if (!state) return;
+    el("boardFrame").hidden = !joined;
+    el("boardHelp").hidden = !joined;
+    el("join").hidden = joined;
+    el("leave").hidden = !joined;
+    el("board").setAttribute("aria-busy", String(busy));
     renderBoard();
     const players = state.players;
     el("players").innerHTML = players
@@ -152,6 +261,21 @@
       state.players[0]?.id !== window.ST9_USER_ID ||
       state.players.length !== 2 ||
       !state.players.every((p) => p.ready);
+    el("ready").disabled =
+      busy || !!players.find((p) => p.id === window.ST9_USER_ID)?.ready;
+    el("start").disabled = busy;
+    el("offer").disabled =
+      busy || state.actor !== window.ST9_USER_ID || state.draw_offer !== null;
+    [
+      "claim",
+      "accept",
+      "resign",
+      "leave",
+      "leaveFinished",
+      "promotion",
+    ].forEach((id) => {
+      el(id).disabled = busy;
+    });
     if (state.phase === "finished")
       el("message").textContent =
         state.reason +
@@ -161,89 +285,95 @@
           : "");
   }
   async function refresh() {
+    if (busy || refreshing) return;
+    refreshing = true;
+    const epoch = actionEpoch;
     try {
       const preview = await api("/preview");
-      joined = preview.in_table;
-      el("join").hidden = joined || preview.phase !== "waiting";
-      el("leave").hidden = !joined;
-      if (joined) {
-        state = await api("/state");
-        draw();
+      if (epoch !== actionEpoch) return;
+      if (preview.in_table) {
+        const next = await api("/state");
+        if (epoch === actionEpoch) setState(next);
       } else {
-        el("board").innerHTML = "";
+        joined = false;
+        state = null;
+        selected = null;
+        boardKey = null;
+        el("boardFrame").hidden = true;
+        el("boardHelp").hidden = true;
+        el("join").hidden = preview.phase !== "waiting";
+        ["leave", "waiting", "controls", "finished"].forEach((id) => {
+          el(id).hidden = true;
+        });
+        el("players").textContent = "";
         el("turn").textContent =
           `${preview.players}/2 игроков · взнос ${preview.rules.entry_cents / 100} БК`;
       }
     } catch (e) {
-      el("message").textContent = e.message;
+      if (epoch === actionEpoch) el("message").textContent = e.message;
+    } finally {
+      refreshing = false;
     }
   }
-  async function send(kind, move) {
-    if (busy || !state) return;
+  async function mutate(path, payload = {}, exit = false) {
+    if (busy) return;
     busy = true;
+    actionEpoch += 1;
+    el("joinButton").disabled = true;
     el("message").textContent = "";
+    if (state) draw();
+    let failed = false;
     try {
-      state = await api("/action", {
+      const next = await api(path, {
         method: "POST",
-        body: JSON.stringify({
-          revision: state.revision,
-          kind,
-          ...(move ? { move } : {}),
-        }),
+        body: JSON.stringify(payload),
       });
-      draw();
+      if (exit) {
+        location.href = "/games/chess/lobby";
+        return;
+      }
+      if (next.fen) setState(next);
     } catch (e) {
+      failed = true;
       el("message").textContent = e.message;
-      await refresh();
     } finally {
       busy = false;
+      el("joinButton").disabled = false;
+      if (state) draw();
     }
+    if (failed || !state) await refresh();
   }
-  el("joinButton").addEventListener("click", async () => {
-    try {
-      await api("/join", { method: "POST", body: "{}" });
-      await refresh();
-    } catch (e) {
-      el("message").textContent = e.message;
-    }
+  async function send(kind, move) {
+    if (!state) return;
+    await mutate("/action", {
+      revision: state.revision,
+      kind,
+      ...(move ? { move } : {}),
+    });
+  }
+  el("joinButton").addEventListener("click", () => mutate("/join"));
+  el("ready").addEventListener("click", () => {
+    if (state) mutate("/ready", { revision: state.revision, ready: true });
   });
-  el("ready").addEventListener("click", async () => {
-    try {
-      state = await api("/ready", {
-        method: "POST",
-        body: JSON.stringify({ revision: state.revision, ready: true }),
-      });
-      draw();
-    } catch (e) {
-      el("message").textContent = e.message;
-    }
-  });
-  el("start").addEventListener("click", async () => {
-    try {
-      state = await api("/start", {
-        method: "POST",
-        body: JSON.stringify({ revision: state.revision }),
-      });
-      draw();
-    } catch (e) {
-      el("message").textContent = e.message;
-    }
+  el("start").addEventListener("click", () => {
+    if (state) mutate("/start", { revision: state.revision });
   });
   el("claim").addEventListener("click", () => send("claim_draw"));
   el("offer").addEventListener("click", () => send("offer_draw"));
   el("accept").addEventListener("click", () => send("accept_draw"));
-  el("resign").addEventListener("click", () => send("resign"));
-  async function leave() {
+  el("resign").addEventListener("click", () => {
+    if (confirm("Сдаться? Победу и банк получит соперник.")) send("resign");
+  });
+  function leave() {
     if (!state) return;
-    try {
-      await api("/leave", {
-        method: "POST",
-        body: JSON.stringify({ revision: state.revision }),
-      });
-      location.href = "/games/chess/lobby";
-    } catch (e) {
-      el("message").textContent = e.message;
-    }
+    if (
+      state.phase === "playing" &&
+      !confirm(
+        "Покинуть партию? Это засчитает поражение, соперник получит банк.",
+      )
+    )
+      return;
+    mutate("/leave", { revision: state.revision }, true);
   }
   el("leave").addEventListener("click", leave);
   el("leaveFinished").addEventListener("click", leave);

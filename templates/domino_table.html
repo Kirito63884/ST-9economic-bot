@@ -43,7 +43,7 @@
               id="chainScroll"
               class="dm-chain-scroll"
               tabindex="0"
-              aria-label="Цепочка домино, прокручивается горизонтально"
+              aria-label="Цепочка домино с поворотами"
               hidden
             >
               <div id="chain" class="dm-chain"></div>
@@ -64,9 +64,24 @@
           </div>
           <div class="dm-controls">
             <p id="moveHelp">
-              Перетащите кость на стол или выберите её и конец цепочки.
+              Выберите направление для конца цепочки, затем перетащите кость или нажмите «Поставить».
+              Если рядом занято, цепочка огибает выложенные кости.
             </p>
             <div class="dm-side-buttons">
+              <label class="dm-direction">Левый конец
+                <select id="directionLeft" aria-label="Направление левого конца">
+                  <option value="auto">По столу</option>
+                  <option value="up">↑ Вверх</option>
+                  <option value="down">↓ Вниз</option>
+                </select>
+              </label>
+              <label class="dm-direction">Правый конец
+                <select id="directionRight" aria-label="Направление правого конца">
+                  <option value="auto">По столу</option>
+                  <option value="up">↑ Вверх</option>
+                  <option value="down">↓ Вниз</option>
+                </select>
+              </label>
               <button id="playLeft" class="dm-btn" disabled>
                 ← Поставить слева</button
               ><button id="playRight" class="dm-btn" disabled>
@@ -105,7 +120,7 @@
         <div class="dm-status">
           <span id="connection" class="dm-connection">Подключение…</span>
           <div class="dm-actions">
-            <button id="fit" class="dm-btn">Вся цепочка</button
+            <button id="fit" class="dm-btn" aria-pressed="false">Компактнее</button
             ><button id="leave" class="dm-btn danger">Выйти со стола</button
             ><button id="close" class="dm-btn danger" hidden>
               Расформировать
