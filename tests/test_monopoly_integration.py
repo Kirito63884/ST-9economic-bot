@@ -231,3 +231,35 @@ def test_natural_finish_rematch_has_new_consent_and_new_single_stake(
     assert wallet(101) == 120 and wallet(102) == 80
     with SessionLocal() as db:
         assert db.query(GameHistory).filter_by(game_type="monopoly").count() == 4
+
+
+def test_monopoly_and_draughts_coexist_after_merge(make_user, login_as):
+    """Both pending and already installed games must survive shared runtime writes."""
+    c, p = table(make_user, login_as, n=2, entry=1000)
+    made = c.post("/api/draughts/tables", json={"rules": {"entry_cents": 500}})
+    assert made.status_code == 200, made.text
+    d = "/api/draughts/table/" + made.json()["table_id"]
+    c.cookies.set("session", session_cookie(102))
+    assert c.post(d + "/join").status_code == 200
+    assert request(c, d, "ready", ready=True).status_code == 200
+    c.cookies.set("session", session_cookie(101))
+    assert request(c, d, "ready", ready=True).status_code == 200
+    assert request(c, d, "start").status_code == 200
+    assert request(c, p, "start").status_code == 200
+    assert wallet(101) == wallet(102) == 85
+    before = saved_state()
+    assert before["draughts"] and before["monopoly"]
+    main.restore_runtime(json.dumps(before))
+    assert c.get(d + "/state").status_code == c.get(p + "/state").status_code == 200
+    c.cookies.set("session", session_cookie(102))
+    assert request(c, p, "leave").status_code == 200
+    assert wallet(101) == 105 and wallet(102) == 85
+    c.cookies.set("session", session_cookie(101))
+    assert c.get(d + "/state").json()["phase"] == "playing"
+    assert request(c, d, "action", kind="resign").status_code == 200
+    assert wallet(101) == 105 and wallet(102) == 95
+    with SessionLocal() as db:
+        rows = db.query(GameHistory).all()
+        assert len(rows) == 4
+        assert {r.game_type for r in rows} == {"draughts", "monopoly"}
+        assert sum(r.amount for r in rows) == 0

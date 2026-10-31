@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Шашечный стол — Strike Team 9</title>
+  {% include "_site_ui.html" %}
+  {% include "_table_admin_ui.html" %}
+  {% include "_draughts_ui.html" %}
+</head>
+<body>
+  {% include "_site_nav.html" %}
+  <main id="st-content" class="draughts-page">
+    <p><a href="/games/draughts/lobby">← Все шашечные столы</a></p>
+    <h1>◉ Русские шашки</h1>
+    <div id="join" hidden>
+      <p>Открытый стол: присоединитесь, чтобы увидеть доску и играть.</p>
+      <button class="draughts-btn" id="joinButton" type="button">Присоединиться</button>
+    </div>
+    <div class="draughts-layout">
+      <section aria-label="Игровое поле">
+        <div id="boardFrame" class="draughts-board-frame" hidden>
+          <div class="draughts-axis draughts-files top" aria-hidden="true"></div>
+          <div class="draughts-axis draughts-ranks left" aria-hidden="true"></div>
+          <div id="board" class="draughts-board" role="group" aria-label="Шашечная доска" aria-describedby="boardHelp"></div>
+          <div class="draughts-axis draughts-ranks right" aria-hidden="true"></div>
+          <div class="draughts-axis draughts-files bottom" aria-hidden="true"></div>
+        </div>
+        <p id="boardHelp" class="draughts-board-help" hidden>
+          Выберите свою фигуру, затем клетку для хода. Точка — свободная клетка,
+          кольцо — взятие. Стрелки на клавиатуре перемещают фокус, Enter выбирает клетку.
+        </p>
+      </section>
+      <aside class="draughts-side">
+        <div id="players" class="draughts-players"></div>
+        <div id="bank" class="draughts-rules"></div>
+        <div id="counts" class="draughts-rules"></div>
+        <div id="turn" class="draughts-turn" role="status"></div>
+        <div id="message" class="draughts-msg" role="status"></div>
+        <label>
+          Ссылка-приглашение
+          <input id="invite" readonly class="draughts-promote" aria-label="Ссылка на стол">
+          <button class="draughts-btn secondary" id="copyInvite" type="button">Скопировать</button>
+        </label>
+        <div id="waiting" hidden>
+          <p>Оба игрока должны нажать «Готов».</p>
+          <div id="settings" hidden>
+            <label>Взнос каждого, БК <input id="stake" type="number" min="0" max="1000000" step="0.01"></label>
+            <button id="saveStake" class="draughts-btn secondary" type="button">Изменить взнос</button>
+          </div>
+          <button class="draughts-btn" id="ready" type="button">Готов</button>
+          <button class="draughts-btn" id="start" type="button" hidden>Начать партию</button>
+        </div>
+        <button class="draughts-btn secondary" id="leave" type="button">Покинуть стол</button>
+        <div id="controls" class="draughts-actions" hidden>
+          <button class="draughts-btn secondary" id="offer" type="button">Предложить ничью</button>
+          <button class="draughts-btn secondary" id="accept" type="button" hidden>Принять ничью</button>
+          <button class="draughts-btn secondary" id="resign" type="button">Сдаться</button>
+        </div>
+        <div id="finished" hidden>
+          <button class="draughts-btn" id="rematch" type="button" hidden>Ещё партия · сменить цвета</button>
+          <button class="draughts-btn" id="leaveFinished" type="button">В лобби</button>
+        </div>
+        <button class="draughts-btn secondary" id="close" type="button" hidden>Расформировать стол</button>
+        <details><summary>История ходов</summary><ol id="history" class="draughts-history"></ol></details>
+        {% include "_draughts_rules.html" %}
+      </aside>
+    </div>
+  </main>
+  <script>
+    const DRAUGHTS_TABLE_ID = {{ table_id|tojson }};
+    window.ST9_USER_ID = {{ user.id|tojson }};
+  </script>
+  {% include "_request_security.html" %}
+  <script>{% include "_draughts_table.js.html" %}</script>
+</body>
+</html>
