@@ -18,6 +18,11 @@ test -f "$app_dir/wallet_history.py"
 files=(
     main.py database.py backup_routes.py roster_membership.py requirements.txt
     chess_game.py chess_routes.py
+    backgammon_engine.py backgammon_game.py backgammon_routes.py
+    templates/backgammon_lobby.html templates/backgammon_table.html
+    templates/_backgammon_ui.html templates/_backgammon_rules.html
+    templates/_backgammon_lobby.js.html templates/_backgammon_table.js.html
+    templates/admin_logs.html
     templates/chess_lobby.html templates/chess_table.html
     templates/_chess_ui.html templates/_chess_lobby.js.html templates/_chess_table.js.html
     assembly_attendance.py assembly_waivers.py groups_admin.py assembly_reports.py
@@ -102,6 +107,27 @@ while pending:
 if missing:
     raise SystemExit("Сначала установите зависимости этого коммита: " + ", ".join(sorted(missing)))
 PY
+# Check static Jinja dependencies using the actual merged installation, before
+# stopping services. A new partial must not silently disappear from the whitelist.
+"$app_dir/venv/bin/python" - "$stage/code" "$app_dir" "${files[@]}" <<'PY_TEMPLATES'
+from pathlib import Path
+import sys
+from jinja2 import Environment, meta
+stage, target = map(Path, sys.argv[1:3])
+files = set(sys.argv[3:])
+pending = [name for name in files if name.startswith("templates/")]
+seen = set()
+while pending:
+    name = pending.pop()
+    if name in seen:
+        continue
+    seen.add(name)
+    source = (stage if name in files else target) / name
+    if not source.is_file():
+        raise SystemExit("В комплекте установки отсутствует шаблон: " + name)
+    parsed = Environment().parse(source.read_text())
+    pending.extend("templates/" + ref for ref in meta.find_referenced_templates(parsed) if ref)
+PY_TEMPLATES
 # The bot must reload changed user fields/roster policy or the previous assembly policy.
 for path in database.py roster_membership.py assembly_attendance.py assembly_reports.py assembly_waivers.py; do
     if ! cmp -s "$stage/code/$path" "$app_dir/$path"; then
@@ -212,6 +238,18 @@ from chess_routes import ChessService
 from battleship import BattleshipTable
 from battleship_routes import BattleshipService
 import main  # Verify all entry-point imports without starting background workers.
+from backgammon_game import BackgammonTable
+from backgammon_engine import Round
+from database import AppRuntime, SessionLocal
+for variant in ("long", "short"):
+    round = Round(variant, [6, 1])
+    assert Round.from_dict(round.to_dict()).to_dict() == round.to_dict()
+with SessionLocal() as session:
+    row = session.get(AppRuntime, 1)
+    main.restore_runtime(row.payload if row else "{}")
+for name in ("backgammon_lobby.html", "backgammon_table.html"):
+    main.templates.env.get_template(name)
+print("Длинные и короткие нарды доступны; сохранённые партии восстановлены без бросков и выплат.")
 from table_lifecycle import IDLE_SECONDS
 from table_admin import management
 from protocol_rankings import CATEGORIES
