@@ -81,6 +81,8 @@ from billiards import BilliardsError
 from billiards_routes import BilliardsService, build_router as build_billiards_router
 from domino import DominoError
 from domino_routes import DominoService, build_router as build_domino_router
+from draughts_game import DraughtsError
+from draughts_routes import DraughtsService, build_router as build_draughts_router
 from backgammon_engine import BackgammonError
 from backgammon_routes import BackgammonService, build_router as build_backgammon_router
 from chess_game import ChessError
@@ -166,6 +168,7 @@ async def lifespan(app):
         asyncio.create_task(billiards_timeout_checker()),
         asyncio.create_task(domino_timeout_checker()),
         asyncio.create_task(chess_timeout_checker()),
+        asyncio.create_task(draughts_timeout_checker()),
         asyncio.create_task(backgammon_timeout_checker()),
         asyncio.create_task(battleship_timeout_checker()),
         asyncio.create_task(squad_schedule_checker()),
@@ -209,6 +212,7 @@ durak_service = DurakService()
 billiards_service = BilliardsService()
 domino_service = DominoService()
 chess_service = ChessService()
+draughts_service = DraughtsService()
 backgammon_service = BackgammonService()
 battleship_service = BattleshipService()
 
@@ -230,6 +234,11 @@ async def domino_error_handler(request, exc):
 
 @app.exception_handler(ChessError)
 async def chess_error_handler(request, exc):
+    return JSONResponse({"detail": str(exc)}, status_code=exc.status)
+
+
+@app.exception_handler(DraughtsError)
+async def draughts_error_handler(request, exc):
     return JSONResponse({"detail": str(exc)}, status_code=exc.status)
 
 
@@ -408,6 +417,7 @@ async def durable_request(request: Request, call_next):
                 request.method, request.url.path, uid,
                 poker_tables, durak_service, billiards_service, domino_service,
                 chess=chess_service,
+                draughts=draughts_service,
                 backgammon=backgammon_service,
                 battleship=battleship_service,
             )
@@ -786,6 +796,10 @@ def get_user_activity(user_id: int) -> dict:
         player = table.player(user_id)
         if player and not player.get("left") and table.phase == "playing":
             return {"game": "chess", "details": f"Шахматы · {table.player(table.actor)['name']} ходит"}
+    for table in draughts_service.tables.values():
+        player = table.player(user_id)
+        if player and not player.get("left") and table.phase == "playing":
+            return {"game": "draughts", "details": f"Русские шашки · {table.player(table.actor)['name']} ходит"}
     for table in backgammon_service.tables.values():
         player = table.player(user_id)
         if player and not player.get("left") and table.phase == "playing":
@@ -1268,7 +1282,7 @@ async def update_profile(
     if bio is not None:
         user.bio = bio.strip()[:500] if bio.strip() else None
     if favorite_game is not None:
-        valid = ["blackjack", "roulette", "poker", "crash", "durak", "billiards", "domino", "battleship", "chess", "backgammon", ""]
+        valid = ["blackjack", "roulette", "poker", "crash", "durak", "billiards", "domino", "battleship", "chess", "draughts", "backgammon", ""]
         user.favorite_game = favorite_game if favorite_game in valid else None
     if avatar_emoji is not None:
         user.avatar_emoji = avatar_emoji.strip()[:10] if avatar_emoji.strip() else None
@@ -3036,6 +3050,7 @@ def detach_user_from_games(db, user):
     billiards_service.detach(user.id, db)
     domino_service.detach(user.id, db)
     chess_service.detach(user.id, db)
+    draughts_service.detach(user.id, db)
     backgammon_service.detach(user.id, db)
     battleship_service.detach(user.id, db)
     game = active_games.pop(user.id, None)
@@ -5014,6 +5029,7 @@ def serialize_runtime():
         "requests": table_requests,
         "domino": {tid: table.to_dict() for tid, table in domino_service.tables.items()},
         "chess": {tid: table.to_dict() for tid, table in chess_service.tables.items()},
+        "draughts": {tid: table.to_dict() for tid, table in draughts_service.tables.items()},
         "backgammon": {tid: table.to_dict() for tid, table in backgammon_service.tables.items()},
         "battleship": {tid: table.to_dict() for tid, table in battleship_service.tables.items()},
         "durak": {tid: table.to_dict() for tid, table in durak_service.tables.items()},
@@ -5071,6 +5087,7 @@ def restore_runtime(payload):
     billiards_service.restore(data.get("billiards", {}), gap if gap > 5 else 0)
     domino_service.restore(data.get("domino", {}), gap if gap > 5 else 0)
     chess_service.restore(data.get("chess", {}))
+    draughts_service.restore(data.get("draughts", {}))
     backgammon_service.restore(data.get("backgammon", {}))
     battleship_service.restore(data.get("battleship", {}), gap if gap > 5 else 0)
 
@@ -5164,6 +5181,22 @@ async def chess_timeout_checker():
             logger.exception("Failed to read chess tables")
 
 
+async def draughts_timeout_checker():
+    while True:
+        await asyncio.sleep(1)
+        try:
+            async with transaction(serialize_runtime, restore_runtime):
+                ids = list(draughts_service.tables)
+            for tid in ids:
+                try:
+                    async with transaction(serialize_runtime, restore_runtime) as db:
+                        draughts_service.tick_table(tid, db)
+                except Exception:
+                    logger.exception("Failed to settle draughts table %s", tid)
+        except Exception:
+            logger.exception("Failed to read draughts tables")
+
+
 async def backgammon_timeout_checker():
     while True:
         await asyncio.sleep(1)
@@ -5196,6 +5229,7 @@ async def battleship_timeout_checker():
             logger.exception("Failed to read battleship tables")
 
 
+app.include_router(build_draughts_router(draughts_service, get_user, get_db, templates, is_super_admin))
 app.include_router(build_backgammon_router(backgammon_service, get_user, get_db, templates, is_super_admin))
 app.include_router(build_battleship_router(battleship_service, get_user, get_db, templates, is_super_admin))
 app.include_router(build_domino_router(domino_service, get_user, get_db, templates, is_super_admin))
@@ -5293,6 +5327,7 @@ app.include_router(
         log_game,
         domino=domino_service,
         chess=chess_service,
+        draughts=draughts_service,
         backgammon=backgammon_service,
         battleship=battleship_service,
     )
@@ -5312,6 +5347,7 @@ app.include_router(
         domino=domino_service,
         battleship=battleship_service,
         chess=chess_service,
+        draughts=draughts_service,
         backgammon=backgammon_service,
     )
 )

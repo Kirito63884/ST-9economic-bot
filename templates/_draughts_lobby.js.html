@@ -1,0 +1,66 @@
+(() => {
+  const error = document.getElementById("error");
+  const esc = (s) =>
+    String(s).replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  async function api(url, options = {}) {
+    const response = await fetch(url, {
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...window.ST9_REQUEST_HEADERS,
+      },
+      ...options,
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Ошибка запроса");
+    return data;
+  }
+  async function load() {
+    try {
+      const data = await api("/api/draughts/tables");
+      document.getElementById("tables").innerHTML = data.tables.length
+        ? data.tables
+            .map(
+              (t) =>
+                `<article class="draughts-table"><div><strong>${esc(t.creator)}${t.mine ? " · ваш стол" : ""}</strong><p>${t.players}/2 игроков · ${t.phase === "waiting" ? "Ожидает игроков" : t.phase === "finished" ? "Партия завершена" : "Идёт партия"}${t.rules.private ? " · закрытый" : ""} · взнос ${t.rules.entry_cents / 100} БК</p></div><a class="draughts-btn" href="/games/draughts/table/${encodeURIComponent(t.id)}">${t.mine ? "Вернуться" : "К столу"} →</a>${TableAdmin.markup(t, "draughts")}</article>`,
+            )
+            .join("")
+        : "Открытых столов пока нет";
+    } catch (e) {
+      error.textContent = e.message;
+    }
+  }
+  document.getElementById("create").addEventListener("click", async () => {
+    error.textContent = "";
+    try {
+      const made = await api("/api/draughts/tables", {
+        method: "POST",
+        body: JSON.stringify({
+          rules: {
+            entry_cents: Math.round(
+              Number(document.getElementById("entry").value) * 100,
+            ),
+            private: document.getElementById("private").value === "true",
+          },
+        }),
+      });
+      location.href =
+        "/games/draughts/table/" + encodeURIComponent(made.table_id);
+    } catch (e) {
+      error.textContent = e.message;
+    }
+  });
+  window.addEventListener("focus", load);
+  load();
+  setInterval(load, 5000);
+})();
