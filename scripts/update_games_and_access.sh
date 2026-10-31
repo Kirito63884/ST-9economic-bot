@@ -21,9 +21,11 @@ files=(
     templates/go_lobby.html templates/go_table.html
     templates/_go_ui.html templates/_go_rules.html
     templates/_go_lobby.js.html templates/_go_table.js.html
-    chess_game.py chess_routes.py
+    chess_game.py chess_routes.py draughts_game.py draughts_routes.py
     templates/chess_lobby.html templates/chess_table.html
     templates/_chess_ui.html templates/_chess_lobby.js.html templates/_chess_table.js.html
+    templates/draughts_lobby.html templates/draughts_table.html templates/_draughts_ui.html
+    templates/_draughts_rules.html templates/_draughts_lobby.js.html templates/_draughts_table.js.html
     assembly_attendance.py assembly_waivers.py groups_admin.py assembly_reports.py
     medals_routes.py protocol_rankings.py
     templates/admin.html templates/admin_logs.html templates/_assembly_waiver.html templates/_admin_group_reports.html
@@ -211,6 +213,9 @@ from domino import DominoTable
 from domino_routes import DominoService
 import chess
 assert chess.__version__ == "1.11.2"
+from draughts_game import DraughtsTable, initial_board, steps
+from draughts_routes import DraughtsService
+assert len(initial_board()) == 24 and len(steps(initial_board(), "white")) == 7
 from chess_game import ChessTable
 from chess_routes import ChessService
 from battleship import BattleshipTable
@@ -238,6 +243,9 @@ from table_lifecycle import IDLE_SECONDS
 from table_admin import management
 from protocol_rankings import CATEGORIES
 from medals_routes import catalog_context
+for name in ("draughts_lobby.html", "draughts_table.html", "_draughts_ui.html",
+             "_draughts_rules.html", "_draughts_lobby.js.html", "_draughts_table.js.html"):
+    main.templates.env.get_template(name)
 print("Го, прежние игры, сохранённые партии и шаблоны проверены. Права не менялись.")
 PY
 )
