@@ -41,12 +41,16 @@ def test_rendered_scripts_parse(make_user, login_as):
     import main
     from chess_game import ChessTable
     from draughts_game import DraughtsTable
+    from backgammon_game import BackgammonTable
 
     main.chess_service.tables["frontend-fixture"] = ChessTable(
         "frontend-fixture", uid, "Имя <script>alert(1)</script>"
     )
     main.draughts_service.tables["frontend-draughts"] = DraughtsTable(
         "frontend-draughts", uid, "Имя <script>alert(1)</script>"
+    )
+    main.backgammon_service.tables["frontend-fixture"] = BackgammonTable(
+        "frontend-fixture", uid, "Имя <script>alert(1)</script>"
     )
     from database import AppRuntime, SessionLocal
 
@@ -70,6 +74,8 @@ def test_rendered_scripts_parse(make_user, login_as):
         "/games/domino/lobby",
         "/games/draughts/lobby",
         "/games/draughts/table/frontend-draughts",
+        "/games/backgammon/lobby",
+        "/games/backgammon/table/frontend-fixture",
         "/games/chess/lobby",
         "/games/chess/table/frontend-fixture",
         "/medals",
