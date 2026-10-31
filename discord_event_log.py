@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import hashlib
+import secrets
 import logging
 import os
 import time
@@ -12,6 +14,8 @@ from datetime import datetime, timedelta, timezone
 import discord
 from discord.http import Route
 from sqlalchemy import Column, DateTime, Integer, String, Text, or_
+from sqlalchemy.orm import aliased
+from sqlalchemy.exc import SQLAlchemyError
 
 from database import Base
 from runtime import metadata_transaction
@@ -21,6 +25,8 @@ CHANNEL_ID = 1295011686436044873
 MOSCOW = timezone(timedelta(hours=3))
 DISCORD_EPOCH_MS = 1420070400000
 NETWORK_SECONDS = 30
+VOICE_KINDS = ("voice_join", "voice_move", "voice_leave")
+VOICE_AUDIT_SECONDS = 5
 logger = logging.getLogger("strike_team9.discord_events")
 
 
@@ -99,7 +105,9 @@ def _avatar(user):
 def _event_key(payload, kind, target):
     sequence = payload.get("s")
     if isinstance(sequence, int):
-        return f"{kind}:{sequence}:{target}"
+        prefix = "voice" if kind in VOICE_KINDS else kind
+        session = str(payload.get("_st9_session", "legacy"))[:16]
+        return f"{prefix}:{session}:{sequence}:{target}"
     return f"{kind}:{target}:{time.time_ns()}"
 
 
@@ -184,12 +192,25 @@ def _set_voice_presence(db, guild_id, target_id, channel_id, channel_name, momen
 
 
 def claim(db, now):
+    earlier = aliased(DiscordEventLog)
+    earlier_voice = (
+        db.query(earlier.id)
+        .filter(
+            earlier.guild_id == DiscordEventLog.guild_id,
+            earlier.id < DiscordEventLog.id,
+            earlier.kind.in_(VOICE_KINDS),
+            earlier.sent_at.is_(None),
+            earlier.ignored_at.is_(None),
+        )
+        .exists()
+    )
     row = (
         db.query(DiscordEventLog)
         .filter(
             DiscordEventLog.sent_at.is_(None),
             DiscordEventLog.ignored_at.is_(None),
             DiscordEventLog.not_before <= now,
+            or_(~DiscordEventLog.kind.in_(VOICE_KINDS), ~earlier_voice),
             or_(DiscordEventLog.retry_at.is_(None), DiscordEventLog.retry_at <= now),
             or_(
                 DiscordEventLog.lease_until.is_(None),
@@ -202,7 +223,7 @@ def claim(db, now):
     if row is None:
         return None
     row.attempts += 1
-    row.lease_until = now + timedelta(seconds=NETWORK_SECONDS + 15)
+    row.lease_until = now + timedelta(seconds=NETWORK_SECONDS * 2 + 15)
     return {c.name: getattr(row, c.name) for c in row.__table__.columns}
 
 
@@ -226,11 +247,16 @@ def finish(
     row = db.get(DiscordEventLog, job["id"])
     if row is None or row.sent_at or row.ignored_at:
         return
+    # A different worker may have reclaimed an expired lease. A stale network
+    # response must not release that worker's reservation or change its result.
+    if row.lease_until is not None and row.lease_until != job.get("lease_until"):
+        return
     row.kind = job["kind"]
-    row.lease_until = None
+    if message or ignored or error:
+        row.lease_until = None
     if actor is not None:
         row.actor_id = str(actor) if str(actor).isdigit() else None
-        data = json.loads(row.payload)
+        data = json.loads(job["payload"])
         data["reason"] = _text(reason, 512)
         data["audit_resolved"] = True
         if row.kind in ("voice_move", "voice_leave"):
@@ -279,6 +305,10 @@ def matching_audit(document, job):
         target = str(entry.get("target_id") or "")
         if target and target != job["target_id"]:
             continue
+        if job["kind"] in VOICE_KINDS and target != job["target_id"]:
+            # Discord often aggregates member disconnect/move audit entries
+            # without a target. Proximity alone cannot identify who was moved.
+            continue
         at = snowflake_time(entry.get("id"))
         window = 15 if job["kind"] in ("voice_move", "voice_leave") else 45
         if at is None or abs((at - job["occurred_at"]).total_seconds()) > window:
@@ -304,9 +334,8 @@ def matching_audit(document, job):
     if candidates:
         _, actor, reason = max(candidates, key=lambda item: item[0])
         return actor, reason
-    # Voice audit entries can omit the moved member, so correlate a very recent
-    # entry with the gateway event and destination. With no match, log it as a
-    # normal self-directed voice change after short retries for audit-log lag.
+    # Preserve the observed voice transition even if the audit entry is late
+    # or cannot reliably identify its subject. Never guess a moderator.
     if job["kind"] in ("voice_move", "voice_leave"):
         return ("", "") if job["attempts"] >= 3 else False
     # Member removal without a matching kick entry is an ordinary server leave.
@@ -357,7 +386,8 @@ def embed_for(job):
     embed = {
         "description": descriptions[job["kind"]],
         "color": colors[job["kind"]],
-        "footer": {"text": "ST-9 • " + local.strftime("%d.%m.%Y %H:%M МСК")},
+        "footer": {"text": "ST-9 • " + local.strftime("%d.%m.%Y %H:%M:%S МСК")},
+        "timestamp": job["occurred_at"].replace(tzinfo=timezone.utc).isoformat(),
         "author": {"name": _text(target.get("name"), 100) or "Участник"},
     }
     icon = _avatar(target)
@@ -375,6 +405,9 @@ class DiscordEventWorker:
         self.timeouts = {}
         self.bots = set()
         self.task = None
+        self.input_lock = asyncio.Lock()
+        self.session_tag = secrets.token_hex(8)
+        self.last_sequence = -1
 
     def channel_name(self, channel_id):
         sid = str(channel_id or "")
@@ -395,12 +428,61 @@ class DiscordEventWorker:
         payload = gateway_packet(raw)
         if not isinstance(payload, dict) or not isinstance(payload.get("d"), dict):
             return
+        # Discord dispatches raw listeners as separate tasks. Serialise capture
+        # and keep its original arrival time through DB retries; never advance
+        # the in-memory voice cache before a failed transaction is retried.
+        payload = {**payload, "_received_at": utcnow()}
+        async with self.input_lock:
+            if payload.get("t") == "READY":
+                session = payload["d"].get("session_id")
+                if isinstance(session, str) and session:
+                    self.session_tag = hashlib.sha256(session.encode()).hexdigest()[:16]
+                    self.last_sequence = (
+                        payload.get("s") if type(payload.get("s")) is int else -1
+                    )
+                    self.channels, self.channel_names, self.timeouts, self.bots = (
+                        {},
+                        {},
+                        {},
+                        set(),
+                    )
+                return
+            sequence = payload.get("s")
+            if type(sequence) is int and sequence <= self.last_sequence:
+                return
+            payload["_st9_session"] = self.session_tag
+            delay = 1
+            while True:
+                snapshot = (
+                    self.channels.copy(),
+                    self.channel_names.copy(),
+                    self.timeouts.copy(),
+                    self.bots.copy(),
+                )
+                try:
+                    await self.record_packet(payload)
+                    if type(sequence) is int:
+                        self.last_sequence = sequence
+                    return
+                except asyncio.CancelledError:
+                    raise
+                except SQLAlchemyError:
+                    self.channels, self.channel_names, self.timeouts, self.bots = (
+                        snapshot
+                    )
+                    logger.exception(
+                        "Cannot persist Discord event; retrying in arrival order"
+                    )
+                    await asyncio.sleep(delay)
+                    delay = min(10, delay * 2)
+
+    async def record_packet(self, payload):
         event = payload.get("t")
         data = payload["d"]
         gid = str(data.get("guild_id", data.get("id", "")))
         if not self.guild_id or gid != self.guild_id:
             return
-        now = utcnow()
+        now = payload["_received_at"]
         if event == "GUILD_CREATE":
             self.channels = {
                 str(v.get("user_id")): str(v.get("channel_id"))
@@ -483,15 +565,23 @@ class DiscordEventWorker:
                 return
             old_name = self.channel_name(old)
             new_name = self.channel_name(new)
-            if new:
-                self.channels[sid] = new
-            else:
-                self.channels.pop(sid, None)
             kind = (
                 "voice_join" if not old else "voice_leave" if not new else "voice_move"
             )
             delay = 2 if kind in ("voice_move", "voice_leave") else 0
             async with metadata_transaction() as db:
+                key = _event_key(payload, kind, sid)
+                if db.query(DiscordEventLog.id).filter_by(event_key=key).first():
+                    presence = db.get(DiscordVoicePresence, sid)
+                    if presence:
+                        self.channels[sid] = presence.channel_id
+                    else:
+                        self.channels.pop(sid, None)
+                    return
+                if new:
+                    self.channels[sid] = new
+                else:
+                    self.channels.pop(sid, None)
                 if new_name:
                     _remember_channel(db, gid, new, new_name, now)
                 _set_voice_presence(db, gid, sid, new, new_name, now)
@@ -616,7 +706,10 @@ class DiscordEventWorker:
         ) and not details.get("audit_resolved"):
             try:
                 matched = await asyncio.wait_for(
-                    self.resolve_audit(job), timeout=NETWORK_SECONDS
+                    self.resolve_audit(job),
+                    timeout=VOICE_AUDIT_SECONDS
+                    if job["kind"] in VOICE_KINDS
+                    else NETWORK_SECONDS,
                 )
             except asyncio.CancelledError:
                 raise
@@ -630,9 +723,15 @@ class DiscordEventWorker:
                     return False
                 matched = ("", "")
             except Exception:
-                async with metadata_transaction() as db:
-                    finish(db, job, utcnow(), error="audit_unavailable")
-                return False
+                if job["kind"] in VOICE_KINDS and job["attempts"] >= 2:
+                    matched = ("", "")
+                    details["audit_status"] = "unavailable"
+                else:
+                    async with metadata_transaction() as db:
+                        finish(db, job, utcnow(), error="audit_unavailable")
+                    return False
+            if matched is False and job["kind"] in VOICE_KINDS and job["attempts"] >= 2:
+                matched = ("", "")
             if matched is False:
                 async with metadata_transaction() as db:
                     finish(db, job, utcnow(), error="audit_pending")
@@ -647,6 +746,8 @@ class DiscordEventWorker:
                             return True
                     matched = ("", "")
                     job["kind"] = "member_leave"
+                elif job["kind"] in VOICE_KINDS:
+                    matched = ("", "")
                 else:
                     async with metadata_transaction() as db:
                         finish(
@@ -659,7 +760,7 @@ class DiscordEventWorker:
                     return True
             actor, reason = matched
             job["actor_id"] = actor
-            data = json.loads(job["payload"])
+            data = details.copy()
             data["reason"] = reason
             data["audit_resolved"] = True
             if job["kind"] in ("voice_move", "voice_leave"):
@@ -668,7 +769,17 @@ class DiscordEventWorker:
             async with metadata_transaction() as db:
                 finish(db, job, utcnow(), actor=actor, reason=reason)
         try:
-            payload = {"embeds": [embed_for(job)], "allowed_mentions": {"parse": []}}
+            # Discord remembers a recently used nonce. A timed-out POST that
+            # Discord already accepted can be retried without a second message.
+            nonce = hashlib.sha256(
+                f"st9log:{job['guild_id']}:{job['id']}:{job['occurred_at'].isoformat()}".encode()
+            ).hexdigest()[:24]
+            payload = {
+                "embeds": [embed_for(job)],
+                "allowed_mentions": {"parse": []},
+                "nonce": nonce,
+                "enforce_nonce": True,
+            }
             result = await asyncio.wait_for(
                 self.bot.http.request(
                     Route(
@@ -698,14 +809,15 @@ class DiscordEventWorker:
 
     async def loop(self):
         while not self.bot.is_closed():
+            processed = False
             try:
                 if self.bot.is_ready():
-                    await self.process_one()
+                    processed = await self.process_one()
             except asyncio.CancelledError:
                 raise
             except Exception:
                 logger.exception("Discord event log will retry")
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.15 if processed else 0.5)
 
 
 def register_discord_event_log(bot):

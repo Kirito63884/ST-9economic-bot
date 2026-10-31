@@ -40,9 +40,13 @@ def test_rendered_scripts_parse(make_user, login_as):
     client = login_as(uid)
     import main
     from chess_game import ChessTable
+    from draughts_game import DraughtsTable
 
     main.chess_service.tables["frontend-fixture"] = ChessTable(
         "frontend-fixture", uid, "Имя <script>alert(1)</script>"
+    )
+    main.draughts_service.tables["frontend-draughts"] = DraughtsTable(
+        "frontend-draughts", uid, "Имя <script>alert(1)</script>"
     )
     from database import AppRuntime, SessionLocal
 
@@ -64,6 +68,8 @@ def test_rendered_scripts_parse(make_user, login_as):
         "/games/durak/lobby",
         "/games/billiards/lobby",
         "/games/domino/lobby",
+        "/games/draughts/lobby",
+        "/games/draughts/table/frontend-draughts",
         "/games/chess/lobby",
         "/games/chess/table/frontend-fixture",
         "/medals",
