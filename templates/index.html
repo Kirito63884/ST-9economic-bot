@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <title>Баланс — Strike Team 9</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+              rel="stylesheet">
+        <style>
+        body{background:linear-gradient(135deg,#0f0c29,#302b63,#24243e);min-height:100vh;position:relative;overflow-x:hidden}
+        body::before{content:'';position:fixed;top:0;left:0;width:100%;height:100%;background:radial-gradient(circle at 20% 30%,rgba(120,119,198,.3) 0%,transparent 50%),radial-gradient(circle at 80% 70%,rgba(255,119,198,.2) 0%,transparent 50%);pointer-events:none;z-index:0}
+        @keyframes float{0%,100%{transform:translateY(0) rotate(0deg)}50%{transform:translateY(-30px) rotate(180deg)}}
+        .bg-shape{position:fixed;opacity:.1;border-radius:50%;pointer-events:none;z-index:0}
+        .shape-1{width:300px;height:300px;background:linear-gradient(135deg,#667eea,#764ba2);top:10%;left:5%;animation:float 20s ease-in-out infinite}
+        .shape-2{width:200px;height:200px;background:linear-gradient(135deg,#f093fb,#f5576c);top:60%;right:10%;animation:float 15s ease-in-out infinite 2s}
+        .shape-3{width:250px;height:250px;background:linear-gradient(135deg,#4facfe,#00f2fe);bottom:10%;left:20%;animation:float 25s ease-in-out infinite 5s}
+        .shape-4{width:180px;height:180px;background:linear-gradient(135deg,#43e97b,#38f9d7);top:30%;right:20%;animation:float 18s ease-in-out infinite 3s}
+        .container{position:relative;z-index:1}.navbar{position:relative;z-index:10}
+        .top-badge{display:inline-block;padding:2px 10px;border-radius:12px;font-size:.85rem;font-weight:700;margin-right:6px}
+        .top-1{background:linear-gradient(45deg,#ffd700,#ffed4e);color:#000;box-shadow:0 0 15px rgba(255,215,0,.5)}
+        .top-2{background:linear-gradient(45deg,#c0c0c0,#e8e8e8);color:#000;box-shadow:0 0 10px rgba(192,192,192,.5)}
+        .top-3{background:linear-gradient(45deg,#cd7f32,#e8a87c);color:#fff;box-shadow:0 0 10px rgba(205,127,50,.5)}
+        .current-user{background:rgba(0,123,255,.15)!important;border-left:3px solid #0d6efd}
+        .table-section{background:rgba(42,42,74,.8);backdrop-filter:blur(10px);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:25px;margin-bottom:30px;box-shadow:0 8px 32px rgba(0,0,0,.3)}
+        .clickable-row{cursor:pointer;transition:all .3s}
+        .clickable-row:hover{background:rgba(255,255,255,.08)!important;transform:translateX(5px)}
+        .profile-overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .3s ease;padding:20px}
+        .profile-overlay.active{opacity:1;pointer-events:auto}
+        .profile-card{background:linear-gradient(145deg,rgba(42,42,74,.95),rgba(26,26,46,.95));backdrop-filter:blur(20px);border:1px solid rgba(255,255,255,.15);border-radius:20px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;padding:30px;position:relative;transform:scale(.9) translateY(20px);transition:transform .3s cubic-bezier(.4,0,.2,1);box-shadow:0 20px 60px rgba(0,0,0,.6)}
+        .profile-overlay.active .profile-card{transform:scale(1) translateY(0)}
+        .profile-close{position:absolute;top:15px;right:15px;background:rgba(255,255,255,.1);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:1.2rem;cursor:pointer;transition:background .2s;display:flex;align-items:center;justify-content:center}
+        .profile-close:hover{background:rgba(255,255,255,.2)}
+        .profile-avatar{width:90px;height:90px;border-radius:50%;background:linear-gradient(135deg,#667eea,#764ba2);display:flex;align-items:center;justify-content:center;font-size:2.5rem;font-weight:700;color:#fff;margin:0 auto 15px;border:3px solid rgba(255,255,255,.2);box-shadow:0 10px 30px rgba(102,126,234,.4)}
+        .stat-box{background:rgba(0,0,0,.4);backdrop-filter:blur(5px);border-radius:12px;padding:15px;text-align:center;flex:1;border:1px solid rgba(255,255,255,.05)}
+        .stat-value{font-size:1.4rem;font-weight:700}.stat-label{font-size:.8rem;color:rgba(255,255,255,.6);margin-top:3px}
+        .history-mini{max-height:250px;overflow-y:auto}
+        .history-mini-row{padding:8px 12px;border-radius:8px;margin-bottom:4px;font-size:.9rem;display:flex;justify-content:space-between;align-items:center;transition:all .2s}
+        .history-mini-row:hover{transform:translateX(3px)}
+        .history-mini-row.won{background:rgba(76,175,80,.15);border-left:3px solid #4caf50}
+        .history-mini-row.lost{background:rgba(244,67,54,.15);border-left:3px solid #f44336}
+        .history-mini-row.push{background:rgba(255,152,0,.15);border-left:3px solid #ff9800}
+        .history-mini-row.admin{background:rgba(156,39,176,.15);border-left:3px solid #9c27b0}
+        .history-mini-row.bonus{background:rgba(255,215,0,.15);border-left:3px solid #ffd700}
+        .amount-pos{color:#4caf50;font-weight:700}.amount-neg{color:#f44336;font-weight:700}.amount-zero{color:#ff9800;font-weight:700}
+        .profile-loading{text-align:center;padding:40px;color:rgba(255,255,255,.5)}
+        .daily-bonus-card{background:linear-gradient(135deg,rgba(76,175,80,.2),rgba(42,42,74,.8));border:2px solid rgba(76,175,80,.5);text-align:center;padding:25px}
+
+        .letter-header td {
+            background: rgba(255, 255, 255, 0.05) !important;
+            font-weight: bold;
+            color: #aaa;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            font-size: 0.9rem;
+        }
+        .letter-header {
+            transition: opacity 0.2s ease;
+        }
+
+
+        .sort-btn {
+            transition: all 0.2s;
+            font-size: 0.85rem;
+            padding: 4px 10px;
+        }
+        .sort-btn.active {
+            background: rgba(102, 126, 234, 0.3) !important;
+            border-color: #667eea !important;
+            color: #fff !important;
+        }
+        .sort-btn:hover:not(.active) {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+    </style>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        {% include '_site_ui.html' %}{% include '_medals_style.html' %}
+    </head>
+    <body class="st-home-page">
+        {% include '_site_nav.html' %}
+        <main class="container mt-4" id="st-content">
+            <div class="st-home-grid">
+                <section class="st-hero">
+                    <span class="st-eyebrow">Наше сообщество · наша валюта</span>
+                    {% if user %}
+                    <h1>Привет, {{ user.display_name or user.username }}!</h1>
+                    <p>Твой баланс, игры и друзья — всё в одном месте.</p>
+                    <div class="st-home-balance">
+                        <div class="st-coin" aria-hidden="true">♝</div>
+                        <div>
+                            <strong data-st-balance>{{ '%.2f'|format(user.balance) }}</strong>
+                            <br>
+                            <span>бишопкоины · БК</span>
+                        </div>
+                    </div>
+                    <div class="st-actions"><a href="/games" class="btn btn-primary">Выбрать игру →</a><a href="/profile#history" class="btn btn-outline-light">Моя история</a><a href="/appeals" class="btn btn-outline-light">Апелляции по сборам</a></div>
+                    {% else %}
+                    <h1>
+                        Добро пожаловать
+                        <br>
+                        в Strike Team 9
+                    </h1>
+                    <p>Играйте вместе, собирайте бишопкоины и поднимайтесь в рейтинге сообщества.</p>
+                    <div class="st-actions"><a href="/login" class="btn btn-primary">Войти через Discord</a><a href="/auth/link" class="btn btn-outline-light">Вход через бота</a></div>
+                    {% endif %}
+                </section>
+                {% if user %}
+                <section class="st-panel st-daily" id="dailyBonusCard">
+                    <span class="st-eyebrow">Заглядывай каждый день</span>
+                    <h2>Ежедневный бонус</h2>
+                    <p id="dailyBonusStatus" aria-live="polite">Проверяем доступность…</p>
+                    <div class="st-daily-stats">
+                        <div class="st-daily-stat"><small>Дней подряд</small><strong id="dailyStreak">—</strong></div>
+                        <div class="st-daily-stat"><small>Следующий бонус, БК</small><strong id="dailyAmount"
+        class="text-success">—</strong></div>
+                    </div>
+                    <button id="claimDailyBtn"
+                            class="btn btn-primary"
+                            onclick="claimDailyBonus()"
+                            disabled>Получить бонус</button>
+                    <div id="dailyStreakInfo"></div>
+                </section>
+                {% else %}
+                <section class="st-panel st-daily">
+                    <span class="st-eyebrow">Strike Team 9</span>
+                    <h2>Своё сообщество</h2>
+                    <p>Уже {{ total_users }} игроков. Один профиль для всех игр, общий баланс и история операций.</p>
+                    <p>Discord доступен только на телефоне? Команда <b>/login</b> выдаст ссылку для входа на компьютере.</p>
+                    <a class="btn btn-outline-light" href="/auth/link">Как войти через бота →</a>
+                </section>
+                {% endif %}
+            </div>
+            <div class="st-shortcuts"><a class="st-shortcut" href="/games/blackjack"><span class="st-shortcut-icon" aria-hidden="true">♠</span><span><strong>Блэкджек</strong><small>Собери 21</small></span></a><a class="st-shortcut" href="/games/roulette"><span class="st-shortcut-icon" aria-hidden="true">◉</span><span><strong>Рулетка</strong><small>Выбери свой цвет</small></span></a><a class="st-shortcut" href="/games/poker/lobby"><span class="st-shortcut-icon" aria-hidden="true">♣</span><span><strong>Покер</strong><small>Сыграй с друзьями</small></span></a><a class="st-shortcut" href="/games/crash"><span class="st-shortcut-icon" aria-hidden="true">↗</span><span><strong>Crash</strong><small>Успей забрать</small></span></a><a class="st-shortcut" href="/games/battleship/lobby"><span class="st-shortcut-icon" aria-hidden="true">⚓</span><span><strong>Морской бой</strong><small>Сразись с другом</small></span></a><a class="st-shortcut" href="/games/chess/lobby"><span class="st-shortcut-icon" aria-hidden="true">♟</span><span><strong>Шахматы</strong><small>Классика один на один</small></span></a><a class="st-shortcut" href="/games/durak/lobby"><span class="st-shortcut-icon" aria-hidden="true">🂡</span><span><strong>Дурак</strong><small>Свои правила</small></span></a></div>
+            {% include "_home_activity.html" %}
+            <div data-st-tab-group="home">
+                <div class="st-tabs" role="tablist" aria-label="Разделы">
+                    <button type="button"
+                            role="tab"
+                            id="home-tab-leaders"
+                            aria-controls="home-panel-leaders"
+                            aria-selected="true"
+                            tabindex="0"
+                            data-st-tab="leaders">Лидеры</button><button type="button"
+        role="tab"
+        id="home-tab-players"
+        aria-controls="home-panel-players"
+        aria-selected="false"
+        tabindex="-1"
+        data-st-tab="players">Все игроки · {{ total_users }}</button>
+                </div>
+                <section role="tabpanel"
+                         id="home-panel-leaders"
+                         aria-labelledby="home-tab-leaders"
+                         data-st-panel="leaders"
+                         data-st-panel-group="home"
+                         class="">
+                    <div class="table-section st-table-card">
+                        <div class="st-section-heading">
+                            <h2>Лидеры сообщества</h2>
+                            <span class="st-muted small">Топ-10 по балансу</span>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover align-middle mb-0">
+                                <thead>
+                                    <tr>
+                                        <th style="width:80px">#</th>
+                                        <th>Игрок</th>
+                                        <th style="width:150px" class="text-end">Баланс, БК</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for u in top_users %}
+                                    <tr class="clickable-row {% if user and user.id == u.id %}current-user{% endif %}"
+                                        data-user-id="{{ u.id }}">
+                                        <td>
+                                            {% if loop.index == 1 %}<span class="top-badge top-1">🥇 1</span>
+                                            {% elif loop.index == 2 %}<span class="top-badge top-2">🥈 2</span>
+                                            {% elif loop.index == 3 %}<span class="top-badge top-3">🥉 3</span>
+                                            {% else %}<span class="fw-bold fs-5">{{ loop.index }}</span>{% endif %}
+                                        </td>
+                                        <td>
+                                            <button type="button"
+                                                    class="st-player-button">{{ u.display_name or u.username }}</button>
+                                            <div class="st-row-meta">@{{ u.username }}</div>
+                                            {% if user_role_labels[u.id] %}
+                                            <div class="st-row-meta">{{ user_role_labels[u.id]|join(', ') }}</div>
+                                            {% endif %}
+                                            {% if u.is_admin %}<span class="badge bg-warning text-dark ms-2">Админ</span>{% endif %}
+                                            {% if user and user.id == u.id %}<span class="badge bg-info ms-2">Вы</span>{% endif %}
+                                        </td>
+                                        <td class="text-end"><span {% if user and user.id == u.id %}data-st-balance{% endif %}
+      class="fs-5 text-warning fw-bold">{{ "%.2f"|format(u.balance) }}</span></td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="3"
+                                            class="text-center text-white-50 py-4">Пока никто не играет</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+                <section role="tabpanel"
+                         id="home-panel-players"
+                         aria-labelledby="home-tab-players"
+                         data-st-panel="players"
+                         data-st-panel-group="home"
+                         class=""
+                         hidden>
+                    <div class="table-section st-table-card">
+                        <div class="st-section-heading">
+                            <h3 class="mb-0">Все игроки <span class="badge bg-secondary fs-6"
+       id="otherUsersCount">{{ other_users|length }}</span></h3>
+                            <div class="st-toolbar">
+                                <!-- Кнопки сортировки -->
+                                <div class="btn-group btn-group-sm" role="group">
+                                    <button type="button"
+                                            class="btn btn-outline-light sort-btn active"
+                                            data-sort="alpha"
+                                            title="По алфавиту">А—Я</button>
+                                    <button type="button"
+                                            class="btn btn-outline-light sort-btn"
+                                            data-sort="balance-desc"
+                                            title="По балансу (убывание)">Баланс ↓</button>
+                                    <button type="button"
+                                            class="btn btn-outline-light sort-btn"
+                                            data-sort="balance-asc"
+                                            title="По балансу (возрастание)">Баланс ↑</button>
+                                    <button type="button"
+                                            class="btn btn-outline-light sort-btn"
+                                            data-sort="discord-role"
+                                            title="По роли Discord">Роль Discord</button>
+                                </div>
+                                <select id="homeDiscordRoleFilter"
+                                        class="form-select form-select-sm bg-dark text-light border-secondary"
+                                        onchange="filterUsers()"
+                                        aria-label="Фильтр роли Discord"
+                                        style="max-width:260px">
+                                    <option value="all">Все роли Discord</option>
+                                    {% for item in role_filters %}
+                                    <option value="{{ item.id }}">{{ item.name }}</option>
+                                    {% endfor %}
+                                </select>
+                                <!-- Поиск -->
+                                <div class="d-flex gap-2" style="max-width: 300px;">
+                                    <input type="text"
+                                           id="userSearch"
+                                           class="form-control form-control-sm bg-dark text-light border-secondary"
+                                           placeholder="🔍 Поиск по нику или Discord..."
+                                           oninput="filterUsers()"
+                                           aria-label="Поиск игрока по нику или Discord">
+                                    <button class="btn btn-outline-secondary btn-sm"
+                                            onclick="clearSearch()"
+                                            title="Очистить поиск">✕</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover align-middle mb-0"
+                                   id="otherUsersTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width:80px">#</th>
+                                        <th>Игрок</th>
+                                        <th style="width:150px" class="text-end">Баланс, БК</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for u in other_users %}
+                                    <tr class="clickable-row {% if user and user.id == u.id %}current-user{% endif %}"
+                                        data-user-id="{{ u.id }}"
+                                        data-name="{{ u.display_name or u.username }}"
+                                        data-discord="{{ u.username }}"
+                                        data-balance="{{ u.balance }}"
+                                        data-discord-roles="{{ user_role_ids[u.id]|join(' ') }}"
+                                        data-role-rank="{{ user_role_ranks[u.id] }}">
+                                        <td><span class="fw-bold fs-5">{{ loop.index }}</span></td>
+                                        <td>
+                                            <button type="button"
+                                                    class="st-player-button">{{ u.display_name or u.username }}</button>
+                                            <div class="st-row-meta">@{{ u.username }}</div>
+                                            {% if u.is_admin %}<span class="badge bg-warning text-dark ms-2">Админ</span>{% endif %}
+                                            {% if user and user.id == u.id %}<span class="badge bg-info ms-2">Вы</span>{% endif %}
+                                        </td>
+                                        <td class="text-end"><span {% if user and user.id == u.id %}data-st-balance{% endif %}
+      class="st-value text-warning fw-bold">{{ "%.2f"|format(u.balance) }}</span></td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </section>
+            </div>
+            <footer class="st-footer">
+                <span>Strike Team 9 · Бишопкоины</span><button id="bugReportBtn"
+        type="button"
+        onclick="openBugReport()">Сообщить о проблеме</button>
+            </footer>
+        </main>
+        <dialog class="st-overlay-dialog"
+                id="profileOverlay"
+                aria-label="Профиль игрока">
+            <div class="st-dialog-heading">
+                <h2>Профиль игрока</h2>
+                <button class="st-close"
+                        onclick="closeProfile()"
+                        aria-label="Закрыть профиль">×</button>
+            </div>
+            <div id="profileContent"></div>
+        </dialog>
+        <dialog class="st-overlay-dialog"
+                id="bugReportModal"
+                aria-labelledby="bugTitle">
+            <div class="st-dialog-heading">
+                <h2 id="bugTitle">Сообщить о проблеме</h2>
+                <button class="st-close"
+                        onclick="closeBugReport()"
+                        aria-label="Закрыть сообщение">×</button>
+            </div>
+            <p>Опишите, что произошло и как повторить ошибку.</p>
+            <div class="st-dialog-form">
+                <div>
+                    <label for="bugSubject"
+                           class="form-label">Тема</label><input class="form-control"
+       id="bugSubject"
+       maxlength="100">
+                </div>
+                <div>
+                    <label for="bugMessage" class="form-label">Описание</label><textarea class="form-control" id="bugMessage" maxlength="2000" rows="5"></textarea><small id="bugCharCount">0/2000</small>
+                </div>
+                <div id="bugStatus" role="status" style="display:none"></div>
+                <div class="st-actions">
+                    <button class="btn btn-primary" id="bugSendBtn" onclick="sendBugReport()">Отправить</button><button class="btn btn-outline-light" onclick="closeBugReport()">Отмена</button>
+                </div>
+            </div>
+        </dialog>
+        <script>
+const overlay = document.getElementById("profileOverlay");
+let profileRequest = 0;
+const content = document.getElementById("profileContent");
+
+document.querySelectorAll(".clickable-row").forEach((row) => {
+    row.addEventListener("click", () => openProfile(row.dataset.userId));
+});
+
+overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) closeProfile();
+});
+
+document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && overlay.open) closeProfile();
+});
+
+async function openProfile(uid) {
+    const requestId = ++profileRequest;
+    if (!overlay.open) overlay.showModal();
+    content.innerHTML = `<div class="profile-loading"><div class="spinner-border text-light"></div><p class="mt-3">Загрузка...</p></div>`;
+    try {
+        const res = await fetch(`/api/user/${uid}/public-profile`);
+        if (requestId !== profileRequest || !overlay.open) return;
+        if (res.status === 403) {
+            content.innerHTML = `<div class="text-center py-5"><div style="font-size:4rem">🔒</div><h3 class="mt-3">Профиль скрыт</h3><p class="text-white-50">Пользователь скрыл свой профиль от других</p></div>`;
+            return;
+        }
+        if (!res.ok) throw new Error("Ошибка");
+        const data = await res.json();
+        if (requestId === profileRequest && overlay.open) renderProfile(data);
+    } catch (e) {
+        if (requestId !== profileRequest || !overlay.open) return;
+        content.innerHTML = `<div class="text-center py-5 text-danger">Ошибка загрузки профиля</div>`;
+    }
+}
+
+function escapeHtml(value) {
+    return String(value ?? "").replace(
+        /[&<>"']/g,
+        (ch) =>
+            ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;",
+            })[ch],
+    );
+}
+
+function renderProfile(d) {
+    const emoji = d.avatar_emoji || (d.display_name || d.username).charAt(0).toUpperCase();
+    const themeColor = /^#[0-9a-f]{6}$/i.test(d.theme_color || "") ? d.theme_color : "#667eea";
+    const stats = d.stats;
+    const winrate = stats.total_games > 0 ? ((stats.wins / stats.total_games) * 100).toFixed(1) : 0;
+
+    let badges = "";
+    if (d.is_admin) badges += '<span class="badge bg-warning text-dark me-1">⚙️ Админ</span>';
+    if (d.is_self) badges += '<span class="badge bg-info me-1">Это вы</span>';
+    if (!d.is_public && !d.is_self)
+        badges += '<span class="badge bg-secondary me-1">🔒 Скрыт</span>';
+
+    const favoriteGames = {
+        blackjack: "♠️ Блэкджек",
+        roulette: "🎡 Рулетка",
+        poker: "🃏 Покер",
+        durak: "🂡 Дурак",
+        domino: "▣ Домино",
+        battleship: "⚓ Морской бой",
+        chess: "♟ Шахматы",
+        backgammon: "⚄ Нарды",
+        monopoly: "▦ Монополия",
+        go: "● Го",
+        crash: "📈 Crash",
+    };
+    const favGame = d.favorite_game ? favoriteGames[d.favorite_game] : null;
+
+    // Ник на Discord-сервере
+    const guildNickBlock =
+        d.guild_nickname && d.guild_nickname !== d.display_name
+            ? `<div class="mt-2" style="background:rgba(88,101,242,.15);border:1px solid rgba(88,101,242,.3);border-radius:8px;padding:8px 12px;font-size:.85rem">
+             <span style="color:#8ab4f8">🎮 Ник на сервере:</span>
+             <span style="color:#fff;font-weight:600">${escapeHtml(d.guild_nickname)}</span>
+           </div>`
+            : "";
+    const presenceBlock = d.presence?.squad_online
+        ? `<div class="mt-2"><span class="badge bg-success me-1">● Сейчас играет в Squad</span><span class="badge bg-dark">${escapeHtml(d.presence.server_name || "Protocol")}${d.presence.game_name ? ` · ${escapeHtml(d.presence.game_name)}` : ""}</span></div>`
+        : d.presence?.site_online
+          ? '<div class="mt-2"><span class="badge bg-info text-dark">● Сейчас на сайте</span></div>'
+          : "";
+
+    content.innerHTML = `
+        <div class="text-center">
+            <div class="profile-avatar" style="background:linear-gradient(135deg,${themeColor},${themeColor}dd);font-size:${d.avatar_emoji ? "4rem" : "2.5rem"}">${escapeHtml(emoji)}</div>
+            <h2 class="mb-1">${escapeHtml(d.display_name)}</h2>
+            <p class="text-white-50 mb-2">@${escapeHtml(d.username)}</p>
+            <div>${badges}</div>
+            <div class="mt-2"><span class="badge bg-primary fs-6">🏆 #${d.position} в рейтинге</span></div>
+            ${presenceBlock}
+            ${guildNickBlock}
+            ${d.quote ? `<div class="mt-3 fst-italic text-white-50" style="border-left:3px solid ${themeColor};padding-left:15px">"${escapeHtml(d.quote)}"</div>` : ""}
+            <h3 class="text-warning mt-3 mb-0">${d.balance.toFixed(2)} БК</h3>
+        </div>
+
+        ${(d.medals || []).length ? `<section class="mt-4"><h3>Медали · ${d.medals.length}</h3><div class="medal-awards">${d.medals.map((a) => `<div class="medal-award" title="${escapeHtml(a.reason)}">${a.image ? `<img src="${escapeHtml(a.image)}" alt="${escapeHtml(a.name)}" loading="lazy">` : `<div class="medal-manual-symbol">${escapeHtml(a.symbol)}</div>`}<span>${escapeHtml(a.name)}<br><small>${escapeHtml(a.date)}</small></span></div>`).join("")}</div></section>` : ""}
+        ${d.bio ? `<div class="mt-4 p-3" style="background:rgba(0,0,0,.3);border-radius:10px;border-left:3px solid ${themeColor}"><small class="text-white-50 d-block mb-1">📝 О себе</small>${escapeHtml(d.bio)}</div>` : ""}
+
+        <div class="d-flex gap-2 mt-4">
+            <div class="stat-box"><div class="stat-value text-success">${stats.wins}</div><div class="stat-label">Побед</div></div>
+            <div class="stat-box"><div class="stat-value text-danger">${stats.losses}</div><div class="stat-label">Поражений</div></div>
+            <div class="stat-box"><div class="stat-value text-warning">${stats.pushes}</div><div class="stat-label">Ничьих</div></div>
+            <div class="stat-box"><div class="stat-value text-info">${winrate}%</div><div class="stat-label">Винрейт</div></div>
+        </div>
+
+        <div class="d-flex gap-2 mt-2">
+            <div class="stat-box"><div class="stat-value text-success">+${stats.total_won.toFixed(0)}</div><div class="stat-label">Выиграно</div></div>
+            <div class="stat-box"><div class="stat-value text-danger">${stats.total_lost.toFixed(0)}</div><div class="stat-label">Проиграно</div></div>
+            <div class="stat-box"><div class="stat-value ${stats.net >= 0 ? "text-success" : "text-danger"}">${stats.net >= 0 ? "+" : ""}${stats.net.toFixed(0)}</div><div class="stat-label">Итого</div></div>
+        </div>
+
+        ${favGame ? `<div class="mt-3 text-center"><span class="badge" style="background:${themeColor}">🎮 Любимая игра: ${favGame}</span></div>` : ""}
+
+        ${
+            d.history.length > 0
+                ? `
+        <div class="mt-4">
+            <h5 class="mb-3">📜 Последние события</h5>
+            <div class="history-mini">
+                ${d.history
+                    .map(
+                        (h) => `
+                    <div class="history-mini-row ${h.game_type === "admin" ? "admin" : h.game_type === "daily" ? "bonus" : escapeHtml(h.result)}">
+                        <div>
+                            <b>${h.game_type === "admin" ? "🔧" : h.game_type === "daily" ? "🎁" : escapeHtml(h.game_type)}</b>
+                            <small class="text-white-50 ms-2">${escapeHtml(h.details || "")}</small>
+                        </div>
+                        <div class="text-end">
+                            ${h.financial ? `<span class="${h.amount > 0 ? "amount-pos" : h.amount < 0 ? "amount-neg" : "amount-zero"}">${h.amount > 0 ? "+" : ""}${h.amount.toFixed(2)}</span>` : ""}
+                            <small class="text-white-50 ms-2">${escapeHtml(h.time)}</small>
+                        </div>
+                    </div>
+                `,
+                    )
+                    .join("")}
+            </div>
+        </div>`
+                : '<p class="text-center text-white-50 mt-4">Пока нет игр</p>'
+        }
+        ${d.is_self ? `<div class="text-center mt-4"><a href="/profile" class="btn btn-outline-info">✏️ Редактировать профиль</a></div>` : ""}
+    `;
+    if (d.rule_tests !== null && d.rule_tests !== undefined) {
+        const host = document.createElement("section");
+        host.className = "rt-card";
+        content.append(host);
+        ST9Tests.render(host, d.rule_tests, d.can_review_rule_tests);
+    }
+}
+
+function closeProfile() {
+    overlay.close();
+}
+
+</script>
+        <script>
+let dailyBusy = false,
+    dailyClaimBusy = false,
+    dailyDeadline = 0,
+    dailyAvailable = false;
+function dailyCountdown() {
+    const el = document.getElementById("dailyBonusStatus");
+    if (!el || dailyAvailable || !dailyDeadline) return;
+    const s = Math.max(0, Math.ceil((dailyDeadline - performance.now()) / 1000));
+    const h = Math.floor(s / 3600),
+        m = Math.floor((s % 3600) / 60);
+    el.textContent = `Следующий бонус через ${h} ч ${m} мин ${s % 60} сек`;
+    if (!s) {
+        dailyDeadline = 0;
+        loadDailyStatus();
+    }
+}
+async function loadDailyStatus() {
+    if (!document.getElementById("dailyBonusCard") || dailyBusy || dailyClaimBusy) return;
+    dailyBusy = true;
+    try {
+        const r = await fetch("/api/daily-bonus/status");
+        const d = await r.json();
+        if (!r.ok) throw Error(d.detail || "Не удалось проверить бонус");
+        dailyAvailable = d.available;
+        dailyDeadline = performance.now() + d.remaining_seconds * 1000;
+        document.getElementById("dailyStreak").textContent = d.streak;
+        document.getElementById("dailyAmount").textContent = "+" + d.next_bonus.toFixed(0);
+        const btn = document.getElementById("claimDailyBtn");
+        btn.disabled = !d.available;
+        btn.textContent = d.available ? "Получить бонус" : "Бонус получен";
+        if (d.available)
+            document.getElementById("dailyBonusStatus").textContent =
+                "Бонус доступен — забери бишопкоины";
+        else dailyCountdown();
+        document.getElementById("dailyStreakInfo").textContent =
+            d.streak_bonus > 0
+                ? `Бонус за серию: +${d.streak_bonus} БК`
+                : `Ещё ${7 - (d.streak % 7)} дней до бонуса за серию`;
+    } catch (e) {
+        document.getElementById("dailyBonusStatus").textContent =
+            "Не удалось проверить бонус. Попробуем снова.";
+    } finally {
+        dailyBusy = false;
+    }
+}
+async function claimDailyBonus() {
+    if (dailyClaimBusy || !dailyAvailable) return;
+    dailyClaimBusy = true;
+    const btn = document.getElementById("claimDailyBtn");
+    btn.disabled = true;
+    btn.textContent = "Получаем…";
+    try {
+        const r = await fetch("/api/daily-bonus", { method: "POST" }),
+            d = await r.json();
+        if (!r.ok || !d.ok) throw Error(d.detail || d.message || "Не удалось получить бонус");
+        STUI.setBalance(d.balance);
+        STUI.notice(`Получено ${d.amount.toFixed(2)} БК`, "success");
+    } catch (e) {
+        STUI.notice(e.message || "Ошибка сети", "error");
+    } finally {
+        dailyClaimBusy = false;
+        await loadDailyStatus();
+    }
+}
+loadDailyStatus();
+setInterval(dailyCountdown, 1000);
+setInterval(() => {
+    if (!document.hidden) loadDailyStatus();
+}, 60000);
+document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) loadDailyStatus();
+});
+
+</script>
+        <script>
+// === Сортировка и поиск ===
+let currentSort = "alpha";
+try {
+    currentSort = localStorage.getItem("usersSort") || "alpha";
+} catch (e) {}
+
+function sortUsers(type) {
+    currentSort = type;
+    try {
+        localStorage.setItem("usersSort", type);
+    } catch (e) {}
+
+    // Обновляем активную кнопку
+    document.querySelectorAll(".sort-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.sort === type);
+    });
+
+    renderUsersList();
+}
+
+function renderUsersList() {
+    const tbody = document.querySelector("#otherUsersTable tbody");
+    if (!tbody) return;
+
+    const rows = Array.from(tbody.querySelectorAll("tr[data-user-id]"));
+
+    // Сортируем строки в зависимости от типа
+    rows.sort((a, b) => {
+        if (currentSort === "alpha") {
+            const nameA = (a.dataset.name || "").toLowerCase();
+            const nameB = (b.dataset.name || "").toLowerCase();
+            return nameA.localeCompare(nameB, "ru");
+        } else if (currentSort === "discord-role") {
+            return (
+                Number(a.dataset.roleRank) - Number(b.dataset.roleRank) ||
+                (a.dataset.name || "").localeCompare(b.dataset.name || "", "ru")
+            );
+        } else if (currentSort === "balance-desc") {
+            return parseFloat(b.dataset.balance || 0) - parseFloat(a.dataset.balance || 0);
+        } else if (currentSort === "balance-asc") {
+            return parseFloat(a.dataset.balance || 0) - parseFloat(b.dataset.balance || 0);
+        }
+        return 0;
+    });
+
+    tbody.innerHTML = ""; // Очищаем
+    let currentLetter = "";
+    let visibleIndex = 1;
+
+    rows.forEach((row) => {
+        const name = row.dataset.name || "";
+        const firstLetter = name.charAt(0).toUpperCase();
+
+        // Добавляем алфавитные разделители только при сортировке по алфавиту
+        if (currentSort === "alpha" && firstLetter !== currentLetter) {
+            currentLetter = firstLetter;
+            const headerRow = document.createElement("tr");
+            headerRow.className = "letter-header";
+            headerRow.dataset.letter = currentLetter;
+            headerRow.innerHTML = `<td colspan="3" class="text-center py-2">─── ${escapeHtml(currentLetter)} ───</td>`;
+            tbody.appendChild(headerRow);
+        }
+        tbody.appendChild(row);
+
+        // Обновляем номер строки
+        const numCell = row.querySelector("td:first-child span");
+        if (numCell) {
+            numCell.textContent = visibleIndex;
+        }
+        visibleIndex++;
+    });
+
+    // Применяем текущий поиск (если есть)
+    filterUsers();
+}
+
+function filterUsers() {
+    const searchTerm = document.getElementById("userSearch").value.toLowerCase().trim();
+    const selectedRole = document.getElementById("homeDiscordRoleFilter")?.value || "all";
+    const tbody = document.querySelector("#otherUsersTable tbody");
+    if (!tbody) return;
+
+    const rows = tbody.querySelectorAll("tr[data-user-id]");
+    const headers = tbody.querySelectorAll("tr.letter-header");
+    let visibleCount = 0;
+    let visibleIndex = 1;
+
+    // Фильтруем строки и пересчитываем номера
+    rows.forEach((row) => {
+        const name = (row.dataset.name || "").toLowerCase();
+        const discord = (row.dataset.discord || "").toLowerCase();
+        const labels = (row.textContent || "").toLowerCase();
+        const roles = (row.dataset.discordRoles || "").split(" ").filter(Boolean);
+        const matchesSearch =
+            searchTerm === "" ||
+            name.includes(searchTerm) ||
+            discord.includes(searchTerm) ||
+            labels.includes(searchTerm);
+        const matchesRole = selectedRole === "all" || roles.includes(selectedRole);
+        if (matchesSearch && matchesRole) {
+            row.style.display = "";
+
+            // Обновляем номер только для видимых строк
+            const numCell = row.querySelector("td:first-child span");
+            if (numCell) {
+                numCell.textContent = visibleIndex;
+            }
+            visibleIndex++;
+            visibleCount++;
+        } else {
+            row.style.display = "none";
+        }
+    });
+
+    // Скрываем заголовки букв, если в этой группе нет видимых строк
+    headers.forEach((header) => {
+        let hasVisible = false;
+
+        let sibling = header.nextElementSibling;
+        while (sibling && !sibling.classList.contains("letter-header")) {
+            if (sibling.style.display !== "none") {
+                hasVisible = true;
+                break;
+            }
+            sibling = sibling.nextElementSibling;
+        }
+
+        header.style.display = hasVisible ? "" : "none";
+    });
+
+    // Обновляем счётчик
+    const countEl = document.getElementById("otherUsersCount");
+    if (countEl) {
+        countEl.textContent = visibleCount;
+        let empty = document.getElementById("usersEmpty");
+        if (!empty) {
+            empty = document.createElement("div");
+            empty.id = "usersEmpty";
+            empty.className = "st-list-empty";
+            empty.textContent = "Игроки не найдены. Попробуйте другой ник.";
+            document.getElementById("otherUsersTable").parentElement.after(empty);
+        }
+        empty.hidden = visibleCount > 0;
+    }
+}
+
+function clearSearch() {
+    const input = document.getElementById("userSearch");
+    if (input) {
+        input.value = "";
+        const roleFilter = document.getElementById("homeDiscordRoleFilter");
+        if (roleFilter) roleFilter.value = "all";
+        filterUsers();
+        input.focus();
+    }
+}
+
+// Инициализация при загрузке
+document.addEventListener("DOMContentLoaded", function () {
+    // Привязываем обработчики к кнопкам сортировки
+    document.querySelectorAll(".sort-btn").forEach((btn) => {
+        btn.addEventListener("click", function () {
+            sortUsers(this.dataset.sort);
+        });
+    });
+
+    // Устанавливаем активную кнопку из сохранённой сортировки
+    document.querySelectorAll(".sort-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn.dataset.sort === currentSort);
+    });
+
+    // Рендерим список с учётом сохранённой сортировки
+    renderUsersList();
+});
+
+</script>
+        <script>
+function openBugReport() {
+    const modal = document.getElementById("bugReportModal");
+    if (!modal.open) modal.showModal();
+    document.getElementById("bugStatus").style.display = "none";
+    document.getElementById("bugSubject").value = "";
+    document.getElementById("bugMessage").value = "";
+    document.getElementById("bugCharCount").textContent = "0/2000";
+}
+
+function closeBugReport() {
+    document.getElementById("bugReportModal").close();
+}
+
+document.getElementById("bugMessage").addEventListener("input", function (e) {
+    document.getElementById("bugCharCount").textContent = `${e.target.value.length}/2000`;
+});
+
+async function sendBugReport() {
+    if (document.getElementById("bugSendBtn").disabled) return;
+    const subject = document.getElementById("bugSubject").value.trim();
+    const message = document.getElementById("bugMessage").value.trim();
+    const status = document.getElementById("bugStatus");
+    const btn = document.getElementById("bugSendBtn");
+
+    if (!subject) {
+        status.style.display = "block";
+        status.style.background = "rgba(244, 67, 54, 0.2)";
+        status.style.color = "#e57373";
+        status.textContent = "❌ Заполните тему";
+        return;
+    }
+    if (!message || message.length < 10) {
+        status.style.display = "block";
+        status.style.background = "rgba(244, 67, 54, 0.2)";
+        status.style.color = "#e57373";
+        status.textContent = "❌ Опишите проблему подробнее (минимум 10 символов)";
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "⏳ Отправка...";
+    status.style.display = "none";
+
+    const fd = new FormData();
+    fd.append("subject", subject);
+    fd.append("message", message);
+
+    try {
+        const res = await fetch("/api/bug-report", { method: "POST", body: fd });
+        const data = await res.json();
+
+        if (!res.ok) {
+            status.style.display = "block";
+            status.style.background = "rgba(244, 67, 54, 0.2)";
+            status.style.color = "#e57373";
+            status.textContent = "❌ " + (data.detail || "Ошибка");
+            btn.disabled = false;
+            btn.textContent = "🚀 Отправить";
+            return;
+        }
+
+        status.style.display = "block";
+        status.style.background = "rgba(76, 175, 80, 0.2)";
+        status.style.color = "#81c784";
+        status.textContent = "✅ " + data.message;
+
+        setTimeout(() => {
+            closeBugReport();
+            btn.disabled = false;
+            btn.textContent = "🚀 Отправить";
+        }, 2000);
+    } catch (e) {
+        status.style.display = "block";
+        status.style.background = "rgba(244, 67, 54, 0.2)";
+        status.style.color = "#e57373";
+        status.textContent = "❌ Ошибка сети";
+        btn.disabled = false;
+        btn.textContent = "🚀 Отправить";
+    }
+}
+
+// Закрытие по клику вне окна
+document.getElementById("bugReportModal").addEventListener("click", function (e) {
+    if (e.target === this) closeBugReport();
+});
+
+</script>
+        {% include '_rule_test_ui.html' %}
+    </body>
+</html>

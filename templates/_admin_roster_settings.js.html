@@ -1,0 +1,216 @@
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const root = $("panel-roster-settings");
+  if (!root) return;
+  const escape = (text) =>
+    String(text).replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  const endpoint = "/api/admin/roster-publication";
+  let baseline = "";
+  let saved = null,
+    confirmation = null,
+    busy = false;
+  const status = (message) => {
+    $("rosterStatus").textContent = message;
+  };
+  const invalidate = () => {
+    confirmation = null;
+    $("rosterSaveButton").disabled = true;
+    $("rosterPreview").hidden = true;
+  };
+  async function api(path, body) {
+    const response = await fetch(endpoint + path, {
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        ...window.ST9_REQUEST_HEADERS,
+      },
+      ...(body ? { method: "POST", body: JSON.stringify(body) } : {}),
+    });
+    const data = await response.json();
+    if (!response.ok)
+      throw new Error(data.detail || "Не удалось выполнить запрос");
+    return data;
+  }
+  function setBusy(value) {
+    busy = value;
+    root.querySelectorAll("button, input, textarea, select").forEach((node) => {
+      node.disabled = value;
+    });
+    $("rosterSaveButton").disabled = value || !confirmation;
+  }
+  function baseCard(key, label, id, description) {
+    const node = document.createElement("details");
+    node.className = "roster-config-card";
+    node.dataset.roleKey = key;
+    node.innerHTML = `<summary>${escape(label)}</summary><label class="roster-config-label">ID роли Discord <input class="form-control" data-field="role_id" type="text" inputmode="numeric" maxlength="20" list="rosterRoleCatalog" value="${escape(id)}"></label><label class="roster-config-label">Описание / задачи: одна строка на пункт <textarea class="form-control" data-field="description" rows="3" maxlength="1200">${escape(description)}</textarea></label>`;
+    return node;
+  }
+  function extraCard(row = {}) {
+    const node = document.createElement("details");
+    node.className = "roster-config-card";
+    node.open = true;
+    node.innerHTML = `<summary>Дополнительная роль</summary><div class="roster-config-row"><label class="roster-config-label">Название блока <input class="form-control" data-field="title" maxlength="80" value="${escape(row.title || "")}"></label><label class="roster-config-label">ID роли Discord <input class="form-control" data-field="role_id" type="text" inputmode="numeric" maxlength="20" list="rosterRoleCatalog" value="${escape(row.role_id || "")}"></label><label class="roster-config-label">Вид блока <select class="form-select" data-field="kind"><option value="position">Должность: описание и список</option><option value="group">Группа: командир, задачи и состав</option></select></label><label class="roster-config-label">Место в составе <select class="form-select" data-field="message"><option value="second">Второе сообщение, перед учебной группой</option><option value="first">В конце первого сообщения</option></select></label></div><label class="roster-config-label">Значок перед именем <input class="form-control" data-field="prefix" maxlength="8" value="${escape(row.prefix || "✪")}"></label><label class="roster-config-label">Описание / задачи <textarea class="form-control" data-field="description" rows="3" maxlength="1200">${escape(row.description || "")}</textarea></label><button type="button" class="btn btn-sm btn-outline-danger" data-remove-role>Удалить дополнительную роль</button>`;
+    node.querySelector('[data-field="kind"]').value = row.kind || "position";
+    node.querySelector('[data-field="message"]').value =
+      row.message || "second";
+    return node;
+  }
+  function collect() {
+    const config = {
+      role_ids: {},
+      descriptions: {},
+      training_description: $("rosterTraining").value,
+      extra_roles: [],
+    };
+    for (const node of $("rosterBaseRoles").children) {
+      const key = node.dataset.roleKey;
+      config.role_ids[key] = node
+        .querySelector('[data-field="role_id"]')
+        .value.trim();
+      config.descriptions[key] = node.querySelector(
+        '[data-field="description"]',
+      ).value;
+    }
+    for (const node of $("rosterExtraRoles").children) {
+      const role = {};
+      for (const field of node.querySelectorAll("[data-field]"))
+        role[field.dataset.field] = field.value;
+      role.role_id = role.role_id.trim();
+      config.extra_roles.push(role);
+    }
+    return config;
+  }
+  async function load(force = false) {
+    if (busy || (saved && !force)) return;
+    if (
+      force &&
+      saved &&
+      JSON.stringify(collect()) !== baseline &&
+      !confirm(
+        "Загрузить сохранённые настройки и отменить несохранённые изменения?",
+      )
+    )
+      return;
+    setBusy(true);
+    try {
+      saved = await api("");
+      $("rosterRoleCatalog").innerHTML = saved.roles
+        .map(
+          (role) =>
+            `<option value="${escape(role.id)}">${escape(role.name)}</option>`,
+        )
+        .join("");
+      $("rosterBaseRoles").replaceChildren(
+        ...Object.entries(saved.labels).map(([key, label]) =>
+          baseCard(
+            key,
+            label,
+            saved.config.role_ids[key],
+            saved.config.descriptions[key],
+          ),
+        ),
+      );
+      $("rosterTraining").value = saved.config.training_description;
+      $("rosterExtraRoles").replaceChildren(
+        ...saved.config.extra_roles.map(extraCard),
+      );
+      baseline = JSON.stringify(collect());
+      $("rosterEditor").hidden = false;
+      invalidate();
+      const checked = saved.snapshot_at
+        ? new Date(saved.snapshot_at).toLocaleString("ru-RU", {
+            timeZone: "Europe/Moscow",
+          }) + " МСК"
+        : "снимка ещё нет";
+      status(
+        `Последний снимок участников: ${checked}. ${saved.applied_revision === saved.revision ? "Сохранённый вариант применён ботом." : "Бот применит сохранённый вариант в следующем цикле."}`,
+      );
+    } catch (error) {
+      status(error.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  $("rosterReload").addEventListener("click", () => load(true));
+  $("rosterAddRole").addEventListener("click", () => {
+    if ($("rosterExtraRoles").children.length >= 20) {
+      status("Можно добавить не более 20 ролей.");
+      return;
+    }
+    invalidate();
+    $("rosterExtraRoles").append(extraCard());
+  });
+  root.addEventListener("input", invalidate);
+  root.addEventListener("change", invalidate);
+  root.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-remove-role]");
+    if (button && !busy) {
+      button.closest("details").remove();
+      invalidate();
+    }
+  });
+  $("rosterPreviewButton").addEventListener("click", async () => {
+    if (busy || !saved) return;
+    invalidate();
+    setBusy(true);
+    try {
+      const result = await api("/preview", {
+        revision: saved.revision,
+        config: collect(),
+      });
+      confirmation = result.confirmation;
+      $("rosterPreview").replaceChildren();
+      result.texts.forEach((text, index) => {
+        const title = document.createElement("h3");
+        title.textContent = `Сообщение ${index + 1} · ${result.lengths[index]}/2000 символов`;
+        const pre = document.createElement("pre");
+        pre.className = "roster-config-preview";
+        pre.textContent = text;
+        $("rosterPreview").append(title, pre);
+      });
+      $("rosterPreview").hidden = false;
+      status(
+        result.warnings.join(" ") ||
+          "Точный текст с разметкой Discord проверен. Можно сохранить этот вариант.",
+      );
+    } catch (error) {
+      status(error.message);
+    } finally {
+      setBusy(false);
+    }
+  });
+  $("rosterSaveButton").addEventListener("click", async () => {
+    if (busy || !saved || !confirmation) return;
+    setBusy(true);
+    try {
+      const result = await api("/settings", {
+        revision: saved.revision,
+        config: collect(),
+        confirmation,
+      });
+      saved.revision = result.revision;
+      saved.config = collect();
+      baseline = JSON.stringify(collect());
+      confirmation = null;
+      status(result.message);
+    } catch (error) {
+      invalidate();
+      status(error.message);
+    } finally {
+      setBusy(false);
+    }
+  });
+  window.loadRosterSettings = () => load();
+})();

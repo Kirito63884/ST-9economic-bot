@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Го — Strike Team 9</title>
+  {% include "_site_ui.html" %}{% include "_table_admin_ui.html" %}{% include "_go_ui.html" %}
+</head>
+<body>
+  {% include "_site_nav.html" %}
+  <main id="st-content" class="go-page">
+    <p class="go-kicker">Стратегия · два игрока · один банк</p>
+    <h1>● Го ○</h1>
+    <p class="go-muted">Окружайте территорию, защищайте группы и считайте каждый пункт. Китайский подсчёт площади · коми 7,5 · позиционное суперко.</p>
+    <section class="go-panel">
+      <h2>Новый стол</h2>
+      <div class="go-row">
+        <label>Размер поля <select id="size"><option value="9">9×9 · короткая партия</option><option value="13">13×13 · средняя доска</option><option value="19">19×19 · полная доска</option></select></label>
+        <label>Равный взнос, БК <input id="entry" type="number" min="0" max="1000000" step="0.01" value="0"></label>
+        <label>Доступ <select id="private"><option value="false">Открытый</option><option value="true">По ссылке</option></select></label>
+        <button class="go-btn" id="create" type="button">Создать стол →</button>
+      </div>
+      <p class="go-muted">0 БК — бесплатно. Взносы списываются при старте после готовности обоих; победитель получает весь банк.</p>
+      <div id="error" class="go-message" role="status"></div>
+    </section>
+    <section class="go-panel"><h2>Столы</h2><div id="tables">Загрузка…</div></section>
+    {% include "_go_rules.html" %}
+  </main>
+  {% include "_request_security.html" %}<script>{% include "_go_lobby.js.html" %}</script>
+</body>
+</html>

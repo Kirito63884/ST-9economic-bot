@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <title>Профиль — Strike Team 9</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+              rel="stylesheet">
+        <link rel="stylesheet"
+              href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+        <style>
+            body {
+                background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+                min-height: 100vh;
+                position: relative;
+                overflow-x: hidden
+            }
+
+            body::before {
+                content: '';
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: radial-gradient(circle at 20% 30%, rgba(120, 119, 198, .3) 0%, transparent 50%), radial-gradient(circle at 80% 70%, rgba(255, 119, 198, .2) 0%, transparent 50%);
+                pointer-events: none;
+                z-index: 0
+            }
+
+            @keyframes float {
+
+                0%,
+                100% {
+                    transform: translateY(0) rotate(0deg)
+                }
+
+                50% {
+                    transform: translateY(-30px) rotate(180deg)
+                }
+            }
+
+            .bg-shape {
+                position: fixed;
+                opacity: .1;
+                border-radius: 50%;
+                pointer-events: none;
+                z-index: 0
+            }
+
+            .shape-1 {
+                width: 300px;
+                height: 300px;
+                background: linear-gradient(135deg, #667eea, #764ba2);
+                top: 10%;
+                left: 5%;
+                animation: float 20s ease-in-out infinite
+            }
+
+            .shape-2 {
+                width: 200px;
+                height: 200px;
+                background: linear-gradient(135deg, #f093fb, #f5576c);
+                top: 60%;
+                right: 10%;
+                animation: float 15s ease-in-out infinite 2s
+            }
+
+            .shape-3 {
+                width: 250px;
+                height: 250px;
+                background: linear-gradient(135deg, #4facfe, #00f2fe);
+                bottom: 10%;
+                left: 20%;
+                animation: float 25s ease-in-out infinite 5s
+            }
+
+            .container {
+                position: relative;
+                z-index: 1
+            }
+
+            .navbar {
+                position: relative;
+                z-index: 10;
+                background: rgba(0, 0, 0, .85) !important;
+                backdrop-filter: blur(10px);
+                border-bottom: 1px solid rgba(255, 255, 255, .1)
+            }
+
+            .profile-card {
+                background: rgba(42, 42, 74, .8);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, .1);
+                border-radius: 16px;
+                padding: 30px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, .3);
+                margin-bottom: 20px
+            }
+
+            .profile-card h3,
+            .profile-card h5 {
+                margin-bottom: 20px;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                color: #fff
+            }
+
+            .guild-info-card {
+                background: linear-gradient(135deg, rgba(88, 101, 242, .15), rgba(88, 101, 242, .05));
+                border: 1px solid rgba(88, 101, 242, .3);
+                border-radius: 16px;
+                padding: 25px;
+                margin-bottom: 20px;
+                backdrop-filter: blur(10px)
+            }
+
+            .guild-label {
+                font-size: .85rem;
+                color: #8ab4f8;
+                margin-bottom: 8px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-weight: 600
+            }
+
+            .guild-value {
+                font-size: 1.3rem;
+                font-weight: 700;
+                color: #fff;
+                display: flex;
+                align-items: center;
+                gap: 10px
+            }
+
+            .guild-info-note {
+                font-size: .8rem;
+                color: rgba(255, 255, 255, .5);
+                margin-top: 10px;
+                display: flex;
+                align-items: center;
+                gap: 5px
+            }
+
+            .avatar-section {
+                text-align: center;
+                padding: 30px;
+                background: rgba(0, 0, 0, .3);
+                border-radius: 12px;
+                margin-bottom: 20px;
+                border: 1px solid rgba(255, 255, 255, .05)
+            }
+
+            .avatar-emoji-display {
+                font-size: 5rem;
+                margin-bottom: 15px;
+                cursor: pointer;
+                transition: transform .2s;
+                display: inline-block
+            }
+
+            .avatar-emoji-display:hover {
+                transform: scale(1.1) rotate(5deg)
+            }
+
+            .avatar-hint {
+                font-size: .85rem;
+                color: rgba(255, 255, 255, .6);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 5px
+            }
+
+            .emoji-picker {
+                display: none;
+                flex-wrap: wrap;
+                gap: 10px;
+                justify-content: center;
+                margin-top: 15px;
+                padding: 15px;
+                background: rgba(0, 0, 0, .4);
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, .1)
+            }
+
+            .emoji-picker.show {
+                display: flex
+            }
+
+            .emoji-option {
+                font-size: 2rem;
+                cursor: pointer;
+                padding: 10px;
+                border-radius: 8px;
+                transition: all .2s;
+                background: rgba(255, 255, 255, .05);
+                border: 2px solid transparent
+            }
+
+            .emoji-option:hover {
+                background: rgba(255, 255, 255, .15);
+                transform: scale(1.2)
+            }
+
+            .emoji-option.selected {
+                background: rgba(76, 175, 80, .3);
+                border-color: #4caf50
+            }
+
+            .form-label {
+                font-weight: 600;
+                margin-bottom: 8px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                color: #fff !important
+            }
+
+            .form-label i {
+                color: #667eea
+            }
+
+            .form-control {
+                background: rgba(0, 0, 0, .4) !important;
+                border: 1px solid rgba(255, 255, 255, .2) !important;
+                color: #fff !important;
+                border-radius: 10px;
+                padding: 12px;
+                transition: all .2s
+            }
+
+            .form-control:focus {
+                outline: none;
+                border-color: #4caf50 !important;
+                background: rgba(76, 175, 80, .1) !important;
+                box-shadow: 0 0 0 3px rgba(76, 175, 80, .2)
+            }
+
+            .form-control::placeholder {
+                color: rgba(255, 255, 255, .4)
+            }
+
+            .bio-textarea {
+                width: 100%;
+                background: rgba(0, 0, 0, .4);
+                border: 1px solid rgba(255, 255, 255, .2);
+                color: #fff;
+                border-radius: 10px;
+                padding: 12px;
+                resize: vertical;
+                min-height: 120px;
+                font-size: .95rem;
+                transition: all .2s
+            }
+
+            .bio-textarea:focus {
+                outline: none;
+                border-color: #4caf50;
+                background: rgba(76, 175, 80, .1);
+                box-shadow: 0 0 0 3px rgba(76, 175, 80, .2)
+            }
+
+            .char-counter {
+                font-size: .8rem;
+                color: rgba(255, 255, 255, .5);
+                text-align: right;
+                margin-top: 5px
+            }
+
+            .quote-input {
+                width: 100%;
+                background: rgba(0, 0, 0, .4);
+                border: 1px solid rgba(255, 255, 255, .2);
+                color: #fff;
+                border-radius: 10px;
+                padding: 12px;
+                font-style: italic;
+                transition: all .2s
+            }
+
+            .quote-input:focus {
+                outline: none;
+                border-color: #ffd700;
+                background: rgba(255, 215, 0, .1);
+                box-shadow: 0 0 0 3px rgba(255, 215, 0, .2)
+            }
+
+            .favorite-game-select {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+                gap: 12px;
+                margin-top: 10px
+            }
+
+            .game-option {
+                padding: 18px 12px;
+                background: rgba(0, 0, 0, .3);
+                border: 2px solid rgba(255, 255, 255, .1);
+                border-radius: 12px;
+                text-align: center;
+                cursor: pointer;
+                transition: all .2s
+            }
+
+            .game-option:hover {
+                background: rgba(255, 255, 255, .1);
+                border-color: rgba(255, 255, 255, .3);
+                transform: translateY(-2px)
+            }
+
+            .game-option.selected {
+                background: rgba(76, 175, 80, .2);
+                border-color: #4caf50;
+                box-shadow: 0 0 15px rgba(76, 175, 80, .3)
+            }
+
+            .game-option-icon {
+                font-size: 2.2rem;
+                margin-bottom: 8px
+            }
+
+            .game-option-name {
+                font-size: .9rem;
+                font-weight: 600;
+                color: #fff
+            }
+
+            .color-picker {
+                display: flex;
+                gap: 12px;
+                flex-wrap: wrap;
+                margin-top: 10px
+            }
+
+            .color-option {
+                width: 45px;
+                height: 45px;
+                border-radius: 50%;
+                cursor: pointer;
+                border: 3px solid transparent;
+                transition: all .2s;
+                position: relative
+            }
+
+            .color-option:hover {
+                transform: scale(1.15)
+            }
+
+            .color-option.selected {
+                border-color: #fff;
+                box-shadow: 0 0 20px currentColor
+            }
+
+            .color-option.selected::after {
+                content: '✓';
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                color: #fff;
+                font-weight: 700;
+                font-size: 1.2rem;
+                text-shadow: 0 0 5px rgba(0, 0, 0, .5)
+            }
+
+            .privacy-card {
+                background: rgba(58, 42, 74, .8);
+                backdrop-filter: blur(10px);
+                border: 1px solid rgba(255, 255, 255, .1);
+                border-radius: 16px;
+                padding: 25px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, .3);
+                margin-bottom: 20px
+            }
+
+            .form-check-input {
+                width: 3rem;
+                height: 1.5rem;
+                cursor: pointer
+            }
+
+            .form-check-input:checked {
+                background-color: #4caf50;
+                border-color: #4caf50
+            }
+
+            .form-check-label {
+                cursor: pointer;
+                font-weight: 600;
+                color: #fff
+            }
+
+            .save-btn {
+                background: linear-gradient(45deg, #4caf50, #2e7d32);
+                color: #fff;
+                border: none;
+                padding: 14px 30px;
+                border-radius: 12px;
+                font-weight: 700;
+                font-size: 1.05rem;
+                transition: all .2s;
+                width: 100%;
+                margin-top: 20px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 10px
+            }
+
+            .save-btn:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 25px rgba(76, 175, 80, .4);
+                color: #fff
+            }
+
+            .stat-card {
+                background: rgba(0, 0, 0, .3);
+                border-radius: 12px;
+                padding: 20px;
+                text-align: center;
+                border: 1px solid rgba(255, 255, 255, .05);
+                transition: all .2s
+            }
+
+            .stat-card:hover {
+                border-color: rgba(255, 255, 255, .15);
+                transform: translateY(-2px)
+            }
+
+            .stat-value {
+                font-size: 1.8rem;
+                font-weight: 700;
+                margin-bottom: 5px
+            }
+
+            .stat-label {
+                font-size: .85rem;
+                color: rgba(255, 255, 255, .6)
+            }
+
+            .info-item {
+                padding: 12px 0;
+                border-bottom: 1px solid rgba(255, 255, 255, .05);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                color: #fff
+            }
+
+            .info-item:last-child {
+                border-bottom: none
+            }
+
+            .info-item i {
+                color: #667eea;
+                width: 20px
+            }
+
+            .game-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 5px 12px;
+                border-radius: 8px;
+                font-size: .85rem;
+                font-weight: 600
+            }
+
+            .badge-blackjack {
+                background: rgba(33, 150, 243, .2);
+                color: #64b5f6;
+                border: 1px solid rgba(33, 150, 243, .3)
+            }
+
+            .badge-roulette {
+                background: rgba(244, 67, 54, .2);
+                color: #e57373;
+                border: 1px solid rgba(244, 67, 54, .3)
+            }
+
+            .badge-poker {
+                background: rgba(76, 175, 80, .2);
+                color: #81c784;
+                border: 1px solid rgba(76, 175, 80, .3)
+            }
+
+            .badge-crash {
+                background: rgba(255, 152, 0, .2);
+                color: #ffb74d;
+                border: 1px solid rgba(255, 152, 0, .3)
+            }
+
+            .badge-daily {
+                background: rgba(255, 215, 0, .2);
+                color: #ffd700;
+                border: 1px solid rgba(255, 215, 0, .3)
+            }
+
+            .badge-admin {
+                background: rgba(156, 39, 176, .2);
+                color: #ce93d8;
+                border: 1px solid rgba(156, 39, 176, .3)
+            }
+
+            .badge-default {
+                background: rgba(158, 158, 158, .2);
+                color: #bdbdbd;
+                border: 1px solid rgba(158, 158, 158, .3)
+            }
+
+            .result-badge {
+                display: inline-flex;
+                align-items: center;
+                gap: 5px;
+                padding: 4px 10px;
+                border-radius: 6px;
+                font-size: .8rem;
+                font-weight: 600
+            }
+
+            .result-won {
+                background: rgba(76, 175, 80, .2);
+                color: #81c784
+            }
+
+            .result-lost {
+                background: rgba(244, 67, 54, .2);
+                color: #e57373
+            }
+
+            .result-push {
+                background: rgba(255, 152, 0, .2);
+                color: #ffb74d
+            }
+
+            .result-bonus {
+                background: rgba(255, 215, 0, .2);
+                color: #ffd700
+            }
+
+            .result-admin {
+                background: rgba(156, 39, 176, .2);
+                color: #ce93d8
+            }
+
+            .history-table {
+                background: rgba(0, 0, 0, .4) !important;
+                border-radius: 12px;
+                overflow: hidden;
+                width: 100%;
+                color: #fff !important
+            }
+
+            .history-table thead,
+            .history-table thead tr,
+            .history-table thead th {
+                background: rgba(0, 0, 0, .6) !important;
+                color: #fff !important;
+                border: none !important;
+                padding: 12px !important;
+                font-weight: 600
+            }
+
+            .history-table tbody tr {
+                background: rgba(20, 20, 40, .4) !important;
+                transition: all .2s;
+                border-bottom: 1px solid rgba(255, 255, 255, .05) !important;
+                color: #fff !important
+            }
+
+            .history-table tbody tr:hover {
+                background: rgba(255, 255, 255, .08) !important
+            }
+
+            .history-table tbody td {
+                background: transparent !important;
+                color: #fff !important;
+                border: none !important;
+                border-bottom: 1px solid rgba(255, 255, 255, .05) !important;
+                padding: 12px !important;
+                vertical-align: middle
+            }
+
+            .amount-pos {
+                color: #81c784;
+                font-weight: 700
+            }
+
+            .amount-neg {
+                color: #e57373;
+                font-weight: 700
+            }
+
+            .amount-zero {
+                color: #ffb74d;
+                font-weight: 700
+            }
+
+            .details-text {
+                color: rgba(255, 255, 255, .6);
+                font-size: .8rem;
+                max-width: 200px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap
+            }
+
+            .details-text:hover {
+                white-space: normal;
+                overflow: visible
+            }
+
+            .empty-state {
+                text-align: center;
+                padding: 60px 20px;
+                color: rgba(255, 255, 255, .5)
+            }
+
+            .empty-state i {
+                font-size: 4rem;
+                margin-bottom: 20px;
+                opacity: .3
+            }
+
+            h3,
+            h5 {
+                color: #fff
+            }
+
+            .text-muted-custom {
+                color: rgba(255, 255, 255, .5) !important
+            }
+
+            .btn-info {
+                background: #4facfe;
+                border: none;
+                color: #fff
+            }
+
+            .btn-outline-light {
+                color: #fff !important;
+                border-color: rgba(255, 255, 255, .3)
+            }
+
+            .btn-outline-light:hover {
+                background: rgba(255, 255, 255, .1);
+                color: #fff !important
+            }
+
+            @media (max-width: 768px) {
+                .favorite-game-select {
+                    grid-template-columns: repeat(2, 1fr)
+                }
+
+                .color-option {
+                    width: 40px;
+                    height: 40px
+                }
+            }
+        </style>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        {% include "_site_ui.html" %}
+        {% include "_medals_style.html" %}
+    </head>
+    <body class="st-profile-page">
+        {% include "_site_nav.html" %}
+        <main class="container mt-4" id="st-content">
+            <div class="st-page-heading">
+                <div>
+                    <span class="st-eyebrow">Strike Team 9</span>
+                    <h1>Мой профиль</h1>
+                    <p>{{ user.display_name or user.username }} · ваш профиль в Strike Team 9</p>
+                </div>
+                <div class="st-actions"><a href="/games" class="btn btn-primary">К играм →</a></div>
+            </div>
+            <div data-st-tab-group="profile">
+                <div class="st-tabs" role="tablist" aria-label="Разделы">
+                    <button type="button"
+                            role="tab"
+                            id="profile-tab-overview"
+                            aria-controls="profile-panel-overview"
+                            aria-selected="true"
+                            tabindex="0"
+                            data-st-tab="overview">Обзор</button><button type="button"
+        role="tab"
+        id="profile-tab-edit"
+        aria-controls="profile-panel-edit"
+        aria-selected="false"
+        tabindex="-1"
+        data-st-tab="edit">Настройки</button><button type="button"
+        role="tab"
+        id="profile-tab-history"
+        aria-controls="profile-panel-history"
+        aria-selected="false"
+        tabindex="-1"
+        data-st-tab="history">История</button>
+                </div>
+                <section role="tabpanel"
+                         id="profile-panel-overview"
+                         aria-labelledby="profile-tab-overview"
+                         data-st-panel="overview"
+                         data-st-panel-group="profile"
+                         class="">
+                    {% include "_profile_medals.html" %}
+                    <div class="rt-card" id="rtProfileResults"></div>
+                    <div class="st-profile-overview">
+                        <div class="profile-card">
+                            <div class="d-flex justify-content-between align-items-center mb-4">
+                                <h3 class="mb-0"><i class="fas fa-chart-bar"
+   style="color:#667eea"></i> Ваша статистика</h3>
+                                <div class="d-flex gap-2">
+                                    <span class="badge bg-info"><i class="fas fa-hashtag"></i> ID: {{ user.id }}</span>
+                                    {% if user.is_admin %}<span class="badge bg-warning text-dark"><i class="fas fa-crown"></i> Админ</span>{% endif %}
+                                </div>
+                            </div>
+                            <div class="row g-3 mb-4">
+                                <div class="col-md-4">
+                                    <div class="stat-card">
+                                        <div class="stat-value text-warning">
+                                            <i class="fas fa-coins"></i> {{ "%.2f"|format(user.balance) }}
+                                        </div>
+                                        <div class="stat-label">Бишопкоины, БК</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="stat-card">
+                                        <div class="stat-value text-info">
+                                            <i class="fas fa-scroll"></i> {{ history|length }}
+                                        </div>
+                                        <div class="stat-label">Записей</div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4">
+                                    <div class="stat-card">
+                                        <div class="stat-value" style="color:{{ user.theme_color or '#667eea' }}">
+                                            {% if user.favorite_game == "blackjack" %}♠️
+                                            {% elif user.favorite_game == "roulette" %}🎡
+                                            {% elif user.favorite_game == "domino" %}▣
+                                            {% elif user.favorite_game == "battleship" %}⚓
+                                            {% elif user.favorite_game == "durak" %}🂡
+                                            {% elif user.favorite_game == "backgammon" %}⚄
+                                            {% elif user.favorite_game == "monopoly" %}▦
+                                            {% elif user.favorite_game == "go" %}●
+                                            {% elif user.favorite_game == "chess" %}♟
+                                            {% elif user.favorite_game == "draughts" %}◉
+                                            {% elif user.favorite_game == "poker" %}🃏
+                                            {% elif user.favorite_game == "crash" %}📈
+                                            {% else %}
+                                            <i class="fas fa-question"></i>
+                                            {% endif %}
+                                        </div>
+                                        <div class="stat-label">Любимая</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="info-item">
+                                <i class="fas fa-at"></i>
+                                <span>Username: <b>{{ user.username }}</b></span>
+                            </div>
+                            <div class="info-item">
+                                <i class="fab fa-discord"></i>
+                                <span>Discord ID: <code>{{ user.discord_id }}</code></span>
+                            </div>
+                            {% if user.avatar_emoji %}
+                            <div class="info-item">
+                                <i class="fas fa-user-circle"></i>
+                                <span>Аватарка: <span style="font-size:1.3rem">{{ user.avatar_emoji }}</span></span>
+                            </div>
+                            {% endif %}
+                            {% if user.quote %}
+                            <div class="info-item">
+                                <i class="fas fa-quote-right"></i>
+                                <span class="fst-italic text-muted-custom">"{{ user.quote }}"</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        <aside>
+                            <div class="guild-info-card">
+                                <div class="guild-label">
+                                    <i class="fab fa-discord"></i> Ник на Discord-сервере
+                                </div>
+                                <div class="guild-value">{{ user.guild_nickname or user.username }}</div>
+                                <div class="guild-info-note">
+                                    <i class="fas fa-info-circle"></i>
+                                    Обновляется автоматически при изменении ника на Discord-сервере. Изменить можно в Discord.
+                                </div>
+                            </div>
+                            <div class="privacy-card">
+                                <h5><i class="fas fa-shield-alt"
+   style="color:#9c27b0"></i> Приватность профиля</h5>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input"
+                                           type="checkbox"
+                                           id="publicToggle"
+                                           {% if user.profile_public %}checked{% endif %}
+                                           onchange="togglePublic()">
+                                    <label class="form-check-label" for="publicToggle">
+                                        <b id="privacyStatus">{% if user.profile_public %}Публичный{% else %}Скрытый{% endif %}</b>
+                                    </label>
+                                </div>
+                                <p class="text-muted-custom small mt-3 mb-0" id="privacyDesc">
+                                    {% if user.profile_public %}
+                                    <i class="fas fa-eye"></i> Другие игроки могут просматривать ваш профиль и статистику
+                                    {% else %}
+                                    <i class="fas fa-eye-slash"></i> Ваш профиль виден только вам и администраторам
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </aside>
+                    </div>
+                </section>
+                <section role="tabpanel"
+                         id="profile-panel-edit"
+                         aria-labelledby="profile-tab-edit"
+                         data-st-panel="edit"
+                         data-st-panel-group="profile"
+                         class="st-profile-edit"
+                         hidden>
+                    <div class="profile-card">
+                        <h3><i class="fas fa-user-edit" style="color:#667eea"></i> Редактирование профиля</h3>
+                        <form method="post" action="/profile/update" id="profileForm">
+                            <fieldset id="profileFields">
+                                <div class="avatar-section">
+                                    <button type="button"
+                                            class="avatar-emoji-display"
+                                            id="avatarDisplay"
+                                            aria-label="Выбрать аватар"
+                                            aria-expanded="false"
+                                            aria-controls="emojiPicker"
+                                            onclick="toggleEmojiPicker()">{{ user.avatar_emoji or '👤' }}</button>
+                                    <div class="avatar-hint">
+                                        <i class="fas fa-mouse-pointer"></i> Нажмите для выбора аватарки
+                                    </div>
+                                    <input type="hidden"
+                                           name="avatar_emoji"
+                                           id="avatarInput"
+                                           value="{{ user.avatar_emoji or '' }}">
+                                    <div class="emoji-picker" id="emojiPicker">
+                                        {% for emoji in ['👤','🦁','🐺','🦊','🦅','🐉','🦈','🐻','🦇','👑','💎','⚡','🔥','❄️','🌟','💀','🎭','🃏','🎲','🎯','🦉','🐯','🦄','🌙','☀️'] %}
+                                        <button type="button"
+                                                class="emoji-option {% if user.avatar_emoji == emoji %}selected{% endif %}"
+                                                onclick="selectEmoji('{{ emoji }}',this)">{{ emoji }}</button>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="form-label" for="profileName">
+                                        <i class="fas fa-tag"></i> Отображаемый ник на сайте
+                                    </label>
+                                    <input type="text"
+                                           id="profileName"
+                                           name="new_name"
+                                           value="{{ display_name }}"
+                                           maxlength="30"
+                                           class="form-control"
+                                           placeholder="Ваш ник">
+                                    <small class="text-muted-custom d-block mt-2">
+                                        <i class="fas fa-info-circle"></i> До 30 символов. Можно изменить независимо от Discord-ника.
+                                    </small>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="form-label" for="profileBio">
+                                        <i class="fas fa-align-left"></i> О себе
+                                    </label>
+                                    <textarea id="profileBio"
+                                              name="bio"
+                                              class="bio-textarea"
+                                              maxlength="500"
+                                              placeholder="Расскажите о себе..."
+                                              oninput="updateCharCount(this, 'bioCounter', 500)">{{ user.bio or '' }}</textarea>
+                                    <div class="char-counter" id="bioCounter">{{ (user.bio or '')|length }}/500</div>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="form-label" for="profileQuote">
+                                        <i class="fas fa-quote-left"></i> Цитата / Подпись
+                                    </label>
+                                    <input type="text"
+                                           id="profileQuote"
+                                           name="quote"
+                                           value="{{ user.quote or '' }}"
+                                           maxlength="200"
+                                           class="quote-input"
+                                           placeholder="Ваша любимая цитата...">
+                                    <small class="text-muted-custom d-block mt-2">До 200 символов</small>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="form-label">
+                                        <i class="fas fa-gamepad"></i> Любимая игра
+                                    </label>
+                                    <input type="hidden"
+                                           name="favorite_game"
+                                           id="favoriteGameInput"
+                                           value="{{ user.favorite_game or '' }}">
+                                    <div class="favorite-game-select">
+                                        <button type="button" class="game-option {% if user.favorite_game == 'domino' %}selected{% endif %}" onclick="selectGame('domino',this)"><div class="game-option-icon">▣</div><div class="game-option-name">Домино</div></button>
+                                        <button type="button" class="game-option {% if user.favorite_game == 'battleship' %}selected{% endif %}" onclick="selectGame('battleship',this)"><div class="game-option-icon">⚓</div><div class="game-option-name">Морской бой</div></button>
+                                        <button type="button" class="game-option {% if user.favorite_game == 'chess' %}selected{% endif %}" onclick="selectGame('chess',this)"><div class="game-option-icon">♟</div><div class="game-option-name">Шахматы</div></button>
+                                        <button type="button" class="game-option {% if user.favorite_game == 'draughts' %}selected{% endif %}" onclick="selectGame('draughts',this)"><div class="game-option-icon">◉</div><div class="game-option-name">Русские шашки</div></button>
+                                        <button type="button" class="game-option {% if user.favorite_game == 'backgammon' %}selected{% endif %}" onclick="selectGame('backgammon',this)"><div class="game-option-icon">⚄</div><div class="game-option-name">Нарды</div></button>
+                                        <button type="button" class="game-option {% if user.favorite_game == 'monopoly' %}selected{% endif %}" onclick="selectGame('monopoly',this)"><div class="game-option-icon">▦</div><div class="game-option-name">Монополия</div></button>
+                                        <button type="button" class="game-option {% if user.favorite_game == 'go' %}selected{% endif %}" onclick="selectGame('go',this)"><div class="game-option-icon">●</div><div class="game-option-name">Го</div></button>
+                                        <button type="button"
+                                                class="game-option {% if user.favorite_game == 'durak' %}selected{% endif %}"
+                                                onclick="selectGame('durak',this)">
+                                            <div class="game-option-icon">🂡</div>
+                                            <div class="game-option-name">Дурак</div>
+                                        </button>
+                                        <button type="button"
+                                                class="game-option {% if user.favorite_game == 'blackjack' %}selected{% endif %}"
+                                                onclick="selectGame('blackjack',this)">
+                                            <div class="game-option-icon">♠️</div>
+                                            <div class="game-option-name">Блэкджек</div>
+                                        </button>
+                                        <button type="button"
+                                                class="game-option {% if user.favorite_game == 'roulette' %}selected{% endif %}"
+                                                onclick="selectGame('roulette',this)">
+                                            <div class="game-option-icon">🎡</div>
+                                            <div class="game-option-name">Рулетка</div>
+                                        </button>
+                                        <button type="button"
+                                                class="game-option {% if user.favorite_game == 'poker' %}selected{% endif %}"
+                                                onclick="selectGame('poker',this)">
+                                            <div class="game-option-icon">🃏</div>
+                                            <div class="game-option-name">Покер</div>
+                                        </button>
+                                        <button type="button"
+                                                class="game-option {% if user.favorite_game == 'crash' %}selected{% endif %}"
+                                                onclick="selectGame('crash',this)">
+                                            <div class="game-option-icon">📈</div>
+                                            <div class="game-option-name">Crash</div>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="mb-4">
+                                    <label class="form-label">
+                                        <i class="fas fa-palette"></i> Цвет темы профиля
+                                    </label>
+                                    <input type="hidden"
+                                           name="theme_color"
+                                           id="themeColorInput"
+                                           value="{{ user.theme_color or '#667eea' }}">
+                                    <div class="color-picker">
+                                        {% set colors = [('#667eea', 'Индиго'), ('#f093fb', 'Розовый'), ('#4facfe', 'Голубой'), ('#43e97b', 'Зелёный'), ('#fa709a', 'Коралл'), ('#ffd700', 'Золотой'), ('#f44336', 'Красный'), ('#9c27b0', 'Фиолетовый'), ('#ff9800', 'Оранжевый'), ('#00bcd4', 'Бирюзовый')] %}
+                                        {% for color, name in colors %}
+                                        <button type="button"
+                                                class="color-option {% if (user.theme_color or '#667eea') == color %}selected{% endif %}"
+                                                style="background:{{ color }};
+                                                       color:{{ color }}"
+                                                onclick="selectColor('{{ color }}',this)"
+                                                title="{{ name }}"
+                                                aria-label="{{ name }}"></button>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </fieldset>
+                            <div class="st-profile-save-bar">
+                                <small id="profileSaveStatus" role="status">Изменения ещё не внесены</small><button type="submit" class="save-btn">
+                                    <i class="fas fa-save"></i> Сохранить изменения
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </section>
+                <section role="tabpanel"
+                         id="profile-panel-history"
+                         aria-labelledby="profile-tab-history"
+                         data-st-panel="history"
+                         data-st-panel-group="profile"
+                         class="st-profile-history"
+                         hidden>
+{% include "_wallet_history.html" %}
+                </section>
+            </div>
+        </main>
+        <script>
+function toggleEmojiPicker() {
+    const visible = document.getElementById("emojiPicker").classList.toggle("show");
+    document.getElementById("avatarDisplay").setAttribute("aria-expanded", visible);
+}
+
+function selectEmoji(emoji, el) {
+    document.getElementById("avatarDisplay").textContent = emoji;
+    document.getElementById("avatarInput").value = emoji;
+    document.querySelectorAll(".emoji-option").forEach((el) => el.classList.remove("selected"));
+    el.classList.add("selected");
+    markProfileDirty();
+    document.getElementById("emojiPicker").classList.remove("show");
+}
+
+function selectGame(game, el) {
+    document.getElementById("favoriteGameInput").value = game;
+    document.querySelectorAll(".game-option").forEach((el) => el.classList.remove("selected"));
+    el.classList.add("selected");
+    markProfileDirty();
+}
+
+function selectColor(color, el) {
+    document.getElementById("themeColorInput").value = color;
+    document.querySelectorAll(".color-option").forEach((el) => el.classList.remove("selected"));
+    el.classList.add("selected");
+    markProfileDirty();
+}
+
+function updateCharCount(textarea, counterId, maxLen) {
+    const counter = document.getElementById(counterId);
+    const len = textarea.value.length;
+    counter.textContent = `${len}/${maxLen}`;
+    counter.style.color =
+        len > maxLen * 0.9 ? "#f44336" : len > maxLen * 0.7 ? "#ff9800" : "rgba(255,255,255,.5)";
+}
+async function togglePublic() {
+    const input = document.getElementById("publicToggle");
+    if (input.disabled) return;
+    const requested = input.checked;
+    input.disabled = true;
+    try {
+        const res = await fetch("/profile/toggle-public", {
+            method: "POST",
+        });
+        const data = await res.json();
+        if (!res.ok) throw Error(data.detail || "Не удалось изменить приватность");
+        input.checked = !!data.profile_public;
+        document.getElementById("privacyStatus").textContent = data.profile_public
+            ? "Публичный"
+            : "Скрытый";
+        document.getElementById("privacyDesc").textContent = data.profile_public
+            ? "Другие игроки могут просматривать ваш профиль и статистику"
+            : "Ваш профиль виден только вам и администраторам";
+        STUI.notice("Настройка приватности сохранена", "success");
+    } catch (e) {
+        input.checked = !requested;
+        STUI.notice(e.message || "Ошибка сети", "error");
+    } finally {
+        input.disabled = false;
+    }
+}
+document.addEventListener("click", function (e) {
+    const picker = document.getElementById("emojiPicker");
+    const display = document.getElementById("avatarDisplay");
+    if (
+        picker &&
+        picker.classList.contains("show") &&
+        !picker.contains(e.target) &&
+        !display.contains(e.target)
+    ) {
+        picker.classList.remove("show");
+    }
+});
+const profileForm = document.getElementById("profileForm");
+const originalProfile = JSON.stringify([...new FormData(profileForm)]);
+let profileDirty = false,
+    profileSaving = false;
+
+function markProfileDirty() {
+    profileDirty = JSON.stringify([...new FormData(profileForm)]) !== originalProfile;
+    const el = document.getElementById("profileSaveStatus");
+    el.textContent = profileDirty ? "Есть несохранённые изменения" : "Изменения ещё не внесены";
+    el.classList.toggle("st-profile-dirty", profileDirty);
+    for (const kind of ["emoji", "game", "color"])
+        document
+            .querySelectorAll("." + kind + "-option")
+            .forEach((el) => el.setAttribute("aria-pressed", el.classList.contains("selected")));
+}
+profileForm.addEventListener("input", markProfileDirty);
+window.addEventListener("beforeunload", (e) => {
+    if (profileDirty) {
+        e.preventDefault();
+        e.returnValue = "";
+    }
+});
+markProfileDirty();
+profileForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (profileSaving) return;
+    const data = new FormData(profileForm);
+    profileSaving = true;
+    document.getElementById("profileFields").disabled = true;
+    const btn = profileForm.querySelector("[type=submit]");
+    btn.disabled = true;
+    try {
+        const r = await fetch("/profile/update", {
+            method: "POST",
+            body: data,
+        });
+        if (!r.ok) {
+            let d;
+            try {
+                d = await r.json();
+            } catch {}
+            throw Error(d?.detail || "Не удалось сохранить профиль");
+        }
+        profileDirty = false;
+        window.location.assign("/profile?updated=1");
+    } catch (e) {
+        STUI.notice(e.message || "Ошибка сети", "error");
+        profileSaving = false;
+        document.getElementById("profileFields").disabled = false;
+        btn.disabled = false;
+    }
+});
+
+
+if (new URLSearchParams(location.search).get("updated") === "1")
+    STUI.notice("Профиль сохранён", "success");
+
+</script>
+        {% include "_rule_test_ui.html" %}
+        <script>
+ST9Tests.render(document.getElementById("rtProfileResults"), {{ rule_tests|tojson }});
+
+</script>
+    </body>
+</html>

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8">
+        <title>Игры — Strike Team 9</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"
+              rel="stylesheet">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        {% include "_site_ui.html" %}
+    </head>
+    <body class="st-catalog-page">
+        {% include "_site_nav.html" %}
+        <main class="container mt-4" id="st-content">
+            <div class="st-page-heading">
+                <div>
+                    <span class="st-eyebrow">Strike Team 9</span>
+                    <h1>Во что сыграем?</h1>
+                    <p>Семь игр. Один баланс в бишопкоинах.</p>
+                </div>
+                <div class="st-actions"><a href="/profile#history"
+   class="btn btn-outline-light">Моя история</a></div>
+            </div>
+            {% if not user %}
+            <div class="st-panel">
+                <p>Для игры войдите через Discord или по личной ссылке от бота.</p>
+                <a href="/login" class="btn btn-primary">Войти</a>
+            </div>
+            {% endif %}
+            <div class="st-catalog-grid">
+                <a class="st-game-card" href="/games/blackjack">
+                    <div class="st-game-art st-art-blackjack" aria-hidden="true">
+                        <svg viewBox="0 0 110 120">
+                            <rect x="14" y="10" width="70" height="99" rx="9" fill="#b8d0f4" transform="rotate(-12 49 59)" /><rect x="26" y="7" width="70" height="99" rx="9" fill="#eef4fc" /><text x="35" y="34" font-size="20" fill="#253959">A</text><text x="44" y="80" font-size="48" fill="#253959">♠</text>
+                        </svg>
+                    </div>
+                    <div class="st-game-card-content">
+                        <h2>Блэкджек</h2>
+                        <p>Собери руку ближе к 21, чем у дилера.</p>
+                        <div class="st-game-tags"><span>Один игрок</span><span>Победа ×2 · блэкджек ×2,5</span></div>
+                        <span class="st-game-link">Открыть игру →</span>
+                    </div>
+                </a><a class="st-game-card" href="/games/roulette">
+                    <div class="st-game-art st-art-roulette" aria-hidden="true">
+                        <svg viewBox="0 0 110 120">
+                            <circle cx="55" cy="57" r="48" fill="#263148" stroke="#bd8496" stroke-width="5" />
+                            <path d="M55 9 A48 48 0 0 1 103 57 L55 57Z" fill="#914b5c" />
+                            <path d="M55 105 A48 48 0 0 1 7 57 L55 57Z" fill="#914b5c" />
+                            <circle cx="55" cy="57" r="13" fill="#c8a268" />
+                            <path d="M47 2L55 18L63 2Z" fill="#f5dca8" />
+                        </svg>
+                    </div>
+                    <div class="st-game-card-content">
+                        <h2>Рулетка</h2>
+                        <p>Выбери цвет или чётность и запускай колесо.</p>
+                        <div class="st-game-tags"><span>Один игрок</span><span>Зеро ×36</span></div>
+                        <span class="st-game-link">Открыть игру →</span>
+                    </div>
+                </a><a class="st-game-card" href="/games/poker/lobby">
+                    <div class="st-game-art st-art-poker" aria-hidden="true">
+                        <svg viewBox="0 0 110 120">
+                            <rect x="9" y="20" width="65" height="89" rx="8" fill="#d4efe8" transform="rotate(-10 40 60)" /><rect x="37" y="10" width="65" height="89" rx="8" fill="#eef4fc" /><text x="43" y="36" font-size="20" fill="#253959">K</text><text x="49" y="82" font-size="43" fill="#253959">♣</text>
+                        </svg>
+                    </div>
+                    <div class="st-game-card-content">
+                        <h2>Покер</h2>
+                        <p>Техасский холдем с друзьями за общим столом.</p>
+                        <div class="st-game-tags"><span>2–12 игроков</span><span>История раздач</span></div>
+                        <span class="st-game-link">Открыть игру →</span>
+                    </div>
+                </a><a class="st-game-card" href="/games/crash">
+                    <div class="st-game-art st-art-crash" aria-hidden="true">
+                        <svg viewBox="0 0 110 120">
+                            <path d="M9 105H105M9 105V12" fill="none" stroke="#8d856c" stroke-width="3" />
+                            <path d="M18 88L41 75L61 61L82 32L100 12" fill="none" stroke="#edd094" stroke-width="6" stroke-linejoin="round" />
+                            <path d="M77 13H101V37" fill="none" stroke="#edd094" stroke-width="6" />
+                            <circle cx="41" cy="75" r="5" fill="#fff2ce" />
+                        </svg>
+                    </div>
+                    <div class="st-game-card-content">
+                        <h2>Crash</h2>
+                        <p>Множитель растёт. Забери выплату до падения.</p>
+                        <div class="st-game-tags"><span>Один игрок</span><span>Комиссия 5%</span></div>
+                        <span class="st-game-link">Открыть игру →</span>
+                    </div>
+                </a><a class="st-game-card" href="/games/durak/lobby">
+                    <div class="st-game-art st-art-poker" aria-hidden="true">
+                        <svg viewBox="0 0 110 120">
+                            <rect x="12" y="22" width="64" height="86" rx="8" fill="#acd9cd" transform="rotate(-12 44 65)" /><rect x="35" y="9" width="64" height="88" rx="8" fill="#eef4fc" /><text x="43" y="35" font-size="22" fill="#b74d67">6</text><text x="49" y="80" font-size="43" fill="#b74d67">♦</text>
+                        </svg>
+                    </div>
+                    <div class="st-game-card-content">
+                        <h2>Дурак</h2>
+                        <p>Подкидной или переводной. Свои правила и общий банк.</p>
+                        <div class="st-game-tags"><span>2–6 игроков</span><span>Настраиваемые столы</span><span>Без комиссии</span></div>
+                        <span class="st-game-link">Открыть игру →</span>
+                    </div>
+                </a><a class="st-game-card" href="/games/billiards/lobby">
+                    <div class="st-game-art st-art-billiards" aria-hidden="true">
+                        <svg viewBox="0 0 110 120">
+                            <rect x="7" y="18" width="96" height="75" rx="13" fill="#5b3825" /><rect x="13" y="24" width="84" height="63" rx="9" fill="#267257" /><circle cx="33" cy="57" r="9" fill="#f5f1df" /><circle cx="69" cy="50" r="8" fill="#e9c84a" /><circle cx="82" cy="61" r="8" fill="#24354d" />
+                            <path d="M22 105 63 59" stroke="#d4b17e" stroke-width="5" stroke-linecap="round" />
+                        </svg>
+                    </div>
+                    <div class="st-game-card-content">
+                        <h2>Бильярд</h2>
+                        <p>Физика шаров, фолы, очередность ходов и общий банк.</p>
+                        <div class="st-game-tags"><span>1–6 игроков</span><span>8-ball и ротация</span><span>Тренировка без ставки</span></div>
+                        <span class="st-game-link">Открыть игру →</span>
+                    </div>
+                </a>
+                <a class="st-game-card" href="/games/chess/lobby">
+                    <div class="st-game-art st-art-poker" aria-hidden="true"><svg viewBox="0 0 110 120"><rect x="14" y="12" width="82" height="96" rx="9" fill="#29384b"/><path d="M22 20h32v32H22zm34 0h32v32H56zM22 54h32v32H22zm34 0h32v32H56z" fill="#e7d6b3"/><text x="27" y="48" font-size="32">♞</text><text x="59" y="82" font-size="32">♜</text></svg></div>
+                    <div class="st-game-card-content"><h2>Шахматы</h2><p>Классика один на один: шах, мат, рокировка и ничьи по правилам.</p><div class="st-game-tags"><span>2 игрока</span><span>Бесплатно или со взносом</span></div><span class="st-game-link">К столам →</span></div>
+                </a>
+                <a class="st-game-card" href="/games/draughts/lobby">
+                    <div class="st-game-art st-art-billiards" aria-hidden="true"><svg viewBox="0 0 110 120"><rect x="12" y="14" width="86" height="92" rx="10" fill="#29473f"/><path d="M20 22h32v32H20zm34 32h32v32H54z" fill="#d5c7a4"/><ellipse cx="38" cy="76" rx="19" ry="8" fill="#152c32"/><circle cx="38" cy="69" r="18" fill="#f6e8bc" stroke="#c1a66b" stroke-width="4"/><circle cx="71" cy="40" r="17" fill="#172b37" stroke="#a5baa7" stroke-width="3"/><path d="M62 42l-2-8 7 4 4-8 4 8 7-4-2 8z" fill="#edcf87"/></svg></div>
+                    <div class="st-game-card-content"><h2>Русские шашки</h2><p>Обязательное взятие, летающие дамки и серии превращений.</p><div class="st-game-tags"><span>2 игрока</span><span>Доска 8×8</span><span>Бесплатно или со взносом</span></div><span class="st-game-link">К столам →</span></div>
+                </a>
+                <a class="st-game-card" href="/games/backgammon/lobby">
+                    <div class="st-game-art st-art-poker" aria-hidden="true"><svg viewBox="0 0 110 120"><rect x="14" y="12" width="82" height="96" rx="9" fill="#29384b"/><path d="M22 20h32v32H22zm34 0h32v32H56zM22 54h32v32H22zm34 0h32v32H56z" fill="#e7d6b3"/><text x="27" y="48" font-size="32">♞</text><text x="59" y="82" font-size="32">♜</text></svg></div>
+                    <div class="st-game-card-content"><h2>Нарды</h2><p>Длинные и короткие нарды: 15 шашек, честные кости и общий банк победителю.</p><div class="st-game-tags"><span>2 игрока</span><span>Бесплатно или со взносом</span></div><span class="st-game-link">К столам →</span></div>
+                <a class="st-game-card" href="/games/monopoly/lobby">
+                    <div class="st-game-art st-art-poker" aria-hidden="true"><svg viewBox="0 0 110 120"><rect x="14" y="12" width="82" height="96" rx="9" fill="#29384b"/><path d="M22 20h32v32H22zm34 0h32v32H56zM22 54h32v32H22zm34 0h32v32H56z" fill="#e7d6b3"/><path d="M29 84V49L55 29L81 49V84H62V65H48V84Z" fill="#79b39b"/></svg></div>
+                    <div class="st-game-card-content"><h2>Монополия</h2><p>Покупайте участки, стройте город и договаривайтесь о сделках.</p><div class="st-game-tags"><span>2–10 игроков</span><span>Бесплатно или со взносом</span></div><span class="st-game-link">К столам →</span></div>
+                </a>
+                <a class="st-game-card" href="/games/go/lobby">
+                    <div class="st-game-art st-art-poker" aria-hidden="true"><svg viewBox="0 0 110 120"><rect x="14" y="12" width="82" height="96" rx="9" fill="#29384b"/><path d="M22 20h32v32H22zm34 0h32v32H56zM22 54h32v32H22zm34 0h32v32H56z" fill="#e7d6b3"/><text x="27" y="48" font-size="32">●</text><text x="59" y="82" font-size="32">○</text></svg></div>
+                    <div class="st-game-card-content"><h2>Го</h2><p>Захватывайте группы и окружайте территорию. Поля 9×9, 13×13 и 19×19.</p><div class="st-game-tags"><span>2 игрока</span><span>Бесплатно или со взносом</span></div><span class="st-game-link">К столам →</span></div>
+                </a>
+                <a class="st-game-card" href="/games/domino/lobby">
+                    <div class="st-game-art st-art-billiards" aria-hidden="true">
+                        <svg viewBox="0 0 110 120"><g transform="rotate(-12 55 60)"><rect x="14" y="17" width="35" height="81" rx="7" fill="#f3ecd3"/><path d="M16 57H47" stroke="#797c64"/><g fill="#28453e"><circle cx="24" cy="29" r="3"/><circle cx="39" cy="29" r="3"/><circle cx="24" cy="41" r="3"/><circle cx="39" cy="41" r="3"/><circle cx="24" cy="68" r="3"/><circle cx="39" cy="68" r="3"/><circle cx="31" cy="78" r="3"/><circle cx="24" cy="88" r="3"/><circle cx="39" cy="88" r="3"/></g></g><rect x="58" y="25" width="35" height="81" rx="7" fill="#e4d9b5"/><path d="M59 65H92" stroke="#797c64"/><g fill="#28453e"><circle cx="67" cy="37" r="3"/><circle cx="84" cy="37" r="3"/><circle cx="67" cy="47" r="3"/><circle cx="84" cy="47" r="3"/><circle cx="67" cy="57" r="3"/><circle cx="84" cy="57" r="3"/><circle cx="75" cy="85" r="3"/></g></svg>
+                    </div>
+                    <div class="st-game-card-content"><h2>Домино</h2><p>Классика с базаром. Собери цепочку и выложи все кости.</p><div class="st-game-tags"><span>2–4 игрока</span><span>«Рыба» и раздел банка</span><span>Без комиссии</span></div><span class="st-game-link">Открыть игру →</span></div>
+                </a>
+                <a class="st-game-card" href="/games/battleship/lobby">
+                    <div class="st-game-art st-art-billiards" aria-hidden="true">
+                        <svg viewBox="0 0 110 120"><path d="M12 76H98L85 94H26Z" fill="#9dbfc9"/><path d="M37 52H77V76H37Z" fill="#e3d5ad"/><path d="M45 43H71V52H45Z" fill="#7eacc7"/><path d="M58 17V43M58 25H87" fill="none" stroke="#eee0b1" stroke-width="4"/><path d="M8 99Q20 91 32 99T56 99T80 99T104 99" fill="none" stroke="#69bacd" stroke-width="4"/></svg>
+                    </div>
+                    <div class="st-game-card-content"><h2>Морской бой</h2><p>Расставь флот, найди корабли соперника и забери общий банк.</p><div class="st-game-tags"><span>2 игрока</span><span>10×10 · классика</span><span>Победителю весь банк</span></div><span class="st-game-link">Открыть игру →</span></div>
+                </a>
+            </div>
+            <div class="st-field-hint">БК — бишопкоины, внутренняя валюта Strike Team 9. Выплаты указаны с учётом ставки.</div>
+        </main>
+    </body>
+</html>
