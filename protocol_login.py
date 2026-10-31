@@ -44,12 +44,10 @@ def login_form(body):
     raise ClanUnavailable("Не найдена форма входа по коду игры.")
 
 
-def main():
-    print("Зайдите на сервер Protocol и напишите в игровом чате !сайт.")
-    print(
-        "Вход даёт сборщику доступ к вашему кабинету Protocol. Сессия хранится только на этом сервере."
-    )
-    print("Код вводится скрыто. Пароль Steam не нужен.")
+def login_with_code(code, before_save=lambda: None):
+    """Verify the remote account before atomically replacing the collector session."""
+    if not isinstance(code, str) or not re.fullmatch(r"[0-9]{6}", code):
+        raise ClanUnavailable("Нужен шестизначный код из игры.")
     target = cookie_path()
     jar = MozillaCookieJar()
     login_url = BASE + "/login?next=%2Fclan"
@@ -71,9 +69,6 @@ def main():
                 "Страница входа Protocol превышает допустимый размер."
             )
         fields = login_form(response.text)
-        code = getpass.getpass("Код из игры: ").replace(" ", "")
-        if not re.fullmatch(r"\d{6}", code):
-            raise ClanUnavailable("Нужен шестизначный код из игры.")
         fields.update(code=code, next="/clan?clan=STRIKE TEAM 9")
         response = client.post(
             login_url,
@@ -96,6 +91,7 @@ def main():
             raise ClanUnavailable(
                 "Protocol не выдал сессию. Сохранённая сессия не изменена."
             )
+        before_save()
         target.parent.mkdir(parents=True, exist_ok=True)
         fd, name = tempfile.mkstemp(prefix=".protocol-session-", dir=target.parent)
         os.close(fd)
@@ -112,6 +108,10 @@ def main():
             os.replace(temporary, target)
         finally:
             temporary.unlink(missing_ok=True)
+    return document
+
+
+def refresh_after_login(document):
     from datetime import timedelta
     from database import SessionLocal
     from protocol_clan_source import ProtocolClanStats, collect_clan, utcnow
@@ -128,13 +128,25 @@ def main():
         if health:
             health.attempted_at = utcnow() - timedelta(hours=25)
     stored = collect_clan(fetch=lambda: document)
-    if stored:
+    return stored
+
+
+def main():
+    print("Зайдите на сервер Protocol и напишите в игровом чате !сайт.")
+    print(
+        "Вход даёт сборщику доступ к вашему кабинету Protocol. Сессия хранится только на этом сервере."
+    )
+    print("Код вводится скрыто. Пароль Steam не нужен.")
+    code = getpass.getpass("Код из игры: ").replace(" ", "")
+    document = login_with_code(code)
+    del code
+    if refresh_after_login(document):
         print(
             f"Вход выполнен. Загружено игроков: {len(document['players'])}. Значения сессии скрыты."
         )
     else:
         print(
-            "Вход выполнен, но источник Protocol отключён в настройках автоматизации. Включите его для сбора статистики."
+            "Вход выполнен, но источник Protocol отключён в настройках автоматизации."
         )
 
 
