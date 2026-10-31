@@ -373,6 +373,7 @@ async def durable_request(request: Request, call_next):
         or request.url.path in {"/api/admin/player-presence", "/api/site-presence"}
         or request.url.path.startswith("/api/admin/award-design")
         or request.url.path == "/api/admin/protocol-week-check"
+        or request.url.path == "/api/admin/protocol-login"
         or (
             request.method == "GET"
             and request.url.path.startswith("/api/admin/assembly/")
@@ -5327,6 +5328,8 @@ from statistics_freshness import (
 templates.env.globals["may_view_statistics"] = may_view_statistics
 
 app.include_router(make_freshness_router(get_user, get_db))
+from protocol_login_admin import make_router as make_protocol_login_router
+app.include_router(make_protocol_login_router(is_super_admin))
 app.include_router(make_automation_router(get_user, get_db, is_super_admin))
 app.include_router(make_admin_hub_router(get_user, get_db, is_super_admin))
 
