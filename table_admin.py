@@ -57,6 +57,7 @@ def make_router(
     battleship=None,
     chess=None,
     draughts=None,
+    monopoly=None,
     go=None,
 ):
     # Older main.py versions pass log_game in the billiards position. Keeping this
@@ -86,6 +87,8 @@ def make_router(
             games["chess"] = chess.tables
         if draughts is not None:
             games["draughts"] = draughts.tables
+        if monopoly is not None:
+            games["monopoly"] = monopoly.tables
         if go is not None:
             games["go"] = go.tables
         if game not in games:
@@ -144,6 +147,8 @@ def make_router(
             games.append(("chess", chess.tables))
         if draughts is not None:
             games.append(("draughts", draughts.tables))
+        if monopoly is not None:
+            games.append(("monopoly", monopoly.tables))
         if go is not None:
             games.append(("go", go.tables))
         for game, values in games:
@@ -196,6 +201,8 @@ def make_router(
             games["chess"] = chess.tables
         if draughts is not None:
             games["draughts"] = draughts.tables
+        if monopoly is not None:
+            games["monopoly"] = monopoly.tables
         if go is not None:
             games["go"] = go.tables
         if game not in games:

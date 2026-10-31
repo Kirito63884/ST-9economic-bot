@@ -1,0 +1,458 @@
+<style>
+  .mono-page {
+    max-width: 1500px;
+    margin: 0 auto;
+    padding: 24px;
+    color: #e8edf7;
+  }
+  .mono-page * {
+    box-sizing: border-box;
+  }
+  .mono-page h1 {
+    margin: 8px 0;
+    font-size: clamp(24px, 4vw, 38px);
+  }
+  .mono-kicker {
+    color: #83d0bd;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .mono-muted {
+    color: #a6b5c9;
+    line-height: 1.6;
+  }
+  .mono-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 330px;
+    gap: 20px;
+    align-items: start;
+    margin-top: 20px;
+  }
+  .mono-panel {
+    background: #161f2d;
+    border: 1px solid #304054;
+    border-radius: 16px;
+    padding: 18px;
+    margin: 0 0 16px;
+    min-width: 0;
+  }
+  .mono-panel h2 {
+    font-size: 17px;
+    margin: 0 0 14px;
+  }
+  .mono-row {
+    display: flex;
+    align-items: end;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .mono-page label {
+    display: grid;
+    gap: 6px;
+    color: #c1cede;
+    font-size: 13px;
+  }
+  .mono-page input,
+  .mono-page select {
+    background: #0e1521;
+    color: #edf2fa;
+    border: 1px solid #4b5c74;
+    border-radius: 8px;
+    padding: 10px;
+    min-width: 0;
+    max-width: 100%;
+    font: inherit;
+  }
+  .mono-page input[type="checkbox"] {
+    accent-color: #6ad0ae;
+    width: 18px;
+    height: 18px;
+  }
+  .mono-btn {
+    display: inline-flex;
+    justify-content: center;
+    align-items: center;
+    background: #8ed8bb;
+    color: #102b25;
+    border: 1px solid transparent;
+    font: inherit;
+    font-weight: 650;
+    text-decoration: none;
+    padding: 10px 14px;
+    border-radius: 9px;
+    cursor: pointer;
+    min-height: 42px;
+    gap: 5px;
+  }
+  .mono-btn.secondary {
+    background: #243247;
+    color: #e7effa;
+    border-color: #435771;
+  }
+  .mono-btn.danger {
+    background: #492b39;
+    color: #ffd1d6;
+    border-color: #8c4b62;
+  }
+  .mono-btn:disabled {
+    opacity: 0.42;
+    cursor: default;
+  }
+  .mono-page :focus-visible {
+    outline: 3px solid #ffdc8a;
+    outline-offset: 3px;
+  }
+  .mono-message {
+    color: #ffcf99;
+    min-height: 26px;
+    margin: 8px 0;
+  }
+  .mono-board {
+    display: grid;
+    grid-template-columns: repeat(11, minmax(0, 1fr));
+    grid-template-rows: repeat(11, minmax(0, 1fr));
+    aspect-ratio: 1;
+    background: #102b30;
+    border: 5px solid #324d52;
+    border-radius: 14px;
+    overflow: hidden;
+    width: 100%;
+    box-shadow: 0 24px 70px #0005;
+  }
+  .mono-cell {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    border: 1px solid #34444b;
+    background: #e1e7d9;
+    color: #172c2c;
+    padding: 4px 2px 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    font-size: clamp(6px, 0.72vw, 11px);
+    cursor: pointer;
+    font-family: inherit;
+    overflow: hidden;
+  }
+  .mono-cell[aria-pressed="true"] {
+    outline: 3px solid #ffb546;
+    outline-offset: -3px;
+    z-index: 1;
+    background: #fff2d1;
+  }
+  .mono-band {
+    width: calc(100% + 4px);
+    min-height: 8%;
+    height: 10%;
+    background: var(--group, transparent);
+    position: absolute;
+    inset: 0 -2px auto;
+  }
+  .mono-cell-name {
+    margin-top: 8%;
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+    text-align: center;
+  }
+  .mono-cell-num {
+    color: #4b5c59;
+    font-size: 8px;
+    position: absolute;
+    top: 1px;
+    left: 2px;
+  }
+  .mono-cell-price {
+    font-size: 0.9em;
+    color: #405452;
+  }
+  .mono-cell-owner {
+    height: 3px;
+    width: 100%;
+    background: var(--owner, transparent);
+    margin-top: auto;
+  }
+  .mono-tokens {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1px;
+    min-height: 9px;
+  }
+  .mono-token {
+    background: var(--token);
+    color: #12202a;
+    width: clamp(8px, 1.2vw, 15px);
+    height: clamp(8px, 1.2vw, 15px);
+    border: 1px solid #102638;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 800;
+  }
+  .mono-buildings {
+    font-size: 10px;
+    line-height: 1;
+    color: #16734e;
+  }
+  .mono-center {
+    grid-area: 2 / 2 / 11 / 11;
+    background: radial-gradient(ellipse at 50% 30%, #244b4d, #112d33 65%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 6%;
+    text-align: center;
+    gap: 10px;
+    overflow: hidden;
+  }
+  .mono-center-title {
+    font-size: clamp(16px, 3.1vw, 44px);
+    letter-spacing: 0.04em;
+    font-weight: 800;
+    transform: rotate(-9deg);
+    border-block: 1px solid #77b5a759;
+    padding: 8px 12px;
+    color: #b7e4ce;
+  }
+  .mono-city {
+    color: #73a49e;
+    font-size: clamp(25px, 7vw, 80px);
+    line-height: 1;
+  }
+  .mono-center .mono-muted {
+    font-size: clamp(9px, 1vw, 14px);
+    margin: 0;
+  }
+  .mono-dice {
+    display: flex;
+    gap: 8px;
+    min-height: 40px;
+    align-items: center;
+    justify-content: center;
+  }
+  .mono-die {
+    display: grid;
+    place-items: center;
+    width: 38px;
+    height: 38px;
+    border-radius: 9px;
+    font-size: 31px;
+    background: #f2e8d2;
+    color: #203e3d;
+    box-shadow: 2px 4px 0 #0004;
+  }
+  #centerActions {
+    justify-content: center;
+    margin-top: 0;
+  }
+  #centerActions .mono-btn {
+    font-size: clamp(10px, 1.1vw, 14px);
+    padding: 7px 10px;
+    min-height: 34px;
+  }
+  .mono-card {
+    background: #f2e8d2;
+    color: #293b39;
+    border-radius: 8px;
+    padding: 12px;
+    max-width: 310px;
+    font-size: clamp(9px, 1.2vw, 15px);
+    line-height: 1.4;
+  }
+  .mono-player {
+    border: 1px solid #34485c;
+    border-left: 4px solid var(--token);
+    padding: 10px 12px;
+    border-radius: 9px;
+    margin: 7px 0;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    align-items: center;
+  }
+  .mono-player.active {
+    background: #263c48;
+    box-shadow: 0 0 0 1px #82cbb0;
+  }
+  .mono-player.out {
+    opacity: 0.55;
+  }
+  .mono-player small {
+    display: block;
+    color: #a8b8ca;
+    margin-top: 3px;
+  }
+  .mono-cash {
+    color: #a6e0c4;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    font-weight: 700;
+  }
+  .mono-assets {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 7px;
+  }
+  .mono-assets button {
+    border-left: 5px solid var(--group, #9aa);
+    font-size: 12px;
+    padding: 7px 9px;
+    min-height: 36px;
+  }
+  .mono-deed {
+    border-top: 6px solid var(--group, #637c87);
+  }
+  .mono-deed table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  .mono-deed td {
+    padding: 5px 0;
+    border-bottom: 1px solid #2b3949;
+  }
+  .mono-deed td:last-child {
+    text-align: right;
+    color: #bfe5d0;
+  }
+  .mono-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+  .mono-pending {
+    border-color: #ad9261;
+    background: #302e28;
+  }
+  .mono-list-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 16px 0;
+    border-bottom: 1px solid #354052;
+    flex-wrap: wrap;
+  }
+  .mono-trade-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 18px;
+  }
+  .mono-check {
+    display: flex !important;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+  }
+  .mono-scroll {
+    max-height: 250px;
+    overflow: auto;
+  }
+  .mono-history {
+    padding-left: 20px;
+    color: #bbcbd9;
+    font-size: 13px;
+    line-height: 1.7;
+  }
+  .mono-page details summary {
+    cursor: pointer;
+    padding: 4px 0;
+    font-weight: 650;
+  }
+  .mono-page [hidden] {
+    display: none !important;
+  }
+  .mono-rules {
+    color: #b9c9d7;
+    line-height: 1.65;
+    font-size: 14px;
+  }
+  @media (max-width: 1040px) {
+    .mono-layout {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .mono-side {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .mono-cell {
+      font-size: clamp(7px, 1.25vw, 11px);
+    }
+  }
+  @media (max-width: 600px) {
+    .mono-page {
+      padding: 12px;
+    }
+    .mono-side {
+      display: block;
+    }
+    .mono-board {
+      border-width: 2px;
+      border-radius: 8px;
+    }
+    .mono-cell {
+      padding: 2px 0;
+      font-size: 7px;
+      gap: 0;
+    }
+    .mono-cell-name,
+    .mono-cell-price {
+      display: none;
+    }
+    .mono-cell-num {
+      position: static;
+      font-size: 9px;
+      margin-top: 4px;
+    }
+    .mono-buildings {
+      font-size: 8px;
+    }
+    .mono-cell-num::before {
+      content: "#";
+      font-size: 7px;
+    }
+    .mono-token {
+      width: 8px;
+      height: 8px;
+      font-size: 6px;
+    }
+    .mono-die {
+      width: 27px;
+      height: 27px;
+      font-size: 24px;
+    }
+    .mono-dice {
+      min-height: 27px;
+    }
+    .mono-center {
+      gap: 6px;
+      padding: 5%;
+    }
+    .mono-city {
+      display: none;
+    }
+    .mono-center-title {
+      padding: 5px;
+      font-size: 20px;
+    }
+    .mono-card {
+      padding: 7px;
+      font-size: 10px;
+    }
+    .mono-trade-columns {
+      grid-template-columns: 1fr;
+    }
+    .mono-panel {
+      padding: 14px;
+    }
+  }
+</style>

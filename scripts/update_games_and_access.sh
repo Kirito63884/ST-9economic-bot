@@ -17,6 +17,12 @@ test -f "$app_dir/main.py"
 test -f "$app_dir/wallet_history.py"
 files=(
     main.py database.py backup_routes.py roster_membership.py requirements.txt
+    automation_admin.py discord_roster.py roster_admin.py roster_settings.py
+    templates/_admin_roster_settings.html templates/_admin_roster_settings.js.html
+    monopoly_board.py monopoly_game.py monopoly_routes.py
+    templates/monopoly_lobby.html templates/monopoly_table.html
+    templates/_monopoly_ui.html templates/_monopoly_rules.html
+    templates/_monopoly_lobby.js.html templates/_monopoly_table.js.html
     go_engine.py go_game.py go_routes.py
     templates/go_lobby.html templates/go_table.html
     templates/_go_ui.html templates/_go_rules.html
@@ -109,7 +115,7 @@ if missing:
     raise SystemExit("Сначала установите зависимости этого коммита: " + ", ".join(sorted(missing)))
 PY
 # The bot must reload changed user fields/roster policy or the previous assembly policy.
-for path in database.py roster_membership.py assembly_attendance.py assembly_reports.py assembly_waivers.py; do
+for path in database.py roster_membership.py assembly_attendance.py assembly_reports.py assembly_waivers.py discord_roster.py roster_settings.py; do
     if ! cmp -s "$stage/code/$path" "$app_dir/$path"; then
         services+=(discord-bot.service)
         break
@@ -221,14 +227,18 @@ from chess_routes import ChessService
 from battleship import BattleshipTable
 from battleship_routes import BattleshipService
 import main  # Verify all entry-point imports without starting background workers.
+from monopoly_game import MonopolyTable
+from monopoly_routes import MonopolyService
+from database import AppRuntime, SessionLocal
 from go_game import GoTable
 from go_routes import GoService
-from database import AppRuntime, SessionLocal
 from jinja2 import meta
 with SessionLocal() as db:
     saved = db.get(AppRuntime, 1)
     if saved:
         main.restore_runtime(saved.payload or "{}")
+for name in ("monopoly_lobby.html", "monopoly_table.html", "_monopoly_ui.html", "_monopoly_rules.html", "_monopoly_lobby.js.html", "_monopoly_table.js.html"):
+    main.templates.env.get_template(name)
 pending = ["go_lobby.html", "go_table.html", "admin.html"]
 seen = set()
 while pending:
@@ -246,7 +256,7 @@ from medals_routes import catalog_context
 for name in ("draughts_lobby.html", "draughts_table.html", "_draughts_ui.html",
              "_draughts_rules.html", "_draughts_lobby.js.html", "_draughts_table.js.html"):
     main.templates.env.get_template(name)
-print("Го, прежние игры, сохранённые партии и шаблоны проверены. Права не менялись.")
+print("Го, Монополия, прежние игры, сохранённые партии и шаблоны проверены. Права не менялись.")
 PY
 )
 systemctl start "${services[@]}"

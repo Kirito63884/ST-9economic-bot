@@ -1,0 +1,38 @@
+<section id="panel-roster-settings" role="tabpanel" aria-labelledby="tab-roster-settings" hidden>
+  <div class="section-card">
+    <div class="section-heading">
+      <div><h2>Канал «Состав»</h2><p>Меняются ID ролей и описания. Заголовки, оформление, порядок существующих блоков и два сообщения сохраняются.</p></div>
+      <button id="rosterReload" type="button" class="btn btn-sm">Загрузить настройки</button>
+    </div>
+    <p class="hint">Настройки относятся только к публикации в канале <code>1555118430858780712</code>. Роли участникам, права сайта и группы для сборов здесь не изменяются.</p>
+    <p id="rosterStatus" class="editor-info" role="status">Откройте раздел, чтобы загрузить настройки.</p>
+    <datalist id="rosterRoleCatalog"></datalist>
+    <div id="rosterEditor" hidden>
+      <h3>Существующие роли</h3>
+      <div id="rosterBaseRoles" class="stack"></div>
+      <label class="roster-config-label">Задачи учебной группы: одна задача на строку
+        <textarea id="rosterTraining" class="form-control" rows="3" maxlength="1200"></textarea>
+      </label>
+      <h3>Дополнительные роли</h3>
+      <p class="hint">Новый блок добавляется в стиле состава. Его место выбирается отдельно; существующие блоки остаются в прежнем порядке.</p>
+      <div id="rosterExtraRoles" class="stack"></div>
+      <button id="rosterAddRole" type="button" class="btn">＋ Добавить роль</button>
+      <div class="action-row mt-3">
+        <button id="rosterPreviewButton" type="button" class="btn">Предварительный просмотр</button>
+        <button id="rosterSaveButton" type="button" class="btn btn-primary" disabled>Сохранить проверенный вариант</button>
+      </div>
+      <p class="hint">Сначала проверьте оба сообщения. Лимит Discord — 2000 символов на сообщение. Если текст не помещается, бот сохранит прежние сообщения.</p>
+      <div id="rosterPreview" hidden aria-live="polite"></div>
+    </div>
+  </div>
+</section>
+<style>
+  .roster-config-label { display: grid; gap: 7px; margin: 10px 0; color: var(--muted, #aab8cd); }
+  .roster-config-card { border: 1px solid var(--line, #344156); border-radius: 10px; padding: 14px; min-width: 0; }
+  .roster-config-card summary { cursor: pointer; font-weight: 650; }
+  .roster-config-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .roster-config-preview { white-space: pre-wrap; overflow-wrap: anywhere; background: #141c29; color: #e0e8f3; border: 1px solid #3d485e; border-radius: 10px; padding: 16px; font: 14px/1.55 system-ui, sans-serif; }
+  #panel-roster-settings .form-control, #panel-roster-settings .form-select { width: 100%; min-width: 0; }
+  @media (max-width: 600px) { .roster-config-row { grid-template-columns: 1fr; } }
+</style>
+<script>{% include "_admin_roster_settings.js.html" %}</script>

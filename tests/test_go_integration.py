@@ -215,3 +215,39 @@ def test_private_membership_size_changes_and_scoring_resignation(
     )
     assert act(c, p, 101, "resign").status_code == 200
     assert wallet(102) == 60
+
+
+def test_go_and_monopoly_share_runtime_without_losing_stakes(
+    make_user, login_as, monkeypatch
+):
+    # Keep Go's deterministic color choice local: both games import secrets,
+    # and a global randbelow stub would make every Monopoly opening roll tie.
+    with monkeypatch.context() as go_random:
+        c, p = table(make_user, login_as, go_random, entry=1000)
+    made = c.post("/api/monopoly/tables", json={"rules": {"entry_cents": 500}})
+    assert made.status_code == 200, made.text
+    m = "/api/monopoly/table/" + made.json()["table_id"]
+    c.cookies.set("session", session_cookie(102))
+    assert c.post(m + "/join").status_code == 200
+    assert request(c, m, "ready", ready=True).status_code == 200
+    c.cookies.set("session", session_cookie(101))
+    assert request(c, m, "ready", ready=True).status_code == 200
+    assert request(c, m, "start").status_code == 200
+    assert request(c, p, "start").status_code == 200
+    assert wallet(101) == 85 and wallet(102) == 35
+    saved = saved_state()
+    assert saved["go"] and saved["monopoly"]
+    main.restore_runtime(json.dumps(saved))
+    assert c.get(m + "/state").status_code == c.get(p + "/state").status_code == 200
+    c.cookies.set("session", session_cookie(102))
+    assert request(c, p, "leave").status_code == 200
+    assert wallet(101) == 105 and wallet(102) == 35
+    c.cookies.set("session", session_cookie(101))
+    assert c.get(m + "/state").json()["phase"] == "playing"
+    assert request(c, m, "leave").status_code == 200
+    assert wallet(101) == 105 and wallet(102) == 45
+    with SessionLocal() as db:
+        rows = db.query(GameHistory).all()
+        assert len(rows) == 4
+        assert {r.game_type for r in rows} == {"go", "monopoly"}
+        assert sum(r.amount for r in rows) == 0
