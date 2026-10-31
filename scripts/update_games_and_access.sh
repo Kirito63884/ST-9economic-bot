@@ -17,12 +17,16 @@ test -f "$app_dir/main.py"
 test -f "$app_dir/wallet_history.py"
 files=(
     main.py database.py backup_routes.py roster_membership.py requirements.txt
+    go_engine.py go_game.py go_routes.py
+    templates/go_lobby.html templates/go_table.html
+    templates/_go_ui.html templates/_go_rules.html
+    templates/_go_lobby.js.html templates/_go_table.js.html
     chess_game.py chess_routes.py
     templates/chess_lobby.html templates/chess_table.html
     templates/_chess_ui.html templates/_chess_lobby.js.html templates/_chess_table.js.html
     assembly_attendance.py assembly_waivers.py groups_admin.py assembly_reports.py
     medals_routes.py protocol_rankings.py
-    templates/admin.html templates/_assembly_waiver.html templates/_admin_group_reports.html
+    templates/admin.html templates/admin_logs.html templates/_assembly_waiver.html templates/_admin_group_reports.html
     templates/_admin_audit.html templates/_admin_hub.html templates/_statistics_freshness.html
     templates/medals.html templates/_admin_medals.html templates/_award_design.html
     templates/_medals_style.html templates/_award_catalog.html templates/_award_gallery_style.html
@@ -212,11 +216,29 @@ from chess_routes import ChessService
 from battleship import BattleshipTable
 from battleship_routes import BattleshipService
 import main  # Verify all entry-point imports without starting background workers.
+from go_game import GoTable
+from go_routes import GoService
+from database import AppRuntime, SessionLocal
+from jinja2 import meta
+with SessionLocal() as db:
+    saved = db.get(AppRuntime, 1)
+    if saved:
+        main.restore_runtime(saved.payload or "{}")
+pending = ["go_lobby.html", "go_table.html", "admin.html"]
+seen = set()
+while pending:
+    name = pending.pop()
+    if name in seen:
+        continue
+    seen.add(name)
+    source = main.templates.env.loader.get_source(main.templates.env, name)[0]
+    parsed = main.templates.env.parse(source)
+    pending.extend(ref for ref in meta.find_referenced_templates(parsed) if ref is not None)
 from table_lifecycle import IDLE_SECONDS
 from table_admin import management
 from protocol_rankings import CATEGORIES
 from medals_routes import catalog_context
-print("Шахматы, морской бой и технический администратор доступны. Никому автоматически права не назначены.")
+print("Го, прежние игры, сохранённые партии и шаблоны проверены. Права не менялись.")
 PY
 )
 systemctl start "${services[@]}"
@@ -224,7 +246,7 @@ curl -fsS --max-time 10 --retry 6 --retry-delay 1 --retry-connrefused \
     http://127.0.0.1:8000/ -o /dev/null
 systemctl is-active "${services[@]}"
 changing=0
-echo "Готово. Ctrl+F5 → Игры: Шахматы / Морской бой."
+echo "Готово. Ctrl+F5 → Игры → Го: 9×9 / 13×13 / 19×19."
 echo "Техадмин: Админка → Игроки → Открыть → Права доступа. Назначение/снятие — только владельцу."
 echo "После назначения техадмин входит заново. Балансы и существующие роли не изменены."
 echo "Перезапущены: ${services[*]}. Сборщики SQSTAT и игрового онлайна не перезапускались."
