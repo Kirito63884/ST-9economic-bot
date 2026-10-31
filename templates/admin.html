@@ -2192,6 +2192,7 @@
   >
     <span class="nav-icon">⚙</span>Настройки автоматизации
   </button>
+  {% if is_senior_or_super %}<button class="nav-item" id="tab-roster-settings" role="tab" aria-controls="panel-roster-settings" aria-selected="false" tabindex="-1" onclick="switchTab('roster-settings')"><span class="nav-icon">☷</span>Канал «Состав»</button>{% endif %}
   {% if is_super %}<button
     class="nav-item"
     id="tab-access"
@@ -2862,6 +2863,7 @@
                 {% include "_protocol_rankings.html" %}
                 {% include "_admin_medals.html" %}
                 {% include "_admin_automation.html" %}
+                {% if is_senior_or_super %}{% include "_admin_roster_settings.html" %}{% endif %}
             </main>
         </div>
         <div id="editorStorage" hidden>
@@ -3209,6 +3211,7 @@ function switchTab(name, focus = false) {
         loadAssemblyReports();
     }
     if (name === "automation") loadAutomation();
+    if (name === "roster-settings") window.loadRosterSettings?.();
     if (["hub", "award-review", "manual-awards", "appeals", "admin-reports"].includes(name)) loadAdminHub();
     if (name === "group-monthly") window.loadMonthlyGroups();
     if (name === "assembly-summary") window.loadAssemblySummary();
