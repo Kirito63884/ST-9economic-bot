@@ -1,0 +1,67 @@
+(() => {
+  const error = document.getElementById("error");
+  const esc = (s) =>
+    String(s).replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  async function api(url, options = {}) {
+    const response = await fetch(url, {
+      credentials: "same-origin",
+      headers: {
+        "Content-Type": "application/json",
+        ...window.ST9_REQUEST_HEADERS,
+      },
+      ...options,
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Ошибка запроса");
+    return data;
+  }
+  async function load() {
+    try {
+      const data = await api("/api/monopoly/tables");
+      document.getElementById("tables").innerHTML = data.tables.length
+        ? data.tables
+            .map(
+              (t) =>
+                `<article class="mono-list-item"><div><strong>${esc(t.creator)}${t.mine ? " · ваш стол" : ""}</strong><p>${t.players}/${t.rules.max_players} игроков · ${t.phase === "waiting" ? "Ожидает игроков" : t.phase === "finished" ? "Партия завершена" : "Идёт партия"}${t.rules.private ? " · закрытый" : ""} · взнос ${t.rules.entry_cents / 100} БК</p></div><a class="mono-btn" href="/games/monopoly/table/${encodeURIComponent(t.id)}">${t.mine ? "Вернуться" : "К столу"} →</a>${TableAdmin.markup(t, "monopoly")}</article>`,
+            )
+            .join("")
+        : "Открытых столов пока нет";
+    } catch (e) {
+      error.textContent = e.message;
+    }
+  }
+  document.getElementById("create").addEventListener("click", async () => {
+    error.textContent = "";
+    try {
+      const made = await api("/api/monopoly/tables", {
+        method: "POST",
+        body: JSON.stringify({
+          rules: {
+            entry_cents: Math.round(
+              Number(document.getElementById("entry").value) * 100,
+            ),
+            max_players: Number(document.getElementById("capacity").value),
+            private: document.getElementById("private").value === "true",
+          },
+        }),
+      });
+      location.href =
+        "/games/monopoly/table/" + encodeURIComponent(made.table_id);
+    } catch (e) {
+      error.textContent = e.message;
+    }
+  });
+  window.addEventListener("focus", load);
+  load();
+  setInterval(load, 5000);
+})();
