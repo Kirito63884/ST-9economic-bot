@@ -1,0 +1,321 @@
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const base =
+    "/api/backgammon/table/" + encodeURIComponent(BACKGAMMON_TABLE_ID);
+  const uid = window.ST9_USER_ID;
+  let state = null;
+  let selected = null;
+  let busy = false;
+  let generation = 0;
+  let loading = false;
+  const points = new Map();
+  const colorName = (side) => (side === 0 ? "Белые" : "Чёрные");
+  const money = (cents) =>
+    (cents / 100).toLocaleString("ru-RU", { maximumFractionDigits: 2 });
+  const legal = () => state?.round?.legal || [];
+  const describe = (point) =>
+    point === -1 ? "Бар" : point === 24 ? "Выброс" : String(point + 1);
+
+  async function api(path, data) {
+    const response = await fetch(base + path, {
+      method: data === undefined ? "GET" : "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        ...window.ST9_REQUEST_HEADERS,
+      },
+      ...(data === undefined ? {} : { body: JSON.stringify(data) }),
+    });
+    const result = await response.json();
+    if (!response.ok)
+      throw Object.assign(new Error(result.detail || "Ошибка запроса"), {
+        status: response.status,
+      });
+    return result;
+  }
+
+  function buildBoard() {
+    for (let row = 0; row < 2; row++) {
+      for (let col = 0; col < 12; col++) {
+        const index = row === 0 ? 12 + col : 11 - col;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className =
+          "bg-point" + (row ? " bottom" : "") + (col % 2 ? " dark" : "");
+        button.style.gridRow = String(row + 1);
+        button.style.gridColumn = String(col + 1 + (col >= 6 ? 1 : 0));
+        button.dataset.point = index;
+        const label = document.createElement("span");
+        label.className = "bg-number";
+        label.textContent = index + 1;
+        button.append(label);
+        button.addEventListener("click", () => choosePoint(index));
+        $("board").append(button);
+        points.set(index, button);
+      }
+    }
+    const bar = document.createElement("div");
+    bar.className = "bg-bar";
+    bar.id = "barCount";
+    $("board").append(bar);
+  }
+
+  function paintBoard() {
+    const pos = state.round?.pos || {
+      board: Array(24).fill(0),
+      bar: [0, 0],
+      off: [0, 0],
+    };
+    for (const [index, button] of points) {
+      const count = pos.board[index];
+      const signature = String(count);
+      // Keep the buttons and unchanged stacks stable during polling and selection.
+      if (button.dataset.stack !== signature) {
+        button.querySelectorAll(".bg-checker").forEach((node) => node.remove());
+        for (let n = 0; n < Math.min(5, Math.abs(count)); n++) {
+          const checker = document.createElement("span");
+          checker.className = "bg-checker" + (count < 0 ? " black" : "");
+          checker.setAttribute("aria-hidden", "true");
+          if (n === 4 && Math.abs(count) > 5)
+            checker.textContent = Math.abs(count);
+          button.append(checker);
+        }
+        button.dataset.stack = signature;
+      }
+      button.setAttribute(
+        "aria-label",
+        `Пункт ${index + 1}: ${count ? colorName(count > 0 ? 0 : 1) + ", шашек " + Math.abs(count) : "пусто"}`,
+      );
+      button.classList.toggle(
+        "selectable",
+        legal().some((m) => m[0] === index),
+      );
+      button.classList.toggle("selected", selected === index);
+      button.classList.toggle(
+        "target",
+        selected !== null &&
+          legal().some((m) => m[0] === selected && m[1] === index),
+      );
+    }
+    $("barCount").textContent = `Бар\n○ ${pos.bar[0]}\n● ${pos.bar[1]}`;
+    $("bar").hidden = !legal().some((m) => m[0] === -1);
+    $("off").hidden = !legal().some((m) => m[0] === selected && m[1] === 24);
+    $("mobileBar").hidden = $("bar").hidden;
+    $("mobileOff").hidden = $("off").hidden;
+    $("bar").setAttribute("aria-pressed", selected === -1 ? "true" : "false");
+  }
+
+  function choosePoint(index) {
+    if (busy || !state || state.actor !== uid) return;
+    const options = legal().filter((m) => m[0] === selected && m[1] === index);
+    if (selected !== null && options.length) {
+      if (options.length === 1)
+        return send("action", { kind: "move", move: options[0] });
+      showChoices(options);
+      return;
+    }
+    selected =
+      legal().some((m) => m[0] === index) && selected !== index ? index : null;
+    $("choices").replaceChildren();
+    paintBoard();
+  }
+
+  function showChoices(options) {
+    $("choices").replaceChildren();
+    options.forEach((move) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "bg-btn";
+      button.textContent = `${describe(move[0])} → ${describe(move[1])}, кость ${move[2]}`;
+      button.addEventListener("click", () =>
+        send("action", { kind: "move", move }),
+      );
+      $("choices").append(button);
+    });
+    $("choices").firstElementChild?.focus();
+  }
+
+  function render(next) {
+    const changed = state?.revision !== next.revision;
+    state = next;
+    if (!changed) return;
+    selected = null;
+    $("choices").replaceChildren();
+    $("join").hidden = true;
+    $("game").hidden = false;
+    $("title").textContent =
+      "⚄ " +
+      (state.rules.variant === "long" ? "Длинные нарды" : "Короткие нарды");
+    const mine = state.players.find((p) => p.id === uid);
+    const isCreator = uid === state.creator;
+    const playing = state.phase === "playing";
+    $("waiting").hidden = state.phase !== "waiting";
+    $("ready").textContent = mine?.ready ? "Отменить готовность" : "Готов";
+    $("start").hidden = !isCreator;
+    $("start").disabled =
+      state.players.filter((p) => !p.left).length !== 2 ||
+      !state.players.every((p) => p.ready);
+    $("roll").hidden =
+      !playing || state.actor !== uid || !!state.round?.dice.length;
+    $("resign").hidden = !playing;
+    $("rematch").hidden = state.phase !== "finished" || !isCreator;
+    const actor = state.players.find((p) => p.id === state.actor);
+    $("turn").textContent =
+      state.reason ||
+      (playing
+        ? state.actor === uid
+          ? "Ваш ход"
+          : "Ход: " + actor?.name
+        : "Ожидаем готовность двоих");
+    $("mobileControls").hidden = !playing;
+    $("mobileTurn").textContent = $("turn").textContent;
+    $("mobileDice").textContent = state.round?.dice.join(" · ") || "";
+    $("mobileRoll").hidden = $("roll").hidden;
+    $("players").replaceChildren();
+    state.players.forEach((player, side) => {
+      const box = document.createElement("div");
+      box.className =
+        "bg-player" + (player.id === state.actor ? " active" : "");
+      const title = document.createElement("strong");
+      title.textContent = `${side === 0 ? "○" : "●"} ${player.name}${player.id === uid ? " · вы" : ""}`;
+      const detail = document.createElement("small");
+      detail.textContent = player.left
+        ? "Покинул стол"
+        : state.phase === "waiting"
+          ? player.ready
+            ? "Готов"
+            : "Не готов"
+          : `Снято: ${state.round?.pos.off[side] || 0}/15 · на баре: ${state.round?.pos.bar[side] || 0}`;
+      box.append(title, detail);
+      $("players").append(box);
+    });
+    $("dice").replaceChildren();
+    (state.round?.dice || []).forEach((die) => {
+      const box = document.createElement("span");
+      box.className = "bg-die";
+      box.textContent = die;
+      box.setAttribute("aria-label", "Кость " + die);
+      $("dice").append(box);
+    });
+    const round = state.round;
+    $("lastRoll").textContent = round
+      ? `Жеребьёвка ○ ${round.opening[0]} : ● ${round.opening[1]}. Последний бросок: ${round.last_roll.join(" : ") || "ещё нет"}.` +
+        (round.last_pass?.unused.length
+          ? ` Неиспользуемые кости ${round.last_pass.unused.join(", ")}: разрешённых ходов не было.`
+          : "")
+      : "";
+    $("bank").textContent =
+      `Взнос: ${money(state.rules.entry_cents)} БК · банк: ${money((state.phase === "waiting" ? 0 : state.match?.bank_cents) || 0)} БК · ваш баланс: ${Number(state.balance).toLocaleString("ru-RU")} БК`;
+    const side = state.your_side;
+    $("direction").textContent =
+      `${colorName(side)} — ваши шашки. ` +
+      (state.rules.variant === "long"
+        ? side === 0
+          ? "Голова 24 → 13 → 12 → дом 6–1 → выход."
+          : "Голова 12 → 1 → 24 → дом 18–13 → выход."
+        : side === 0
+          ? "Движение 24 → 1; ваш дом 6–1."
+          : "Движение 1 → 24; ваш дом 19–24.");
+    $("management").innerHTML = TableAdmin.markup(state, "backgammon");
+    $("log").replaceChildren();
+    (round?.history || []).forEach((action) => {
+      const item = document.createElement("li");
+      item.textContent = action.roll
+        ? "Бросок: " + action.roll.join(" : ")
+        : `${describe(action.move[0])} → ${describe(action.move[1])}, кость ${action.move[2]}`;
+      $("log").append(item);
+    });
+    paintBoard();
+  }
+
+  async function load() {
+    if (busy || loading) return;
+    loading = true;
+    const token = generation;
+    try {
+      const preview = await api("/preview");
+      if (token !== generation || busy) return;
+      if (!preview.in_table) {
+        $("join").hidden = false;
+        $("game").hidden = true;
+        $("preview").textContent =
+          `${preview.creator} · ${preview.rules.variant === "long" ? "длинные" : "короткие"} нарды · взнос ${money(preview.rules.entry_cents)} БК · ${preview.players}/2 игроков`;
+        $("joinButton").disabled =
+          preview.phase !== "waiting" || preview.players >= 2;
+      } else {
+        const next = await api("/state");
+        if (token === generation && !busy) render(next);
+      }
+    } catch (error) {
+      if (token === generation) $("error").textContent = error.message;
+    } finally {
+      loading = false;
+    }
+  }
+
+  async function send(path, data = {}) {
+    if (busy) return;
+    busy = true;
+    generation++;
+    $("error").textContent = "";
+    try {
+      const result = await api("/" + path, {
+        ...data,
+        ...(path === "join" ? {} : { revision: state.revision }),
+      });
+      if (path === "leave") {
+        location.href = "/games/backgammon/lobby";
+        return;
+      }
+      if (result.revision !== undefined) render(result);
+    } catch (error) {
+      $("error").textContent = error.message;
+    } finally {
+      busy = false;
+      await load();
+    }
+  }
+
+  $("joinButton").onclick = () => send("join");
+  $("ready").onclick = () =>
+    send("ready", { ready: !state.players.find((p) => p.id === uid).ready });
+  $("start").onclick = () => send("start");
+  $("roll").onclick = () => send("action", { kind: "roll" });
+  $("bar").onclick = () => choosePoint(-1);
+  $("mobileBar").onclick = () => choosePoint(-1);
+  $("mobileOff").onclick = () => choosePoint(24);
+  $("mobileRoll").onclick = () => send("action", { kind: "roll" });
+  $("off").onclick = () => choosePoint(24);
+  $("resign").onclick = () => {
+    if (confirm("Сдаться? Весь банк получит соперник."))
+      send("action", { kind: "resign" });
+  };
+  $("leave").onclick = () => {
+    if (
+      state.phase !== "playing" ||
+      confirm("Выход означает поражение. Весь банк получит соперник. Выйти?")
+    )
+      send("leave");
+  };
+  $("rematch").onclick = () => send("rematch");
+  $("invite").value =
+    location.origin +
+    "/games/backgammon/table/" +
+    encodeURIComponent(BACKGAMMON_TABLE_ID);
+  $("copy").onclick = async () => {
+    try {
+      await navigator.clipboard.writeText($("invite").value);
+      $("copyStatus").textContent = "Ссылка скопирована";
+    } catch {
+      $("invite").select();
+      $("copyStatus").textContent = "Скопируйте выделенную ссылку";
+    }
+  };
+  document.addEventListener("st-tables-changed", load);
+  window.addEventListener("focus", load);
+  buildBoard();
+  load();
+  setInterval(load, 2500);
+})();

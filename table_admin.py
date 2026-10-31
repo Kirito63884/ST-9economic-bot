@@ -57,6 +57,7 @@ def make_router(
     battleship=None,
     chess=None,
     draughts=None,
+    backgammon=None,
     monopoly=None,
     go=None,
 ):
@@ -87,6 +88,8 @@ def make_router(
             games["chess"] = chess.tables
         if draughts is not None:
             games["draughts"] = draughts.tables
+        if backgammon is not None:
+            games["backgammon"] = backgammon.tables
         if monopoly is not None:
             games["monopoly"] = monopoly.tables
         if go is not None:
@@ -147,6 +150,8 @@ def make_router(
             games.append(("chess", chess.tables))
         if draughts is not None:
             games.append(("draughts", draughts.tables))
+        if backgammon is not None:
+            games.append(("backgammon", backgammon.tables))
         if monopoly is not None:
             games.append(("monopoly", monopoly.tables))
         if go is not None:
@@ -201,6 +206,8 @@ def make_router(
             games["chess"] = chess.tables
         if draughts is not None:
             games["draughts"] = draughts.tables
+        if backgammon is not None:
+            games["backgammon"] = backgammon.tables
         if monopoly is not None:
             games["monopoly"] = monopoly.tables
         if go is not None:
