@@ -196,9 +196,12 @@ print(json.dumps({str(uid):TimestampSigner('synthetic-monopoly-browser-only').si
         )
         active = a if current["actor"] == 201 else b
         active.locator('#centerActions [data-action="roll"]').click()
-        active.wait_for_function(
-            "document.querySelectorAll('#dice .mono-die').length===2"
-        )
+        # Both clients must observe the roll before a later revision-checked
+        # leave request. Layout checks can finish before the opponent polls.
+        for page in (a, b):
+            page.wait_for_function(
+                "document.querySelectorAll('#dice .mono-die').length===2"
+            )
         assert a.locator("#players img").count() == 0
         assert "<img" in a.locator("#players").inner_text()
         for width in (320, 390, 768, 1280):
@@ -235,9 +238,15 @@ print(json.dumps({str(uid):TimestampSigner('synthetic-monopoly-browser-only').si
         d.locator('[data-action="build"]').click()
         wait_text(d, "#assets", "1 д.")
         d.locator('[data-action="sell"]').click()
+        d.wait_for_function(
+            "!document.querySelector('#assets').textContent.includes('1 д.')"
+        )
         d.locator('[data-action="mortgage"]').click()
         wait_text(d, "#deed", "в залоге")
         d.locator('[data-action="unmortgage"]').click()
+        d.wait_for_function(
+            "!document.querySelector('#deed').textContent.includes('в залоге')"
+        )
         d.locator("#tradeDetails summary").click()
         d.locator('input[name="giveProperty"][value="1"]').check()
         d.locator("#takeCash").fill("90")

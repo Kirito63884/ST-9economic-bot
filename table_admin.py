@@ -58,6 +58,7 @@ def make_router(
     chess=None,
     draughts=None,
     monopoly=None,
+    go=None,
 ):
     # Older main.py versions pass log_game in the billiards position. Keeping this
     # compatible makes an emergency source rollback safe after this module exists.
@@ -88,6 +89,8 @@ def make_router(
             games["draughts"] = draughts.tables
         if monopoly is not None:
             games["monopoly"] = monopoly.tables
+        if go is not None:
+            games["go"] = go.tables
         if game not in games:
             raise HTTPException(400, "Неизвестная игра")
         table = games[game].get(tid)
@@ -146,6 +149,8 @@ def make_router(
             games.append(("draughts", draughts.tables))
         if monopoly is not None:
             games.append(("monopoly", monopoly.tables))
+        if go is not None:
+            games.append(("go", go.tables))
         for game, values in games:
             for tid, table in values.items():
                 if game == "poker":
@@ -198,6 +203,8 @@ def make_router(
             games["draughts"] = draughts.tables
         if monopoly is not None:
             games["monopoly"] = monopoly.tables
+        if go is not None:
+            games["go"] = go.tables
         if game not in games:
             raise HTTPException(400, "Неизвестная игра")
         values = games[game]

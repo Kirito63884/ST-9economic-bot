@@ -85,6 +85,8 @@ from draughts_game import DraughtsError
 from draughts_routes import DraughtsService, build_router as build_draughts_router
 from monopoly_game import MonopolyError
 from monopoly_routes import MonopolyService, build_router as build_monopoly_router
+from go_engine import GoError
+from go_routes import GoService, build_router as build_go_router
 from chess_game import ChessError
 from chess_routes import ChessService, build_router as build_chess_router
 from battleship import BattleshipError
@@ -170,6 +172,7 @@ async def lifespan(app):
         asyncio.create_task(chess_timeout_checker()),
         asyncio.create_task(draughts_timeout_checker()),
         asyncio.create_task(monopoly_timeout_checker()),
+        asyncio.create_task(go_timeout_checker()),
         asyncio.create_task(battleship_timeout_checker()),
         asyncio.create_task(squad_schedule_checker()),
         asyncio.create_task(medal_checker()),
@@ -214,6 +217,7 @@ domino_service = DominoService()
 chess_service = ChessService()
 draughts_service = DraughtsService()
 monopoly_service = MonopolyService()
+go_service = GoService()
 battleship_service = BattleshipService()
 
 
@@ -234,6 +238,11 @@ async def domino_error_handler(request, exc):
 
 @app.exception_handler(MonopolyError)
 async def monopoly_error_handler(request, exc):
+    return JSONResponse({"detail": str(exc)}, status_code=exc.status)
+
+
+@app.exception_handler(GoError)
+async def go_error_handler(request, exc):
     return JSONResponse({"detail": str(exc)}, status_code=exc.status)
 
 
@@ -419,6 +428,7 @@ async def durable_request(request: Request, call_next):
                 chess=chess_service,
                 draughts=draughts_service,
                 monopoly=monopoly_service,
+                go=go_service,
                 battleship=battleship_service,
             )
             if uid:
@@ -796,6 +806,10 @@ def get_user_activity(user_id: int) -> dict:
         player = table.player(user_id)
         if player and not player["left"] and table.phase == "playing":
             return {"game": "monopoly", "details": f"Монополия · банк {table.match['bank_cents'] / 100:.2f} БК"}
+    for table in go_service.tables.values():
+        player = table.player(user_id)
+        if player and not player["left"] and table.phase in ("playing", "scoring"):
+            return {"game": "go", "details": f"Го · {table.rules['size']}×{table.rules['size']}"}
     for table in chess_service.tables.values():
         player = table.player(user_id)
         if player and not player.get("left") and table.phase == "playing":
@@ -1282,7 +1296,7 @@ async def update_profile(
     if bio is not None:
         user.bio = bio.strip()[:500] if bio.strip() else None
     if favorite_game is not None:
-        valid = ["blackjack", "roulette", "poker", "crash", "durak", "billiards", "domino", "battleship", "chess", "draughts", "monopoly", ""]
+        valid = ["blackjack", "roulette", "poker", "crash", "durak", "billiards", "domino", "battleship", "chess", "draughts", "monopoly", "go", ""]
         user.favorite_game = favorite_game if favorite_game in valid else None
     if avatar_emoji is not None:
         user.avatar_emoji = avatar_emoji.strip()[:10] if avatar_emoji.strip() else None
@@ -3052,6 +3066,7 @@ def detach_user_from_games(db, user):
     chess_service.detach(user.id, db)
     draughts_service.detach(user.id, db)
     monopoly_service.detach(user.id, db)
+    go_service.detach(user.id, db)
     battleship_service.detach(user.id, db)
     game = active_games.pop(user.id, None)
     if game and game["status"] in {"playing", "showdown"}:
@@ -5031,6 +5046,7 @@ def serialize_runtime():
         "chess": {tid: table.to_dict() for tid, table in chess_service.tables.items()},
         "draughts": {tid: table.to_dict() for tid, table in draughts_service.tables.items()},
         "monopoly": {tid: table.to_dict() for tid, table in monopoly_service.tables.items()},
+        "go": {tid: table.to_dict() for tid, table in go_service.tables.items()},
         "battleship": {tid: table.to_dict() for tid, table in battleship_service.tables.items()},
         "durak": {tid: table.to_dict() for tid, table in durak_service.tables.items()},
         "billiards": {
@@ -5089,6 +5105,7 @@ def restore_runtime(payload):
     chess_service.restore(data.get("chess", {}))
     draughts_service.restore(data.get("draughts", {}))
     monopoly_service.restore(data.get("monopoly", {}))
+    go_service.restore(data.get("go", {}))
     battleship_service.restore(data.get("battleship", {}), gap if gap > 5 else 0)
 
 
@@ -5213,6 +5230,22 @@ async def monopoly_timeout_checker():
             logger.exception("Failed to read monopoly tables")
 
 
+async def go_timeout_checker():
+    while True:
+        await asyncio.sleep(1)
+        try:
+            async with transaction(serialize_runtime, restore_runtime):
+                ids = list(go_service.tables)
+            for tid in ids:
+                try:
+                    async with transaction(serialize_runtime, restore_runtime) as db:
+                        go_service.tick_table(tid, db)
+                except Exception:
+                    logger.exception("Failed to settle go table %s", tid)
+        except Exception:
+            logger.exception("Failed to read go tables")
+
+
 async def battleship_timeout_checker():
     while True:
         await asyncio.sleep(1)
@@ -5231,6 +5264,7 @@ async def battleship_timeout_checker():
 
 app.include_router(build_draughts_router(draughts_service, get_user, get_db, templates, is_super_admin))
 app.include_router(build_monopoly_router(monopoly_service, get_user, get_db, templates, is_super_admin))
+app.include_router(build_go_router(go_service, get_user, get_db, templates, is_super_admin))
 app.include_router(build_battleship_router(battleship_service, get_user, get_db, templates, is_super_admin))
 app.include_router(build_domino_router(domino_service, get_user, get_db, templates, is_super_admin))
 app.include_router(
@@ -5329,6 +5363,7 @@ app.include_router(
         chess=chess_service,
         draughts=draughts_service,
         monopoly=monopoly_service,
+        go=go_service,
         battleship=battleship_service,
     )
 )
@@ -5349,6 +5384,7 @@ app.include_router(
         chess=chess_service,
         draughts=draughts_service,
         monopoly=monopoly_service,
+        go=go_service,
     )
 )
 from admin_presence import make_router as make_presence_router

@@ -684,7 +684,7 @@
                             </div>
                             <div class="field">
                                 <label for="logGame">Раздел</label><select id="logGame" name="game">
-                                    {% for value,label in [('','Все разделы'),('poker','Покер'),('durak','Дурак'),('billiards','Бильярд'),('blackjack','Блэкджек'),('roulette','Рулетка'),('crash','Crash'),('chess','Шахматы'),('monopoly','Монополия'),('admin','Управление'),('daily','Бонусы')] %}
+                                    {% for value,label in [('','Все разделы'),('poker','Покер'),('durak','Дурак'),('billiards','Бильярд'),('blackjack','Блэкджек'),('roulette','Рулетка'),('crash','Crash'),('chess','Шахматы'),('monopoly','Монополия'),('go','Го'),('admin','Управление'),('daily','Бонусы')] %}
                                     <option value="{{ value }}"
                                             {{ 'selected' if filters.game==value else '' }}>{{ label }}</option>
                                     {% endfor %}

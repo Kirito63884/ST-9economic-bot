@@ -5041,6 +5041,7 @@ async function loadOnlineStatus() {
                         billiards: "🎱",
                         chess: "♟",
                         monopoly: "▦",
+                        go: "●",
                     };
                     const names = {
                         blackjack: "Блэкджек",
@@ -5051,6 +5052,7 @@ async function loadOnlineStatus() {
                         billiards: "Бильярд",
                         chess: "Шахматы",
                         monopoly: "Монополия",
+                        go: "Го",
                     };
                     activityBadge = `<span class="activity-badge activity-game">${icons[u.activity.game] || "🎮"} ${escapeHtml(names[u.activity.game] || u.activity.game)}</span>`;
                 } else {
