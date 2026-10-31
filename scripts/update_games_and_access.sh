@@ -28,6 +28,11 @@ files=(
     templates/_go_ui.html templates/_go_rules.html
     templates/_go_lobby.js.html templates/_go_table.js.html
     chess_game.py chess_routes.py draughts_game.py draughts_routes.py
+    backgammon_engine.py backgammon_game.py backgammon_routes.py
+    templates/backgammon_lobby.html templates/backgammon_table.html
+    templates/_backgammon_ui.html templates/_backgammon_rules.html
+    templates/_backgammon_lobby.js.html templates/_backgammon_table.js.html
+    templates/admin_logs.html
     templates/chess_lobby.html templates/chess_table.html
     templates/_chess_ui.html templates/_chess_lobby.js.html templates/_chess_table.js.html
     templates/draughts_lobby.html templates/draughts_table.html templates/_draughts_ui.html
@@ -114,6 +119,27 @@ while pending:
 if missing:
     raise SystemExit("Сначала установите зависимости этого коммита: " + ", ".join(sorted(missing)))
 PY
+# Check static Jinja dependencies using the actual merged installation, before
+# stopping services. A new partial must not silently disappear from the whitelist.
+"$app_dir/venv/bin/python" - "$stage/code" "$app_dir" "${files[@]}" <<'PY_TEMPLATES'
+from pathlib import Path
+import sys
+from jinja2 import Environment, meta
+stage, target = map(Path, sys.argv[1:3])
+files = set(sys.argv[3:])
+pending = [name for name in files if name.startswith("templates/")]
+seen = set()
+while pending:
+    name = pending.pop()
+    if name in seen:
+        continue
+    seen.add(name)
+    source = (stage if name in files else target) / name
+    if not source.is_file():
+        raise SystemExit("В комплекте установки отсутствует шаблон: " + name)
+    parsed = Environment().parse(source.read_text())
+    pending.extend("templates/" + ref for ref in meta.find_referenced_templates(parsed) if ref)
+PY_TEMPLATES
 # The bot must reload changed user fields/roster policy or the previous assembly policy.
 for path in database.py roster_membership.py assembly_attendance.py assembly_reports.py assembly_waivers.py discord_roster.py roster_settings.py; do
     if ! cmp -s "$stage/code/$path" "$app_dir/$path"; then
@@ -227,18 +253,26 @@ from chess_routes import ChessService
 from battleship import BattleshipTable
 from battleship_routes import BattleshipService
 import main  # Verify all entry-point imports without starting background workers.
+from backgammon_game import BackgammonTable
+from backgammon_engine import Round
 from monopoly_game import MonopolyTable
 from monopoly_routes import MonopolyService
-from database import AppRuntime, SessionLocal
 from go_game import GoTable
 from go_routes import GoService
-from jinja2 import meta
-with SessionLocal() as db:
-    saved = db.get(AppRuntime, 1)
-    if saved:
-        main.restore_runtime(saved.payload or "{}")
-for name in ("monopoly_lobby.html", "monopoly_table.html", "_monopoly_ui.html", "_monopoly_rules.html", "_monopoly_lobby.js.html", "_monopoly_table.js.html"):
+from database import AppRuntime, SessionLocal
+for variant in ("long", "short"):
+    round = Round(variant, [6, 1])
+    assert Round.from_dict(round.to_dict()).to_dict() == round.to_dict()
+with SessionLocal() as session:
+    row = session.get(AppRuntime, 1)
+    main.restore_runtime(row.payload if row else "{}")
+for name in (
+    "backgammon_lobby.html", "backgammon_table.html",
+    "monopoly_lobby.html", "monopoly_table.html", "_monopoly_ui.html",
+    "_monopoly_rules.html", "_monopoly_lobby.js.html", "_monopoly_table.js.html",
+):
     main.templates.env.get_template(name)
+from jinja2 import meta
 pending = ["go_lobby.html", "go_table.html", "admin.html"]
 seen = set()
 while pending:
@@ -256,7 +290,7 @@ from medals_routes import catalog_context
 for name in ("draughts_lobby.html", "draughts_table.html", "_draughts_ui.html",
              "_draughts_rules.html", "_draughts_lobby.js.html", "_draughts_table.js.html"):
     main.templates.env.get_template(name)
-print("Го, Монополия, прежние игры, сохранённые партии и шаблоны проверены. Права не менялись.")
+print("Нарды, Го, Монополия и прежние игры доступны; сохранённые партии восстановлены. Права и выплаты не менялись.")
 PY
 )
 systemctl start "${services[@]}"
@@ -264,7 +298,7 @@ curl -fsS --max-time 10 --retry 6 --retry-delay 1 --retry-connrefused \
     http://127.0.0.1:8000/ -o /dev/null
 systemctl is-active "${services[@]}"
 changing=0
-echo "Готово. Ctrl+F5 → Игры → Го: 9×9 / 13×13 / 19×19."
+echo "Готово. Ctrl+F5 → Игры: Нарды / Монополия / Го / Русские шашки / Шахматы / Морской бой."
 echo "Техадмин: Админка → Игроки → Открыть → Права доступа. Назначение/снятие — только владельцу."
 echo "После назначения техадмин входит заново. Балансы и существующие роли не изменены."
 echo "Перезапущены: ${services[*]}. Сборщики SQSTAT и игрового онлайна не перезапускались."

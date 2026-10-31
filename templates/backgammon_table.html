@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Нарды — Strike Team 9</title>
+  {% include "_site_ui.html" %}
+  {% include "_table_admin_ui.html" %}
+  {% include "_backgammon_ui.html" %}
+</head>
+<body>
+  {% include "_site_nav.html" %}
+  <main class="bg-wrap" id="st-content">
+    <p><a href="/games/backgammon/lobby">← Все столы нард</a></p>
+    <h1 id="title">⚄ Нарды</h1>
+    <div id="error" class="bg-error" role="alert"></div>
+    <section class="bg-panel" id="join" hidden>
+      <p id="preview"></p>
+      <button id="joinButton" class="bg-btn" type="button">Присоединиться</button>
+    </section>
+    <div id="game" class="bg-layout" hidden>
+      <section aria-label="Игровая доска">
+        <div class="bg-mobile-controls" id="mobileControls" hidden>
+          <strong id="mobileTurn" role="status"></strong>
+          <span id="mobileDice" aria-label="Оставшиеся кости"></span>
+          <button id="mobileRoll" type="button" class="bg-btn" hidden>Бросить кости</button>
+          <button id="mobileBar" type="button" class="bg-btn secondary" hidden>Ввести с бара</button>
+          <button id="mobileOff" type="button" class="bg-btn" hidden>Снять с доски</button>
+        </div>
+        <div class="bg-board" id="board" role="group" aria-label="Доска нард из 24 пунктов"></div>
+        <p class="bg-help" id="direction"></p>
+        <div class="bg-moves" id="choices" aria-label="Выбор кости для хода"></div>
+        <p class="bg-help">Нажмите на подсвеченную шашку, затем на зелёный пункт.
+          Если туда можно попасть разными костями, выберите кость кнопкой.
+          Для входа с бара и выброса есть отдельные кнопки. Промежуточный пункт тоже должен быть свободен.</p>
+      </section>
+      <aside class="bg-side bg-panel">
+        <div id="turn" class="bg-status" role="status"></div>
+        <div id="dice" class="bg-dice" aria-label="Оставшиеся кости"></div>
+        <p id="lastRoll" class="bg-help"></p>
+        <div id="players"></div>
+        <p id="bank"></p>
+        <div id="waiting" hidden>
+          <button id="ready" type="button" class="bg-btn">Готов</button>
+          <button id="start" type="button" class="bg-btn">Начать партию</button>
+        </div>
+        <button id="roll" type="button" class="bg-btn" hidden>Бросить кости</button>
+        <button id="bar" type="button" class="bg-btn secondary" hidden>Ввести с бара</button>
+        <button id="off" type="button" class="bg-btn" hidden>Снять с доски</button>
+        <button id="resign" type="button" class="bg-btn secondary" hidden>Сдаться</button>
+        <button id="rematch" type="button" class="bg-btn" hidden>Следующая партия</button>
+        <button id="leave" type="button" class="bg-btn secondary">Покинуть стол</button>
+        <div id="management"></div>
+        <label>Пригласить соперника <input id="invite" readonly aria-label="Ссылка-приглашение"></label>
+        <button id="copy" type="button" class="bg-btn secondary">Скопировать ссылку</button>
+        <p id="copyStatus" role="status"></p>
+        <h2>Последние действия</h2>
+        <ol class="bg-log" id="log"></ol>
+      </aside>
+    </div>
+    {% include "_backgammon_rules.html" %}
+  </main>
+  <script>
+    const BACKGAMMON_TABLE_ID = {{ table_id|tojson }};
+    window.ST9_USER_ID = {{ user.id|tojson }};
+  </script>
+  {% include "_request_security.html" %}
+  <script>{% include "_backgammon_table.js.html" %}</script>
+</body>
+</html>
