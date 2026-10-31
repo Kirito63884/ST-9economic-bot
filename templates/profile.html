@@ -740,6 +740,8 @@
                                             {% elif user.favorite_game == "domino" %}▣
                                             {% elif user.favorite_game == "battleship" %}⚓
                                             {% elif user.favorite_game == "durak" %}🂡
+                                            {% elif user.favorite_game == "monopoly" %}▦
+                                            {% elif user.favorite_game == "go" %}●
                                             {% elif user.favorite_game == "chess" %}♟
                                             {% elif user.favorite_game == "draughts" %}◉
                                             {% elif user.favorite_game == "poker" %}🃏
@@ -895,6 +897,8 @@
                                         <button type="button" class="game-option {% if user.favorite_game == 'battleship' %}selected{% endif %}" onclick="selectGame('battleship',this)"><div class="game-option-icon">⚓</div><div class="game-option-name">Морской бой</div></button>
                                         <button type="button" class="game-option {% if user.favorite_game == 'chess' %}selected{% endif %}" onclick="selectGame('chess',this)"><div class="game-option-icon">♟</div><div class="game-option-name">Шахматы</div></button>
                                         <button type="button" class="game-option {% if user.favorite_game == 'draughts' %}selected{% endif %}" onclick="selectGame('draughts',this)"><div class="game-option-icon">◉</div><div class="game-option-name">Русские шашки</div></button>
+                                        <button type="button" class="game-option {% if user.favorite_game == 'monopoly' %}selected{% endif %}" onclick="selectGame('monopoly',this)"><div class="game-option-icon">▦</div><div class="game-option-name">Монополия</div></button>
+                                        <button type="button" class="game-option {% if user.favorite_game == 'go' %}selected{% endif %}" onclick="selectGame('go',this)"><div class="game-option-icon">●</div><div class="game-option-name">Го</div></button>
                                         <button type="button"
                                                 class="game-option {% if user.favorite_game == 'durak' %}selected{% endif %}"
                                                 onclick="selectGame('durak',this)">

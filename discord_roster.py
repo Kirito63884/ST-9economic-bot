@@ -127,19 +127,39 @@ def normalize_members(raw):
     return sorted(members, key=lambda m: (m["name"].casefold(), int(m["id"])))
 
 
-def render_roster(raw):
+def render_roster(raw, config=None):
+    from roster_settings import defaults, validate
+
+    config = defaults() if config is None else validate(config)
+    role_ids = config["role_ids"]
     members = normalize_members(raw)
 
     def has(member, role):
-        return ROLES[role] in member["roles"]
+        return role_ids[role] in member["roles"]
 
     def names(selected, prefix):
         return "\n".join(prefix + "【ST-9】" + m["name"] for m in selected) or "—"
 
-    def position(title, role, prefix="✪"):
-        return (
-            "__" + title + ":__\n" + names([m for m in members if has(m, role)], prefix)
+    def safe(value):
+        return discord.utils.escape_mentions(discord.utils.escape_markdown(value))
+
+    def description(value, bullets=False):
+        return "\n".join(
+            ("• " if bullets else "") + safe(line) for line in value.splitlines()
         )
+
+    def lines(title, selected, role, prefix="✪"):
+        desc = description(config["descriptions"][role])
+        return (
+            "__"
+            + title
+            + ":__\n"
+            + (desc + "\n" if desc else "")
+            + names(selected, prefix)
+        )
+
+    def position(title, role, prefix="✪"):
+        return lines(title, [m for m in members if has(m, role)], role, prefix)
 
     command = "\n\n".join(
         (
@@ -148,55 +168,89 @@ def render_roster(raw):
             position("Полевой командир ST-9", "field"),
             "<:__:1555218232049410089> **СЛУЖБА БЕЗОПАСНОСТИ**",
             position("Руководитель СБ", "security_head"),
-            "__Помощники СБ:__\n"
-            + names(
+            lines(
+                "Помощники СБ",
                 [
                     m
                     for m in members
                     if has(m, "security") and not has(m, "security_head")
                 ],
-                "✪",
+                "security",
             ),
         )
     )
-    units = []
-    for role, prefix, heading, tasks in UNITS:
-        unit = [m for m in members if has(m, role)]
+
+    def group(unit, prefix, heading, tasks, plain_tasks=False):
         leaders = [m for m in unit if has(m, "leader")]
         subleaders = [m for m in unit if has(m, "subleader") and not has(m, "leader")]
         regulars = [m for m in unit if not has(m, "leader") and not has(m, "subleader")]
-        task_heading = "Основные задачи:" if role == "armor" else "__Основные задачи:__"
-        units.append(
-            "\n\n".join(
-                (
-                    heading,
-                    "__Командир группы:__\n" + names(leaders, prefix),
-                    task_heading + "\n" + "\n".join("• " + task for task in tasks),
-                    "__Рядовой состав:__\n" + names(regulars, prefix),
-                    "__Командиры подгрупп:__\n" + names(subleaders, prefix),
-                    SEPARATOR,
-                )
+        return "\n\n".join(
+            (
+                heading,
+                lines("Командир группы", leaders, "leader", prefix),
+                ("Основные задачи:" if plain_tasks else "__Основные задачи:__")
+                + "\n"
+                + (description(tasks, True) or "—"),
+                "__Рядовой состав:__\n" + names(regulars, prefix),
+                lines("Командиры подгрупп", subleaders, "subleader", prefix),
+                SEPARATOR,
             )
         )
+
+    units = [
+        group(
+            [m for m in members if has(m, role)],
+            prefix,
+            heading,
+            config["descriptions"][role],
+            role == "armor",
+        )
+        for role, prefix, heading, _ in UNITS
+    ]
     training = "\n\n".join(
         (
             "<:img_1:1555118789920559175> **УЧЕБНАЯ ГРУППА**",
             position("Главный инструктор", "chief_instructor", "➒"),
-            "__Основные задачи:__\n• проведение тренировок;\n• подготовка игроков к распределению в основные группы;",
-            "__Инструкторы:__\n"
-            + names(
+            "__Основные задачи:__\n"
+            + (description(config["training_description"], True) or "—"),
+            lines(
+                "Инструкторы",
                 [
                     m
                     for m in members
                     if has(m, "instructor") and not has(m, "chief_instructor")
                 ],
+                "instructor",
                 "➒",
             ),
             SEPARATOR,
         )
     )
+    extras = {"first": [], "second": []}
+    for row in config["extra_roles"]:
+        selected = [m for m in members if row["role_id"] in m["roles"]]
+        prefix = safe(row["prefix"])
+        if row["kind"] == "group":
+            text = group(
+                selected, prefix, "**" + safe(row["title"]) + "**", row["description"]
+            )
+        else:
+            desc = description(row["description"])
+            text = (
+                "__"
+                + safe(row["title"])
+                + ":__\n"
+                + (desc + "\n" if desc else "")
+                + names(selected, prefix)
+            )
+        extras[row["message"]].append(text)
     first = "ㅤ\n" + command + "\n\n" + units[0] + "\nㅤ\n" + units[1]
-    second = "ㅤ\n" + units[2] + "\nㅤ\n" + units[3] + "\nㅤ\n" + training + "\nㅤ"
+    if extras["first"]:
+        first += "\nㅤ\n" + "\nㅤ\n".join(extras["first"])
+    second = "ㅤ\n" + units[2] + "\nㅤ\n" + units[3] + "\nㅤ\n"
+    if extras["second"]:
+        second += "\nㅤ\n".join(extras["second"]) + "\nㅤ\n"
+    second += training + "\nㅤ"
     if message_length(first) <= 2000 and message_length(second) <= 2000:
         return [first, second]
     # Keep every line intact and exactly two messages. Prefer section boundaries.
@@ -366,17 +420,64 @@ class RosterPublisher:
             asyncio.wait_for(guild.fetch_roles(), timeout=30),
             self.bot.st9_roster_sync.members(),
         )
+        from roster_settings import CACHE_KEY, load, required_roles, write, version
+
+        normalize_members(
+            raw
+        )  # Reject partial/invalid data before replacing the preview cache.
+        cached_members = [
+            {
+                "user": {
+                    "id": str(m["user"]["id"]),
+                    "username": m["user"].get("username"),
+                    "global_name": m["user"].get("global_name"),
+                    "bot": m["user"].get("bot", False),
+                },
+                "nick": m.get("nick"),
+                "roles": list(m["roles"]),
+            }
+            for m in raw
+        ]
+        async with metadata_transaction() as db:
+            config = load(db)
+            config_revision = version(db)
+            previous = db.get(AutomationSetting, CACHE_KEY)
+            old = json.loads(previous.value) if previous else {}
+            write(
+                db,
+                CACHE_KEY,
+                {
+                    "members": cached_members,
+                    "roles": [
+                        {"id": str(r.id), "name": getattr(r, "name", str(r.id))}
+                        for r in roles
+                    ],
+                    "checked_at": utcnow().isoformat() + "Z",
+                    "applied_revision": old.get("applied_revision"),
+                },
+            )
         available = {str(role.id) for role in roles}
-        missing = [name for name, rid in ROLES.items() if rid not in available]
+        missing = [rid for rid in required_roles(config) if rid not in available]
         if missing:
             raise RosterError(
                 "Не найдены роли состава: "
                 + ", ".join(missing)
                 + ". Старый текст сохранён."
             )
-        texts = render_roster(raw)
+        texts = render_roster(raw, config)
+        # Recheck after the network read. Never hold the DB/wallet lock during Discord writes.
+        with SessionLocal() as db:
+            if version(db) != config_revision:
+                raise RosterError(
+                    "Настройки изменились во время обновления; публикация повторится."
+                )
         await self.publish(channel, texts)
         async with metadata_transaction() as db:
+            row = db.get(AutomationSetting, CACHE_KEY)
+            if row:
+                cached = json.loads(row.value)
+                cached["applied_revision"] = config_revision
+                write(db, CACHE_KEY, cached)
             resolve_alerts(db, "discord_roster_publication")
 
     async def ready(self):

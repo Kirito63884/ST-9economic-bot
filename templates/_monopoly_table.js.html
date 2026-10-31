@@ -1,0 +1,599 @@
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const uid = window.ST9_USER_ID;
+  const base = `/api/monopoly/table/${encodeURIComponent(MONOPOLY_TABLE_ID)}`;
+  const colors = [
+    "#ffcd75",
+    "#84b8ff",
+    "#e68eb8",
+    "#86d8b1",
+    "#c5a2ef",
+    "#efaa7d",
+    "#e4de88",
+    "#82d6df",
+    "#c3d49a",
+    "#c9b5a4",
+  ];
+  const esc = (s) =>
+    String(s).replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  const money = (n) => Number(n).toLocaleString("ru-RU");
+  let state = null,
+    busy = false,
+    loading = false,
+    selected = 0,
+    tradeFingerprint = "";
+  const player = (id) => state.players.find((p) => p.id === id);
+  const name = (id) => player(id)?.name || "Банк";
+  const allowed = (kind) => state.allowed.includes(kind);
+  const button = (label, kind, data = {}, style = "", disabled = false) =>
+    `<button type="button" class="mono-btn ${style}" data-action="${kind}" data-payload="${esc(JSON.stringify(data))}" ${disabled ? "disabled" : ""}>${esc(label)}</button>`;
+  async function api(path, options = {}) {
+    const response = await fetch(path, {
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        ...window.ST9_REQUEST_HEADERS,
+      },
+      ...options,
+    });
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error("Сайт временно недоступен. Повторите запрос позже.");
+    }
+    if (!response.ok) throw new Error(data.detail || "Ошибка запроса");
+    return data;
+  }
+  async function post(endpoint, values = {}) {
+    if (busy || !state) return;
+    busy = true;
+    $("message").textContent = "";
+    try {
+      const next = await api(base + "/" + endpoint, {
+        method: "POST",
+        body: JSON.stringify({ revision: state.revision, ...values }),
+      });
+      if (endpoint === "leave") {
+        location.href = "/games/monopoly/lobby";
+        return;
+      }
+      render(next);
+    } catch (e) {
+      $("message").textContent = e.message;
+      await load();
+    } finally {
+      busy = false;
+    }
+  }
+  const act = (kind, data = {}) => post("action", { kind, data });
+  function coordinates(i) {
+    if (i <= 10) return [11, 11 - i];
+    if (i <= 20) return [21 - i, 1];
+    if (i <= 30) return [1, i - 19];
+    return [i - 29, 11];
+  }
+  function renderBoard() {
+    if (!$("cellPicker").options.length)
+      $("cellPicker").innerHTML = state.board
+        .map(
+          (c) => `<option value="${c.id}">#${c.id} · ${esc(c.name)}</option>`,
+        )
+        .join("");
+    $("cellPicker").value = String(selected);
+    for (const cell of state.board) {
+      let node = $("cell-" + cell.id);
+      if (!node) {
+        node = document.createElement("button");
+        node.type = "button";
+        node.id = "cell-" + cell.id;
+        node.className = "mono-cell";
+        const [row, col] = coordinates(cell.id);
+        node.style.gridRow = row;
+        node.style.gridColumn = col;
+        node.addEventListener("click", () => {
+          selected = cell.id;
+          $("cellPicker").value = String(selected);
+          renderDeed();
+          for (const n of $("board").querySelectorAll(".mono-cell"))
+            n.setAttribute("aria-pressed", n === node ? "true" : "false");
+        });
+        $("board").append(node);
+      }
+      const asset = state.estate[cell.id];
+      const owner = asset?.owner ? player(asset.owner) : null;
+      node.style.setProperty("--group", cell.color || "transparent");
+      node.style.setProperty(
+        "--owner",
+        owner ? colors[owner.token] : "transparent",
+      );
+      node.setAttribute("aria-pressed", String(selected === cell.id));
+      node.setAttribute(
+        "aria-label",
+        `#${cell.id} ${cell.name}${owner ? ", владелец " + owner.name : ""}${asset?.mortgaged ? ", заложено" : ""}`,
+      );
+      const occupants = state.players.filter(
+        (p) => !p.left && !p.bankrupt && p.pos === cell.id,
+      );
+      const content = `<span class="mono-band"></span><span class="mono-cell-num">${cell.id}</span><span class="mono-cell-name">${esc(cell.name)}</span><span class="mono-cell-price">${cell.price || (cell.tax ? "−" + cell.tax : "")}</span><span class="mono-buildings">${asset?.mortgaged ? "⌁" : asset?.level === 5 ? "▣" : "▪".repeat(asset?.level || 0)}</span><span class="mono-tokens">${occupants.map((p) => `<span class="mono-token" style="--token:${colors[p.token]}" title="${esc(p.name)}">${p.token + 1}</span>`).join("")}</span><span class="mono-cell-owner"></span>`;
+      if (node.innerHTML !== content) node.innerHTML = content;
+    }
+    $("dice").innerHTML = state.dice
+      .map(
+        (d) =>
+          `<span class="mono-die" aria-label="${d}">${"⚀⚁⚂⚃⚄⚅"[d - 1]}</span>`,
+      )
+      .join("");
+    $("bank").textContent =
+      `В банке: ${state.bank.houses} домов · ${state.bank.hotels} отелей`;
+    $("lastCard").hidden = !state.last_card;
+    if (state.last_card)
+      $("lastCard").textContent =
+        `${state.last_card.deck === "chance" ? "Шанс" : "Казна"}: ${state.last_card.text}`;
+  }
+  function renderDeed() {
+    const cell = state.board[selected],
+      asset = state.estate[selected];
+    $("deed").style.setProperty("--group", cell.color || "#637c87");
+    let html = `<p class="mono-kicker">Клетка ${selected}</p><h2>${esc(cell.name)}</h2>`;
+    if (!asset) {
+      html += `<p class="mono-muted">${cell.kind === "tax" ? "Обязательный платёж: " + cell.tax : cell.kind === "go" ? "Премия за Старт: 200" : cell.kind === "parking" ? "Здесь можно отдохнуть. Выплаты нет." : cell.kind === "jail" ? "Тюрьма и посещение. Просто попав сюда, вы не становитесь заключённым." : cell.kind === "go_jail" ? "Немедленно в тюрьму, без премии за Старт." : "Здесь выдаётся карточка из колоды."}</p>`;
+    } else {
+      html += `<p class="mono-muted">${esc(asset.owner === null ? "Свободный участок" : "Владелец: " + name(asset.owner))}${asset.mortgaged ? " · в залоге, рента не взимается" : ""}</p><table><tr><td>Стоимость</td><td>${cell.price}</td></tr><tr><td>Залог / выкуп</td><td>${cell.mortgage} / ${cell.mortgage + cell.interest}</td></tr>`;
+      if (cell.kind === "street")
+        html +=
+          cell.rents
+            .map(
+              (r, i) =>
+                `<tr><td>${["Без построек", "1 дом", "2 дома", "3 дома", "4 дома", "Отель"][i]}</td><td>${r}</td></tr>`,
+            )
+            .join("") +
+          `<tr><td>Дом / отель</td><td>${cell.build_cost}</td></tr>`;
+      if (cell.kind === "rail")
+        html += `<tr><td>1 / 2 / 3 / 4 станции</td><td>25 / 50 / 100 / 200</td></tr>`;
+      if (cell.kind === "utility")
+        html += `<tr><td>1 / 2 предприятия</td><td>4× / 10× бросок</td></tr>`;
+      html += "</table>";
+      if (
+        asset.owner === uid &&
+        state.phase === "playing" &&
+        !player(uid).bankrupt
+      ) {
+        html += '<div class="mono-actions">';
+        if (!asset.mortgaged) {
+          html += button(
+            "Заложить +" + cell.mortgage,
+            "mortgage",
+            { property: selected },
+            "secondary",
+          );
+          if (cell.kind === "street")
+            html += button(
+              "Построить −" + cell.build_cost,
+              "build",
+              { property: selected },
+              "",
+              !allowed("build") || !state.buildable.includes(selected),
+            );
+          if (asset.level > 0)
+            html +=
+              button(
+                "Продать постройку",
+                "sell",
+                { property: selected },
+                "secondary",
+              ) +
+              button(
+                "Продать все постройки района",
+                "sell_group",
+                { property: selected },
+                "secondary",
+              );
+        } else
+          html += button(
+            "Выкупить −" + (cell.mortgage + cell.interest),
+            "unmortgage",
+            { property: selected },
+            "",
+            !allowed("unmortgage"),
+          );
+        html += "</div>";
+      }
+    }
+    $("deed").innerHTML = html;
+  }
+  function renderPending() {
+    const p = state.pending;
+    $("pending").hidden = !p;
+    if (!p) return;
+    let html = "";
+    if (p.type === "buy")
+      html = `<h2>Покупка: ${esc(state.board[p.property].name)}</h2><p>${esc(name(p.uid))} может купить участок за ${state.board[p.property].price} или выставить его на аукцион.</p>${p.uid === uid ? button("Купить", "buy") + " " + button("Отказаться → аукцион", "decline", {}, "secondary") : "Ожидаем решение игрока."}`;
+    if (p.type === "auction") {
+      const title =
+        p.kind === "property"
+          ? state.board[p.property].name
+          : p.kind === "houses"
+            ? "Дом"
+            : "Отель";
+      html = `<h2>Аукцион: ${esc(title)}</h2><p>Цена: <strong>${p.bid}</strong>${p.winner ? " · " + esc(name(p.winner)) : " · ещё нет ставок"}. Сейчас торгуется: ${esc(name(p.bidder))}.</p>`;
+      if (p.bidder === uid) {
+        html += `<form id="bidForm" class="mono-row"><label>Ваша ставка <input id="bidAmount" type="number" min="${p.bid + 1}" max="${player(uid).cash}" step="1" value="${p.bid + 1}" required></label>`;
+        if (p.kind !== "property")
+          html += `<label>Строить на участке <select id="bidProperty">${state.buildable
+            .filter(
+              (i) =>
+                (state.estate[i].level === 4 ? "hotels" : "houses") === p.kind,
+            )
+            .map(
+              (i) =>
+                `<option value="${i}">${esc(state.board[i].name)}</option>`,
+            )
+            .join("")}</select></label>`;
+        html += `<button class="mono-btn" type="submit">Повысить</button></form><div class="mono-actions">${button("Выйти из этого аукциона", "pass_bid", {}, "secondary")}</div>`;
+      }
+    }
+    if (p.type === "debt")
+      html = `<h2>Нужно уплатить ${p.amount} игровых денег</h2><p>${esc(name(p.uid))} → ${esc(name(p.creditor))} · ${esc(p.reason)}</p><p>Продайте постройки, заложите участки или договоритесь о сделке. Платёж выполнится автоматически, когда денег хватит.</p>${p.uid === uid ? `<p>Деньги и возможная полная ликвидация: ${money(state.liquidation)}.</p>${allowed("bankrupt") ? button("Объявить банкротство", "bankrupt", {}, "danger") : ""}` : ""}`;
+    if (p.type === "transfer") {
+      const c = state.board[p.property];
+      html = `<h2>Получен заложенный участок: ${esc(c.name)}</h2><p>${esc(name(p.uid))} должен выбрать: проценты сейчас (${c.interest}) либо полный выкуп (${c.mortgage + c.interest}).</p>${p.uid === uid ? button("Оставить залог", "transfer", { redeem: false }, "secondary") + " " + button("Выкупить сразу", "transfer", { redeem: true }) : ""}`;
+    }
+    $("pending").innerHTML = html;
+  }
+  function tradeAssets(owner, prefix) {
+    const properties = Object.entries(state.estate).filter(
+      ([, a]) => a.owner === owner,
+    );
+    return (
+      properties
+        .map(
+          ([i, a]) =>
+            `<label class="mono-check"><input type="checkbox" name="${prefix}Property" value="${i}">#${i} ${esc(state.board[i].name)}${a.mortgaged ? " · залог" : ""}${a.level ? " · постройки" : ""}</label>${a.mortgaged && prefix === "take" ? `<label class="mono-check"><input type="checkbox" name="redeem" value="${i}">Выкупить #${i} сразу (${state.board[i].mortgage + state.board[i].interest}); иначе проценты ${state.board[i].interest}</label>` : ""}`,
+        )
+        .join("") +
+      player(owner)
+        .cards.map(
+          (deck) =>
+            `<label class="mono-check"><input type="checkbox" name="${prefix}Card" value="${deck}">Карта освобождения · ${deck === "chance" ? "Шанс" : "Казна"}</label>`,
+        )
+        .join("")
+    );
+  }
+  function updateTradeAssets() {
+    if (!player(Number($("counterparty").value))) return;
+    const other = Number($("counterparty").value);
+    $("giveAssets").innerHTML = tradeAssets(uid, "give");
+    $("takeAssets").innerHTML = tradeAssets(other, "take");
+  }
+  const checked = (name) =>
+    [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(
+      (x) => x.value,
+    );
+  const legText = (leg) =>
+    [
+      leg.cash ? money(leg.cash) + " денег" : "",
+      ...leg.properties.map((i) => "#" + i + " " + state.board[i].name),
+      ...leg.cards.map(
+        (d) =>
+          "Карта освобождения (" + (d === "chance" ? "Шанс" : "Казна") + ")",
+      ),
+    ]
+      .filter(Boolean)
+      .join(", ") || "Ничего";
+  function renderTrades() {
+    const me = player(uid);
+    $("tradePanel").hidden = state.phase !== "playing" || me.bankrupt;
+    if (me.bankrupt) return;
+    const candidates = state.players.filter(
+      (p) => p.id !== uid && !p.left && !p.bankrupt,
+    );
+    const fingerprint = JSON.stringify([
+      candidates.map((p) => p.id),
+      state.estate,
+      state.players.map((p) => p.cards),
+    ]);
+    if (tradeFingerprint !== fingerprint) {
+      const old = $("counterparty").value;
+      $("counterparty").innerHTML = candidates
+        .map((p) => `<option value="${p.id}">${esc(p.name)}</option>`)
+        .join("");
+      if (candidates.some((p) => String(p.id) === old))
+        $("counterparty").value = old;
+      updateTradeAssets();
+      tradeFingerprint = fingerprint;
+    }
+    $("offers").innerHTML = state.offers
+      .map((o) => {
+        let html = `<article class="mono-panel"><h3>${esc(name(o.from))} → ${esc(name(o.to))}</h3><p>Отдаёт: ${esc(legText(o.give))}</p><p>Получает: ${esc(legText(o.take))}</p>`;
+        if (o.to === uid) {
+          const mortgaged = o.give.properties.filter(
+            (i) => state.estate[i].mortgaged,
+          );
+          const fee = mortgaged.reduce(
+            (v, i) => v + state.board[i].interest,
+            0,
+          );
+          if (fee) html += `<p>Проценты банку при принятии: ${fee}.</p>`;
+          html += mortgaged
+            .map(
+              (i) =>
+                `<label class="mono-check"><input type="checkbox" name="offer-${o.id}" value="${i}">Выкупить #${i} сразу: ${state.board[i].mortgage + state.board[i].interest}</label>`,
+            )
+            .join("");
+          html += `<div class="mono-actions"><button type="button" class="mono-btn" data-accept-offer="${esc(o.id)}">Принять сделку</button> `;
+        } else html += '<div class="mono-actions">';
+        html +=
+          button(
+            o.from === uid ? "Отозвать" : "Отклонить",
+            "trade_cancel",
+            { offer_id: o.id },
+            "secondary",
+          ) + "</div></article>";
+        return html;
+      })
+      .join("");
+  }
+  function render(next) {
+    if (state && next.revision < state.revision) return;
+    const active = document.activeElement;
+    const draft =
+      active?.id && ["INPUT", "SELECT"].includes(active.tagName)
+        ? { id: active.id, value: active.value }
+        : null;
+    const oldRevision = state?.revision;
+    const oldOffers = JSON.stringify(state?.offers);
+    state = next;
+    document.querySelectorAll("[data-st-balance]").forEach((node) => {
+      node.textContent = Number(state.balance).toFixed(2);
+    });
+    $("join").hidden = true;
+    $("game").hidden = false;
+    if (oldRevision === next.revision) {
+      if (oldOffers !== JSON.stringify(state.offers)) renderTrades();
+      return;
+    }
+    const me = player(uid);
+    $("players").innerHTML = state.players
+      .map(
+        (p) =>
+          `<div class="mono-player ${p.id === state.actor ? "active" : ""} ${p.bankrupt || p.left ? "out" : ""}" style="--token:${colors[p.token]}"><div><strong>${p.token + 1}. ${esc(p.name)}${p.id === uid ? " · вы" : ""}</strong><small>${p.bankrupt ? "Банкрот" : p.left ? "Покинул стол" : state.phase === "waiting" ? (p.ready ? "Готов" : "Не готов") : p.jail ? "Тюрьма · попыток: " + p.jail_attempts : "#" + p.pos + " · " + esc(state.board[p.pos].name)}</small></div><span class="mono-cash">${money(p.cash)} ◇</span></div>`,
+      )
+      .join("");
+    const finished = state.phase === "finished";
+    const headline = finished
+      ? "Победитель: " + name(state.match.result.winners[0])
+      : state.phase === "waiting"
+        ? "Ожидание игроков"
+        : `Ход ${state.turn_number}: ${name(state.actor)}`;
+    $("turn").textContent = headline;
+    $("centerTurn").textContent = headline;
+    $("pot").textContent =
+      `Взнос: ${state.rules.entry_cents / 100} БК · ${state.match ? "банк: " + state.match.bank_cents / 100 + " БК" : "мест: " + state.rules.max_players}${finished ? " · выплата победителю завершена" : ""}`;
+    $("waiting").hidden = state.phase !== "waiting";
+    $("ready").textContent = me.ready ? "Снять готовность" : "Готов";
+    $("start").hidden = state.creator !== uid;
+    $("start").disabled =
+      state.players.length < 2 || !state.players.every((p) => p.ready);
+    $("rematch").hidden =
+      !finished ||
+      state.creator !== uid ||
+      state.players.filter((p) => !p.left).length < 2;
+    $("turnActions").innerHTML =
+      (allowed("roll")
+        ? button(
+            me.jail ? "Попытаться выбросить дубль" : "Бросить кости",
+            "roll",
+          )
+        : "") +
+      (allowed("end_turn") ? button("Завершить ход →", "end_turn") : "") +
+      (allowed("pay_bail")
+        ? button("Уплатить 50 и выйти", "pay_bail", {}, "secondary") +
+          me.cards
+            .map((deck) =>
+              button("Карта освобождения", "jail_card", { deck }, "secondary"),
+            )
+            .join("")
+        : "");
+    $("centerActions").innerHTML = $("turnActions").innerHTML;
+    $("assets").innerHTML =
+      Object.entries(state.estate)
+        .filter(([, a]) => a.owner === uid)
+        .map(
+          ([i, a]) =>
+            `<button type="button" class="mono-btn secondary" data-property="${i}" style="--group:${state.board[i].color || "#8195a9"}">#${i} ${esc(state.board[i].name)}${a.mortgaged ? " · залог" : a.level ? " · " + (a.level === 5 ? "отель" : a.level + " д.") : ""}</button>`,
+        )
+        .join("") || '<span class="mono-muted">Участков пока нет</span>';
+    $("events").innerHTML = state.events
+      .slice(-40)
+      .reverse()
+      .map((e) => `<li>${esc(e.text)}</li>`)
+      .join("");
+    $("settingsDetails").hidden =
+      state.creator !== uid || state.phase !== "waiting";
+    if (!$("settingsDetails").open) {
+      $("capacity").value = state.rules.max_players;
+      $("entry").value = state.rules.entry_cents / 100;
+      $("private").checked = state.rules.private;
+    }
+    $("closeTable").innerHTML = TableAdmin.markup(state, "monopoly");
+    renderBoard();
+    renderDeed();
+    renderPending();
+    renderTrades();
+    if (draft && $(draft.id)) {
+      $(draft.id).value = draft.value;
+      $(draft.id).focus({ preventScroll: true });
+    }
+  }
+  async function load() {
+    if (loading) return;
+    loading = true;
+    try {
+      render(await api(base + "/state"));
+    } catch (e) {
+      $("message").textContent = e.message;
+    } finally {
+      loading = false;
+    }
+  }
+  document.addEventListener("click", (event) => {
+    const action = event.target.closest("[data-action]");
+    if (action) {
+      const kind = action.dataset.action;
+      if (
+        ["bankrupt", "sell_group"].includes(kind) &&
+        !confirm(
+          kind === "bankrupt"
+            ? "Объявить банкротство и завершить своё участие? Взнос не возвращается."
+            : "Продать все постройки района за половину стоимости?",
+        )
+      )
+        return;
+      act(kind, JSON.parse(action.dataset.payload));
+    }
+    const asset = event.target.closest("[data-property]");
+    if (asset) {
+      selected = Number(asset.dataset.property);
+      renderBoard();
+      renderDeed();
+      $("deed").scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
+    const offer = event.target.closest("[data-accept-offer]");
+    if (offer)
+      act("trade_accept", {
+        offer_id: offer.dataset.acceptOffer,
+        redeem: checked("offer-" + offer.dataset.acceptOffer).map(Number),
+      });
+  });
+  document.addEventListener("submit", (event) => {
+    if (event.target.id !== "bidForm") return;
+    event.preventDefault();
+    const data = { amount: Number($("bidAmount").value) };
+    if ($("bidProperty")) data.property = Number($("bidProperty").value);
+    act("bid", data);
+  });
+  $("cellPicker").addEventListener("change", () => {
+    selected = Number($("cellPicker").value);
+    renderBoard();
+    renderDeed();
+  });
+  $("counterparty").addEventListener("change", updateTradeAssets);
+  $("tradeForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    const leg = (prefix) => ({
+      cash: Number($(prefix + "Cash").value),
+      properties: checked(prefix + "Property").map(Number),
+      cards: checked(prefix + "Card"),
+    });
+    const take = leg("take");
+    act("trade_offer", {
+      to: Number($("counterparty").value),
+      give: leg("give"),
+      take,
+      redeem: checked("redeem")
+        .map(Number)
+        .filter((i) => take.properties.includes(i)),
+    });
+  });
+  $("settingsForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    post("settings", {
+      rules: {
+        max_players: Number($("capacity").value),
+        entry_cents: Math.round(Number($("entry").value) * 100),
+        private: $("private").checked,
+      },
+    });
+  });
+  $("ready").addEventListener("click", () =>
+    post("ready", { ready: !player(uid).ready }),
+  );
+  $("start").addEventListener("click", () => {
+    if (
+      confirm(
+        `Начать партию? Каждый внесёт ${state.rules.entry_cents / 100} БК, победитель получит общий банк.`,
+      )
+    )
+      post("start");
+  });
+  $("rematch").addEventListener("click", () => post("rematch"));
+  $("leave").addEventListener("click", () => {
+    if (
+      confirm(
+        state.phase === "playing" && !player(uid).bankrupt
+          ? "Выход означает сдачу и потерю взноса. Покинуть стол?"
+          : "Покинуть стол?",
+      )
+    )
+      post("leave");
+  });
+  $("invite").value =
+    location.origin +
+    "/games/monopoly/table/" +
+    encodeURIComponent(MONOPOLY_TABLE_ID);
+  $("copyInvite").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText($("invite").value);
+      $("message").textContent = "Ссылка скопирована";
+    } catch {
+      $("invite").select();
+      $("message").textContent = "Скопируйте выделенную ссылку";
+    }
+  });
+  $("joinButton").addEventListener("click", async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      await api(base + "/join", { method: "POST" });
+      await load();
+    } catch (e) {
+      $("message").textContent = e.message;
+    } finally {
+      busy = false;
+    }
+  });
+  document.addEventListener("st-tables-changed", async () => {
+    try {
+      await api(base + "/preview");
+      await load();
+    } catch {
+      location.href = "/games/monopoly/lobby";
+    }
+  });
+  async function initialize() {
+    try {
+      const preview = await api(base + "/preview");
+      if (preview.in_table) await load();
+      else {
+        $("join").hidden = false;
+        $("preview").textContent =
+          `${preview.creator} · ${preview.players}/${preview.rules.max_players} игроков · равный взнос ${preview.rules.entry_cents / 100} БК`;
+        $("joinButton").disabled =
+          preview.phase !== "waiting" ||
+          preview.players >= preview.rules.max_players;
+      }
+    } catch (e) {
+      $("message").textContent = e.message;
+    }
+  }
+  window.addEventListener("focus", () => {
+    if (state) load();
+  });
+  setInterval(() => {
+    if (state && !busy && !document.hidden) load();
+  }, 1500);
+  initialize();
+})();

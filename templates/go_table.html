@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Го · игровой стол — Strike Team 9</title>
+  {% include "_site_ui.html" %}{% include "_table_admin_ui.html" %}{% include "_go_ui.html" %}
+</head>
+<body>
+  {% include "_site_nav.html" %}
+  <main id="st-content" class="go-page">
+    <p><a href="/games/go/lobby">← Все столы Го</a></p>
+    <p class="go-kicker">Равная ставка · открытая доска</p><h1>● Го ○</h1>
+    <p id="message" class="go-message" role="status" aria-live="polite"></p>
+    <section id="join" class="go-panel" hidden><h2>Приглашение за стол</h2><p id="preview" class="go-muted"></p><button id="joinButton" type="button" class="go-btn">Присоединиться</button></section>
+    <div id="game" hidden>
+      <div class="go-layout">
+        <section>
+          <section class="go-panel"><h2 id="turn" aria-live="polite">Ожидание игроков</h2>
+            <div class="go-row"><label>Масштаб <select id="zoom"><option value="1">100%</option><option value="1.5">150%</option><option value="2">200%</option><option value="3">300%</option></select></label><span class="go-muted">Коми белым: 7,5 · захваченные камни не добавляются к очкам</span></div>
+          </section>
+          <div class="go-scroll" id="boardScroll"><div id="boardFrame" class="go-board-frame" style="--size:9"><div id="topAxis" class="go-axis files go-top" aria-hidden="true"></div><div id="leftAxis" class="go-axis ranks go-left" aria-hidden="true"></div><div id="board" class="go-board" role="group" aria-label="Доска Го: пересечения линий" aria-describedby="boardHelp"></div><div id="rightAxis" class="go-axis ranks go-right" aria-hidden="true"></div><div id="bottomAxis" class="go-axis files go-bottom" aria-hidden="true"></div></div></div>
+          <p id="boardHelp" class="go-muted">Выберите пересечение, затем нажмите «Поставить камень». На телефоне увеличьте поле и прокручивайте его. Стрелки перемещают фокус, Enter выбирает пункт.</p>
+          <section class="go-panel"><p id="selection">Пункт не выбран</p><div class="go-actions"><button id="place" type="button" class="go-btn" disabled>Поставить камень</button><button id="markDead" type="button" class="go-btn" hidden disabled>Изменить отметку группы</button><button id="pass" type="button" class="go-btn secondary" hidden>Пас</button><button id="resign" type="button" class="go-btn danger" hidden>Сдаться</button></div></section>
+          <section id="scoring" class="go-panel" hidden>
+            <h2>Согласование результата</h2><p class="go-muted">Отметьте мёртвые группы. Если не согласны — продолжите игру. Любая смена отметок сбрасывает подтверждения.</p>
+            <div id="scoreNumbers" class="go-score-grid"></div><p id="accepts" class="go-muted"></p>
+            <div class="go-actions"><button id="confirmScore" type="button" class="go-btn">Подтвердить этот итог</button><button id="resume" type="button" class="go-btn secondary">Продолжить игру</button></div>
+          </section>
+          <details class="go-panel"><summary>История партии</summary><ol id="events" class="go-moves"></ol></details>
+          {% include "_go_rules.html" %}
+        </section>
+        <aside class="go-side">
+          <section class="go-panel"><h2>Участники</h2><div id="players"></div><p id="pot" class="go-muted"></p><p id="captured" class="go-muted"></p></section>
+          <section class="go-panel">
+            <div id="waiting"><p class="go-muted">Оба игрока должны подтвердить условия.</p><div class="go-actions"><button id="ready" type="button" class="go-btn">Готов</button><button id="start" type="button" class="go-btn secondary">Начать партию</button></div></div>
+            <div id="finished" hidden><h2>Партия завершена</h2><p id="result"></p><button id="rematch" type="button" class="go-btn" hidden>Новая партия</button></div>
+            <label>Ссылка-приглашение <input id="invite" readonly></label>
+            <div class="go-actions"><button id="copyInvite" class="go-btn secondary" type="button">Скопировать</button><button id="leave" class="go-btn danger" type="button">Покинуть стол</button></div>
+            <div id="closeTable" class="go-actions"></div>
+            <details id="settings" hidden><summary>Условия стола</summary><form id="settingsForm"><label>Размер поля <select id="size"><option value="9">9×9</option><option value="13">13×13</option><option value="19">19×19</option></select></label><label>Взнос, БК <input id="entry" type="number" min="0" max="1000000" step="0.01"></label><label>Доступ <select id="private"><option value="false">Открытый</option><option value="true">По ссылке</option></select></label><button class="go-btn secondary" type="submit">Сохранить условия</button></form></details>
+          </section>
+        </aside>
+      </div>
+    </div>
+  </main>
+  <script>const GO_TABLE_ID = {{ table_id|tojson }}; window.ST9_USER_ID = {{ user.id|tojson }};</script>
+  {% include "_request_security.html" %}<script>{% include "_go_table.js.html" %}</script>
+</body>
+</html>

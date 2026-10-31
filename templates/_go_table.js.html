@@ -1,0 +1,422 @@
+(() => {
+  "use strict";
+  const $ = (id) => document.getElementById(id);
+  const uid = window.ST9_USER_ID;
+  const base = `/api/go/table/${encodeURIComponent(GO_TABLE_ID)}`;
+  const letters = "ABCDEFGHJKLMNOPQRST";
+  const esc = (s) =>
+    String(s).replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  const coordinate = (point) =>
+    letters[point % state.rules.size] +
+    (state.rules.size - Math.floor(point / state.rules.size));
+  const points = (half) => (half / 2).toLocaleString("ru-RU");
+  let state = null,
+    selected = null,
+    busy = false,
+    loading = false,
+    connected = true,
+    boardSize = 0;
+  function notice(text) {
+    $("message").textContent = text;
+  }
+  async function api(path, body) {
+    const response = await fetch(path, {
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        ...window.ST9_REQUEST_HEADERS,
+      },
+      ...(body ? { method: "POST", body: JSON.stringify(body) } : {}),
+    });
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error("Сайт временно недоступен");
+    }
+    if (!response.ok) throw new Error(data.detail || "Ошибка запроса");
+    return data;
+  }
+  async function post(endpoint, values = {}) {
+    if (busy || !state || !connected) return;
+    busy = true;
+    notice("");
+    selectionControls();
+    try {
+      const next = await api(base + "/" + endpoint, {
+        revision: state.revision,
+        ...values,
+      });
+      if (endpoint === "leave") {
+        location.href = "/games/go/lobby";
+        return;
+      }
+      selected = null;
+      render(next);
+    } catch (error) {
+      notice(error.message);
+      await load();
+    } finally {
+      busy = false;
+      selectionControls();
+    }
+  }
+  const act = (kind, data = {}) => post("action", { kind, data });
+  function buildBoard(size) {
+    if (boardSize === size) return;
+    boardSize = size;
+    selected = null;
+    $("boardFrame").style.setProperty("--size", size);
+    const files = [...letters.slice(0, size)]
+      .map((c) => `<span>${c}</span>`)
+      .join("");
+    const ranks = Array.from(
+      { length: size },
+      (_, i) => `<span>${size - i}</span>`,
+    ).join("");
+    $("topAxis").innerHTML = $("bottomAxis").innerHTML = files;
+    $("leftAxis").innerHTML = $("rightAxis").innerHTML = ranks;
+    $("board").replaceChildren();
+    for (let i = 0; i < size * size; i++) {
+      const node = document.createElement("button");
+      node.type = "button";
+      node.id = "point-" + i;
+      node.className = "go-point";
+      node.tabIndex = i === 0 ? 0 : -1;
+      const row = Math.floor(i / size),
+        col = i % size;
+      if (row === 0) node.classList.add("edge-top");
+      if (row === size - 1) node.classList.add("edge-bottom");
+      if (col === 0) node.classList.add("edge-left");
+      if (col === size - 1) node.classList.add("edge-right");
+      node.addEventListener("click", () => {
+        selected = i;
+        for (const button of $("board").children)
+          button.tabIndex = button === node ? 0 : -1;
+        renderBoard();
+        selectionControls();
+      });
+      node.addEventListener("keydown", (event) => {
+        const offsets = {
+          ArrowLeft: col > 0 ? -1 : 0,
+          ArrowRight: col < size - 1 ? 1 : 0,
+          ArrowUp: row > 0 ? -size : 0,
+          ArrowDown: row < size - 1 ? size : 0,
+        };
+        if (!(event.key in offsets)) return;
+        event.preventDefault();
+        const target = $("point-" + (i + offsets[event.key]));
+        node.tabIndex = -1;
+        target.tabIndex = 0;
+        target.focus();
+      });
+      $("board").append(node);
+    }
+  }
+  function isHoshi(point) {
+    const n = state.rules.size,
+      row = Math.floor(point / n),
+      col = point % n;
+    const low = n === 9 ? 2 : 3,
+      high = n - 1 - low,
+      mid = (n - 1) / 2;
+    return n === 19
+      ? [low, mid, high].includes(row) && [low, mid, high].includes(col)
+      : (row === mid && col === mid) ||
+          ([low, high].includes(row) && [low, high].includes(col));
+  }
+  function renderBoard() {
+    buildBoard(state.rules.size);
+    const dead = new Set(state.dead),
+      legal = new Set(state.legal_points);
+    for (let point = 0; point < state.board.length; point++) {
+      const node = $("point-" + point),
+        color = state.board[point];
+      const side = color === 1 ? "black" : "white";
+      let html = isHoshi(point) ? '<span class="go-hoshi"></span>' : "";
+      if (color)
+        html += `<span class="go-stone ${side}${dead.has(point) ? " dead" : ""}${state.last_point === point ? " last" : ""}"></span>`;
+      else if (
+        selected === point &&
+        state.phase === "playing" &&
+        legal.has(point)
+      )
+        html += `<span class="go-stone ghost ${state.your_color === 1 ? "black" : "white"}"></span>`;
+      else if (state.score?.ownership[point])
+        html += `<span class="go-territory ${state.score.ownership[point] === 1 ? "black" : "white"}"></span>`;
+      if (node.innerHTML !== html) node.innerHTML = html;
+      node.setAttribute("aria-pressed", String(selected === point));
+      node.setAttribute(
+        "aria-label",
+        `${coordinate(point)} · ${color === 1 ? "чёрный" : color === 2 ? "белый" : "пусто"}${dead.has(point) ? " · отмечен мёртвым" : ""}`,
+      );
+      node.setAttribute(
+        "aria-disabled",
+        String(
+          !connected ||
+            (state.phase === "playing"
+              ? !legal.has(point)
+              : state.phase !== "scoring" || !color),
+        ),
+      );
+    }
+  }
+  function selectionControls() {
+    if (!state) return;
+    const playing = state.phase === "playing",
+      scoring = state.phase === "scoring";
+    const legal =
+      playing &&
+      state.actor === uid &&
+      selected !== null &&
+      state.legal_points.includes(selected);
+    const markable =
+      scoring && selected !== null && state.board[selected] !== 0;
+    $("selection").textContent =
+      selected === null
+        ? "Пункт не выбран"
+        : `${coordinate(selected)}${legal ? " · можно поставить камень" : markable ? " · группа для согласования" : " · действие сейчас недоступно"}`;
+    $("place").hidden = !playing;
+    $("place").disabled = busy || !connected || !legal;
+    $("place").textContent = legal
+      ? "Поставить камень " + coordinate(selected)
+      : "Поставить камень";
+    $("markDead").hidden = !scoring;
+    $("markDead").disabled = busy || !connected || !markable;
+    $("markDead").textContent =
+      markable && state.dead.includes(selected)
+        ? "Снять отметку мёртвой группы"
+        : "Отметить группу мёртвой";
+    $("pass").hidden = !playing;
+    $("pass").disabled = busy || !connected || state.actor !== uid;
+    $("resign").hidden = !playing && !scoring;
+    $("resign").disabled = busy || !connected;
+    $("confirmScore").disabled =
+      busy || !connected || state.score_accepts.includes(uid);
+    $("resume").disabled = busy || !connected;
+    for (const id of ["ready", "start", "rematch"])
+      $(id).disabled =
+        busy ||
+        !connected ||
+        (id === "start" &&
+          (state.players.length !== 2 ||
+            !state.players.every((p) => p.ready) ||
+            !state.stake_valid));
+  }
+  function render(next) {
+    if (state && next.revision < state.revision) return;
+    const changed = state?.revision !== next.revision;
+    state = next;
+    connected = true;
+    document.querySelectorAll("[data-st-balance]").forEach((node) => {
+      node.textContent = Number(state.balance).toFixed(2);
+    });
+    $("join").hidden = true;
+    $("game").hidden = false;
+    if (!changed) {
+      selectionControls();
+      return;
+    }
+    if (
+      state.phase !== "scoring" &&
+      (selected === null || !state.legal_points.includes(selected))
+    )
+      selected = null;
+    buildBoard(state.rules.size);
+    renderBoard();
+    const names = new Map(state.players.map((p) => [p.id, p.name]));
+    const own = state.players.find((p) => p.id === uid);
+    const participants = state.match?.participants || [];
+    $("players").innerHTML = state.players
+      .map((p) => {
+        const color = participants.find((v) => v.id === p.id)?.color;
+        return `<article class="go-player ${p.id === state.actor ? "active" : ""}"><strong>${color ? `<span class="go-color ${color}"></span>` : ""}${esc(p.name)}${p.id === uid ? " · вы" : ""}</strong><p class="go-muted">${p.left ? "Покинул стол" : state.phase === "waiting" ? (p.ready ? "Готов" : "Не готов") : color === "black" ? "Чёрные" : "Белые"}</p></article>`;
+      })
+      .join("");
+    $("turn").textContent =
+      state.phase === "waiting"
+        ? `Поле ${state.rules.size}×${state.rules.size} · ожидание игроков`
+        : state.phase === "scoring"
+          ? "Два паса · согласование результата"
+          : state.phase === "finished"
+            ? "Партия завершена"
+            : `${state.turn_color === 1 ? "Чёрные" : "Белые"} · ходит ${names.get(state.actor)}`;
+    $("pot").textContent =
+      `Взнос ${state.rules.entry_cents / 100} БК · ${state.match ? "банк " + state.match.bank_cents / 100 + " БК" : "лимит по текущим балансам " + state.stake_limit_cents / 100 + " БК"}`;
+    $("captured").textContent =
+      `Захвачено: чёрными ${state.captures.black}, белыми ${state.captures.white}. Это статистика, не дополнительные очки.`;
+    $("waiting").hidden = state.phase !== "waiting";
+    $("ready").textContent = own.ready ? "Снять готовность" : "Готов";
+    $("start").hidden = state.creator !== uid;
+    $("settings").hidden = state.phase !== "waiting" || state.creator !== uid;
+    if (!$("settings").open) {
+      $("size").value = state.rules.size;
+      $("entry").value = state.rules.entry_cents / 100;
+      $("private").value = String(state.rules.private);
+    }
+    $("scoring").hidden = state.phase !== "scoring";
+    if (state.score) {
+      const s = state.score;
+      $("scoreNumbers").innerHTML =
+        `<div>● Чёрные<strong class="go-score-number">${points(s.black_half)}</strong><small>${s.stones.black} камней + ${s.territory.black} территории</small></div><div>○ Белые<strong class="go-score-number">${points(s.white_half)}</strong><small>${s.stones.white} камней + ${s.territory.white} территории + 7,5 коми</small></div>`;
+      $("accepts").textContent =
+        `Нейтральных пунктов: ${s.neutral}. Подтвердили: ${state.score_accepts.map((id) => names.get(id)).join(", ") || "пока никто"}.`;
+    }
+    $("finished").hidden = state.phase !== "finished";
+    if (state.match?.result) {
+      const r = state.match.result;
+      $("result").textContent =
+        `${r.winners.length ? "Победитель: " + names.get(r.winners[0]) : "Ничья"}. ${r.reason}. ${state.match.settled ? "Расчёт БК выполнен." : "Расчёт ожидается."}`;
+    }
+    $("rematch").hidden =
+      state.phase !== "finished" ||
+      state.creator !== uid ||
+      state.players.filter((p) => !p.left).length !== 2;
+    $("closeTable").innerHTML = TableAdmin.markup(state, "go");
+    $("events").innerHTML = state.events
+      .slice()
+      .reverse()
+      .map((e) => `<li>${esc(e.text)}</li>`)
+      .join("");
+    selectionControls();
+  }
+  async function load() {
+    if (loading) return;
+    loading = true;
+    try {
+      render(await api(base + "/state"));
+    } catch (error) {
+      connected = false;
+      notice(error.message);
+      selectionControls();
+    } finally {
+      loading = false;
+    }
+  }
+  $("place").addEventListener("click", () => {
+    if (selected !== null) act("play", { point: selected });
+  });
+  $("markDead").addEventListener("click", () => {
+    if (selected !== null) act("mark_dead", { point: selected });
+  });
+  $("pass").addEventListener("click", () => {
+    if (
+      confirm(
+        "Пропустить ход? Два паса подряд переводят партию в согласование результата.",
+      )
+    )
+      act("pass");
+  });
+  $("resign").addEventListener("click", () => {
+    if (confirm("Сдаться? Весь банк получит соперник.")) act("resign");
+  });
+  $("resume").addEventListener("click", () => act("resume"));
+  $("confirmScore").addEventListener("click", () => {
+    if (
+      state.score &&
+      confirm(
+        `Подтвердить этот итог: чёрные ${points(state.score.black_half)}, белые ${points(state.score.white_half)}? После подтверждения обоих весь банк получает победитель.`,
+      )
+    )
+      act("confirm_score");
+  });
+  $("ready").addEventListener("click", () =>
+    post("ready", { ready: !state.players.find((p) => p.id === uid).ready }),
+  );
+  $("start").addEventListener("click", () => {
+    if (
+      confirm(
+        `Начать партию ${state.rules.size}×${state.rules.size}? С каждого будет списано ${state.rules.entry_cents / 100} БК; цвета случайные, коми 7,5.`,
+      )
+    )
+      post("start");
+  });
+  $("rematch").addEventListener("click", () => post("rematch"));
+  $("leave").addEventListener("click", () => {
+    if (
+      confirm(
+        ["playing", "scoring"].includes(state.phase)
+          ? "Выход означает сдачу. Весь банк получает соперник. Покинуть стол?"
+          : "Покинуть стол?",
+      )
+    )
+      post("leave");
+  });
+  $("settingsForm").addEventListener("submit", (event) => {
+    event.preventDefault();
+    post("settings", {
+      rules: {
+        size: Number($("size").value),
+        entry_cents: Math.round(Number($("entry").value) * 100),
+        private: $("private").value === "true",
+      },
+    });
+  });
+  $("zoom").addEventListener("change", () => {
+    $("boardFrame").style.width = Number($("zoom").value) * 100 + "%";
+  });
+  $("invite").value =
+    location.origin + "/games/go/table/" + encodeURIComponent(GO_TABLE_ID);
+  $("copyInvite").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText($("invite").value);
+      notice("Ссылка скопирована");
+    } catch {
+      $("invite").select();
+      notice("Скопируйте выделенную ссылку");
+    }
+  });
+  $("joinButton").addEventListener("click", async () => {
+    if (busy) return;
+    busy = true;
+    try {
+      await api(base + "/join", {});
+      await load();
+    } catch (error) {
+      notice(error.message);
+    } finally {
+      busy = false;
+      selectionControls();
+    }
+  });
+  document.addEventListener("st-tables-changed", async () => {
+    try {
+      await api(base + "/preview");
+      await load();
+    } catch {
+      location.href = "/games/go/lobby";
+    }
+  });
+  window.addEventListener("focus", () => {
+    if (state) load();
+  });
+  setInterval(() => {
+    if (state && !busy && !document.hidden) load();
+  }, 1800);
+  (async () => {
+    try {
+      const preview = await api(base + "/preview");
+      if (preview.in_table) await load();
+      else {
+        $("join").hidden = false;
+        $("preview").textContent =
+          `${preview.creator} · поле ${preview.rules.size}×${preview.rules.size} · взнос ${preview.rules.entry_cents / 100} БК · коми 7,5`;
+        $("joinButton").disabled =
+          preview.phase !== "waiting" || preview.players >= 2;
+      }
+    } catch (error) {
+      notice(error.message);
+    }
+  })();
+})();

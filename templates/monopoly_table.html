@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Монополия · игровой стол — Strike Team 9</title>
+    {% include "_site_ui.html" %}{% include "_table_admin_ui.html" %}{% include
+    "_monopoly_ui.html" %}
+  </head>
+  <body>
+    {% include "_site_nav.html" %}
+    <main id="st-content" class="mono-page">
+      <p><a href="/games/monopoly/lobby">← Все столы</a></p>
+      <p class="mono-kicker">Игры сообщества · стратегия и сделки</p>
+      <h1>▦ Монополия</h1>
+      <div
+        id="message"
+        class="mono-message"
+        role="status"
+        aria-live="polite"
+      ></div>
+      <section id="join" class="mono-panel" hidden>
+        <h2>Вас пригласили за стол</h2>
+        <p id="preview" class="mono-muted"></p>
+        <button id="joinButton" class="mono-btn" type="button">
+          Присоединиться
+        </button>
+      </section>
+      <div id="game" hidden>
+        <div class="mono-layout">
+          <section>
+            <div
+              id="board"
+              class="mono-board"
+              role="group"
+              aria-label="Поле Монополии: нажмите клетку для подробностей"
+            >
+              <div class="mono-center">
+                <div class="mono-city" aria-hidden="true">▂ ▥ ▇ ▥ ▂</div>
+                <div class="mono-center-title">МОНОПОЛИЯ</div>
+                <p id="centerTurn" class="mono-muted"></p>
+                <div
+                  id="dice"
+                  class="mono-dice"
+                  aria-label="Результат броска"
+                ></div>
+                <div id="lastCard" class="mono-card" hidden></div>
+                <p id="bank" class="mono-muted"></p>
+                <div id="centerActions" class="mono-actions"></div>
+              </div>
+            </div>
+            <p class="mono-muted">
+              Нажмите любую клетку: цена, рента и владелец появятся ниже. Номера
+              помогают ориентироваться на телефоне.
+            </p>
+            <label
+              >Открыть клетку
+              <select id="cellPicker"></select
+            ></label>
+            <section
+              id="pending"
+              class="mono-panel mono-pending"
+              hidden
+            ></section>
+            <section id="deed" class="mono-panel mono-deed">
+              <h2>Выберите клетку на поле</h2>
+            </section>
+            <section class="mono-panel">
+              <h2>Ваше имущество</h2>
+              <div id="assets" class="mono-assets"></div>
+            </section>
+            <section id="tradePanel" class="mono-panel" hidden>
+              <details id="tradeDetails">
+                <summary>Предложить сделку</summary>
+                <p class="mono-muted">
+                  Укажите обе стороны обмена. Деньги здесь — игровые, не БК.
+                  Передача залогов требует процентов банку.
+                </p>
+                <label
+                  >Другой игрок
+                  <select id="counterparty"></select
+                ></label>
+                <form id="tradeForm">
+                  <div class="mono-trade-columns">
+                    <section>
+                      <h3>Вы отдаёте</h3>
+                      <label
+                        >Деньги
+                        <input
+                          id="giveCash"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value="0"
+                          required
+                      /></label>
+                      <div id="giveAssets"></div>
+                    </section>
+                    <section>
+                      <h3>Вы получаете</h3>
+                      <label
+                        >Деньги
+                        <input
+                          id="takeCash"
+                          type="number"
+                          min="0"
+                          step="1"
+                          value="0"
+                          required
+                      /></label>
+                      <div id="takeAssets"></div>
+                    </section>
+                  </div>
+                  <button class="mono-btn" type="submit">
+                    Отправить предложение
+                  </button>
+                </form>
+              </details>
+              <div id="offers"></div>
+            </section>
+            <details class="mono-panel">
+              <summary>История партии</summary>
+              <ol id="events" class="mono-history mono-scroll"></ol>
+            </details>
+            {% include "_monopoly_rules.html" %}
+          </section>
+          <aside class="mono-side">
+            <section class="mono-panel">
+              <h2>Участники</h2>
+              <div id="players"></div>
+              <p id="pot" class="mono-muted"></p>
+            </section>
+            <section class="mono-panel">
+              <h2 id="turn" aria-live="polite">Ожидание игроков</h2>
+              <div id="waiting" hidden>
+                <p class="mono-muted">
+                  Для старта нужны минимум двое и готовность каждого.
+                </p>
+                <div class="mono-actions">
+                  <button id="ready" class="mono-btn" type="button">
+                    Готов</button
+                  ><button id="start" class="mono-btn secondary" type="button">
+                    Начать партию
+                  </button>
+                </div>
+              </div>
+              <div id="turnActions" class="mono-actions"></div>
+              <button id="rematch" class="mono-btn" type="button" hidden>
+                Новая партия
+              </button>
+              <hr />
+              <label
+                >Ссылка-приглашение
+                <input id="invite" readonly aria-label="Ссылка на стол"
+              /></label>
+              <div class="mono-actions">
+                <button
+                  id="copyInvite"
+                  class="mono-btn secondary"
+                  type="button"
+                >
+                  Скопировать</button
+                ><button id="leave" class="mono-btn danger" type="button">
+                  Покинуть стол
+                </button>
+              </div>
+              <div id="closeTable" class="mono-actions"></div>
+              <details id="settingsDetails" hidden>
+                <summary>Условия стола</summary>
+                <form id="settingsForm">
+                  <label
+                    >Мест
+                    <select id="capacity">
+                      {% for n in range(2, 11) %}
+                      <option value="{{ n }}">{{ n }}</option>
+                      {% endfor %}
+                    </select></label
+                  ><label
+                    >Равный взнос, БК
+                    <input
+                      id="entry"
+                      type="number"
+                      min="0"
+                      max="1000000"
+                      step="0.01" /></label
+                  ><label class="mono-check"
+                    ><input id="private" type="checkbox" /> Только по
+                    ссылке</label
+                  ><button class="mono-btn secondary" type="submit">
+                    Сохранить условия
+                  </button>
+                </form>
+              </details>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </main>
+    <script>
+      const MONOPOLY_TABLE_ID = {{ table_id|tojson }}; window.ST9_USER_ID = {{ user.id|tojson }};
+    </script>
+    {% include "_request_security.html" %}
+    <script>
+      {% include "_monopoly_table.js.html" %}
+    </script>
+  </body>
+</html>
