@@ -158,6 +158,7 @@
 >
   <div class="section-card">
     <h2>Загрузка статистики</h2>
+    {% if is_super %}{% include "_protocol_login.html" %}{% endif %}
     <p>Состояние источников и ход сбора SQSTAT. Обновляется внутри админки.</p>
     {% set statistics_expanded = true %} {% include '_statistics_freshness.html'
     %}

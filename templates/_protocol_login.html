@@ -1,0 +1,47 @@
+<div class="section-card" style="background:#172338;border:1px solid #526c95">
+  <h3>Вход в Protocol</h3>
+  <p>Зайдите на игровой сервер Protocol и напишите в чате <strong>!сайт</strong>.
+    Введите полученный шестизначный код. Сохранённая сессия будет использоваться
+    сборщиком статистики ST-9. Пароль Steam не нужен.</p>
+  <form id="protocolLoginForm" autocomplete="off">
+    <label for="protocolLoginCode">Код из игры</label>
+    <input id="protocolLoginCode" type="password" inputmode="numeric" pattern="[0-9]{6}"
+      minlength="6" maxlength="6" required autocomplete="off" aria-describedby="protocolLoginStatus"
+      style="background:#101827;color:#edf3ff;border:1px solid #7187aa;border-radius:8px;padding:10px;width:150px">
+    <button type="submit" class="btn btn-primary" id="protocolLoginSubmit">Войти в Protocol</button>
+  </form>
+  <p id="protocolLoginStatus" role="status" aria-live="polite"></p>
+</div>
+<script>
+(() => {
+  const form = document.getElementById("protocolLoginForm");
+  const field = document.getElementById("protocolLoginCode");
+  const button = document.getElementById("protocolLoginSubmit");
+  const status = document.getElementById("protocolLoginStatus");
+  let busy = false;
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    if (busy || !form.reportValidity()) return;
+    busy = true;
+    button.disabled = true;
+    const body = JSON.stringify({code: field.value});
+    field.value = "";
+    status.textContent = "Проверяем код в Protocol…";
+    try {
+      const response = await fetch("/api/admin/protocol-login", {
+        method: "POST", credentials: "same-origin", cache: "no-store",
+        headers: {"Content-Type": "application/json"}, body,
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.detail || "Вход не выполнен.");
+      status.textContent = result.message;
+      window.loadAdminStatistics?.();
+    } catch (error) {
+      status.textContent = error.message || "Соединение прервалось. Проверьте состояние источника перед повторным входом.";
+    } finally {
+      busy = false;
+      button.disabled = false;
+    }
+  });
+})();
+</script>
