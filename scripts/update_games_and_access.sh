@@ -57,6 +57,9 @@ files=(
     templates/_battleship_ui.html templates/_battleship_rules.html
     templates/_battleship_shared.js.html templates/_battleship_game.js.html
     templates/_battleship_ships.js.html templates/_battleship_input.js.html
+    horse_racing.py horse_racing_routes.py
+    templates/horse_racing.html templates/_horse_racing_ui.html
+    templates/_horse_racing.js.html
 )
 services=(balance-app.service)
 stage=$(mktemp -d /tmp/games-access.XXXXXX)

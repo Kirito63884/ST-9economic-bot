@@ -743,6 +743,7 @@
                                             {% elif user.favorite_game == "backgammon" %}⚄
                                             {% elif user.favorite_game == "monopoly" %}▦
                                             {% elif user.favorite_game == "go" %}●
+                                            {% elif user.favorite_game == "horse_racing" %}🏇
                                             {% elif user.favorite_game == "chess" %}♟
                                             {% elif user.favorite_game == "draughts" %}◉
                                             {% elif user.favorite_game == "poker" %}🃏
@@ -901,6 +902,7 @@
                                         <button type="button" class="game-option {% if user.favorite_game == 'backgammon' %}selected{% endif %}" onclick="selectGame('backgammon',this)"><div class="game-option-icon">⚄</div><div class="game-option-name">Нарды</div></button>
                                         <button type="button" class="game-option {% if user.favorite_game == 'monopoly' %}selected{% endif %}" onclick="selectGame('monopoly',this)"><div class="game-option-icon">▦</div><div class="game-option-name">Монополия</div></button>
                                         <button type="button" class="game-option {% if user.favorite_game == 'go' %}selected{% endif %}" onclick="selectGame('go',this)"><div class="game-option-icon">●</div><div class="game-option-name">Го</div></button>
+                                        <button type="button" class="game-option {% if user.favorite_game == 'horse_racing' %}selected{% endif %}" onclick="selectGame('horse_racing',this)"><div class="game-option-icon">🏇</div><div class="game-option-name">Скачки</div></button>
                                         <button type="button"
                                                 class="game-option {% if user.favorite_game == 'durak' %}selected{% endif %}"
                                                 onclick="selectGame('durak',this)">

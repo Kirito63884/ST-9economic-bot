@@ -14,6 +14,7 @@
 - [Карта кода](ARCHITECTURE.md)
 - [Результаты проверок](VALIDATION.txt)
 - [Морской бой: правила, проверки и установка](BATTLESHIP_UPDATE.md)
+- [Скачки: правила, проверки и установка](HORSE_RACING_UPDATE.md)
 - [Подключение второго разработчика и порядок PR](CONTRIBUTING.md)
 - [Готовый текст для его ChatGPT/Codex](docs/CHATGPT_HANDOFF.md)
 - [Правила для помощников](AGENTS.md) и [контекст проекта](docs/PROJECT_CONTEXT.md)

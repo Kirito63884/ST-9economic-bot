@@ -89,6 +89,8 @@ from monopoly_game import MonopolyError
 from monopoly_routes import MonopolyService, build_router as build_monopoly_router
 from go_engine import GoError
 from go_routes import GoService, build_router as build_go_router
+from horse_racing import HorseRacingError, HorseRacingService
+from horse_racing_routes import build_router as build_horse_racing_router
 from chess_game import ChessError
 from chess_routes import ChessService, build_router as build_chess_router
 from battleship import BattleshipError
@@ -176,6 +178,7 @@ async def lifespan(app):
         asyncio.create_task(backgammon_timeout_checker()),
         asyncio.create_task(monopoly_timeout_checker()),
         asyncio.create_task(go_timeout_checker()),
+        asyncio.create_task(horse_racing_timeout_checker()),
         asyncio.create_task(battleship_timeout_checker()),
         asyncio.create_task(squad_schedule_checker()),
         asyncio.create_task(medal_checker()),
@@ -222,6 +225,7 @@ draughts_service = DraughtsService()
 backgammon_service = BackgammonService()
 monopoly_service = MonopolyService()
 go_service = GoService()
+horse_racing_service = HorseRacingService()
 battleship_service = BattleshipService()
 
 
@@ -248,6 +252,11 @@ async def monopoly_error_handler(request, exc):
 @app.exception_handler(GoError)
 async def go_error_handler(request, exc):
     return JSONResponse({"detail": str(exc)}, status_code=exc.status)
+
+
+@app.exception_handler(HorseRacingError)
+async def horse_racing_error_handler(request, exc):
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
 
 @app.exception_handler(ChessError)
@@ -1311,7 +1320,7 @@ async def update_profile(
     if bio is not None:
         user.bio = bio.strip()[:500] if bio.strip() else None
     if favorite_game is not None:
-        valid = ["blackjack", "roulette", "poker", "crash", "durak", "billiards", "domino", "battleship", "chess", "draughts", "backgammon", "monopoly", "go", ""]
+        valid = ["blackjack", "roulette", "poker", "crash", "durak", "billiards", "domino", "battleship", "chess", "draughts", "backgammon", "monopoly", "go", "horse_racing", ""]
         user.favorite_game = favorite_game if favorite_game in valid else None
     if avatar_emoji is not None:
         user.avatar_emoji = avatar_emoji.strip()[:10] if avatar_emoji.strip() else None
@@ -3083,6 +3092,7 @@ def detach_user_from_games(db, user):
     backgammon_service.detach(user.id, db)
     monopoly_service.detach(user.id, db)
     go_service.detach(user.id, db)
+    horse_racing_service.detach(user.id, db)
     battleship_service.detach(user.id, db)
     game = active_games.pop(user.id, None)
     if game and game["status"] in {"playing", "showdown"}:
@@ -5064,6 +5074,7 @@ def serialize_runtime():
         "backgammon": {tid: table.to_dict() for tid, table in backgammon_service.tables.items()},
         "monopoly": {tid: table.to_dict() for tid, table in monopoly_service.tables.items()},
         "go": {tid: table.to_dict() for tid, table in go_service.tables.items()},
+        "horse_racing": horse_racing_service.to_dict(),
         "battleship": {tid: table.to_dict() for tid, table in battleship_service.tables.items()},
         "durak": {tid: table.to_dict() for tid, table in durak_service.tables.items()},
         "billiards": {
@@ -5124,6 +5135,7 @@ def restore_runtime(payload):
     backgammon_service.restore(data.get("backgammon", {}))
     monopoly_service.restore(data.get("monopoly", {}))
     go_service.restore(data.get("go", {}))
+    horse_racing_service.restore(data.get("horse_racing", {}), gap if gap > 5 else 0)
     battleship_service.restore(data.get("battleship", {}), gap if gap > 5 else 0)
 
 
@@ -5280,6 +5292,17 @@ async def go_timeout_checker():
             logger.exception("Failed to read go tables")
 
 
+async def horse_racing_timeout_checker():
+    while True:
+        await asyncio.sleep(1)
+        try:
+            async with transaction(serialize_runtime, restore_runtime) as db:
+                horse_racing_service.advance(db)
+                horse_racing_service.pay_pending(db)
+        except Exception:
+            logger.exception("Failed to settle horse racing")
+
+
 async def battleship_timeout_checker():
     while True:
         await asyncio.sleep(1)
@@ -5300,6 +5323,7 @@ app.include_router(build_draughts_router(draughts_service, get_user, get_db, tem
 app.include_router(build_backgammon_router(backgammon_service, get_user, get_db, templates, is_super_admin))
 app.include_router(build_monopoly_router(monopoly_service, get_user, get_db, templates, is_super_admin))
 app.include_router(build_go_router(go_service, get_user, get_db, templates, is_super_admin))
+app.include_router(build_horse_racing_router(horse_racing_service, get_user, get_db, templates))
 app.include_router(build_battleship_router(battleship_service, get_user, get_db, templates, is_super_admin))
 app.include_router(build_domino_router(domino_service, get_user, get_db, templates, is_super_admin))
 app.include_router(
