@@ -226,7 +226,7 @@
       currentState.phase !== "betting" ||
       Boolean(currentState.my_bet) ||
       !Number.isInteger(amount) ||
-      amount < 100 ||
+      amount < 1_000 ||
       amount > maximum;
   }
 
