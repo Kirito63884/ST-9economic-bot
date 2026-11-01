@@ -8,7 +8,7 @@ from sqlalchemy import or_, and_, func
 from database import GameHistory, User
 
 MOSCOW = timezone(timedelta(hours=3))
-GAMES = ("blackjack", "roulette", "poker", "crash", "durak", "billiards", "domino", "battleship", "chess", "draughts", "backgammon", "monopoly", "go")
+GAMES = ("blackjack", "roulette", "poker", "crash", "durak", "billiards", "domino", "battleship", "chess", "draughts", "backgammon", "monopoly", "go", "horse_racing")
 EVENTS = (
     "name_change",
     "role_change",
@@ -66,6 +66,7 @@ TYPES = {
     "backgammon": "Нарды",
     "monopoly": "Монополия",
     "go": "Го",
+    "horse_racing": "Скачки",
     "admin": "Управление",
     "daily": "Бонус",
     "medals": "Награды",

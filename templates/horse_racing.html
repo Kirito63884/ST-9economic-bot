@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <title>Скачки — Strike Team 9</title>
+    {% include "_site_ui.html" %}{% include "_horse_racing_ui.html" %}
+  </head>
+  <body>
+    {% include "_site_nav.html" %}
+    <main class="hr-page" id="st-content">
+      <header class="hr-heading">
+        <div>
+          <span class="hr-eyebrow">ИППОДРОМ STRIKE TEAM 9</span>
+          <h1>Скачки</h1>
+          <p>Выбери лошадь, сделай ставку и следи за заездом.</p>
+        </div>
+        <a class="hr-link" href="/games">Все игры</a>
+      </header>
+      <p id="hr-error" class="hr-alert" role="alert" hidden></p>
+
+      <div class="hr-layout">
+        <section class="hr-card" aria-label="Ипподром">
+          <header class="hr-race-head">
+            <div>
+              <strong id="hr-race-title">Заезд загружается…</strong>
+              <p id="hr-race-subtitle">Подключаемся к ипподрому</p>
+            </div>
+            <div class="hr-countdown"><span id="hr-countdown-label">До закрытия ставок</span><strong id="hr-countdown">—</strong></div>
+          </header>
+          <div class="hr-track-wrap">
+            <div class="hr-track-meta"><span>ST-9 DERBY · 1 200 М</span><span>ФИНИШ →</span></div>
+            <div class="hr-track" id="hr-track" aria-label="Шесть дорожек ипподрома"></div>
+            <div class="hr-track-footer">
+              <span id="hr-track-status" aria-live="polite">Лошади готовятся к старту</span>
+              <span>Общий пул <strong id="hr-pool">0,00 БК</strong></span>
+            </div>
+          </div>
+          <details class="hr-rules">
+            <summary>Как устроены ставки</summary>
+            <p>На один заезд принимается одна ставка от игрока. После закрытия ставок сервер выбирает победившую лошадь и проводит заезд. Игроки, выбравшие её, делят общий пул пропорционально своим ставкам. Если на победителя никто не поставил, всем возвращаются их ставки. Комиссии нет; ставку нельзя отменить после приёма.</p>
+          </details>
+        </section>
+
+        <aside class="hr-card hr-bet-panel" aria-label="Ставка на заезд">
+          <h2>Кто придёт первым?</h2>
+          <p class="hr-intro">Выбери одну из шести лошадей. Ставка — от 1 до 1 000 000 БК, не больше баланса. Пул соперников показан суммарно.</p>
+          <div class="hr-horses" id="hr-horses"></div>
+          <div class="hr-bet-box">
+            <div class="hr-bet-labels"><label for="hr-amount">Твоя ставка, БК</label><span>Баланс <strong id="hr-balance">—</strong></span></div>
+            <div class="hr-bet-row">
+              <input id="hr-amount" type="number" min="1" max="1000000" step="0.01" value="250" inputmode="decimal" />
+              <button id="hr-place" class="hr-place" type="button" disabled>Поставить</button>
+            </div>
+            <div class="hr-presets" aria-label="Быстрый выбор суммы">
+              <button type="button" data-amount="50">50</button>
+              <button type="button" data-amount="100">100</button>
+              <button type="button" data-amount="250">250</button>
+              <button type="button" data-amount="500">500</button>
+            </div>
+            <p class="hr-message" id="hr-message" aria-live="polite">Загружаем текущий заезд…</p>
+          </div>
+        </aside>
+      </div>
+
+      <section class="hr-card hr-last">
+        <div><span class="hr-last-label">ПОСЛЕДНИЙ ФИНИШ</span><strong id="hr-last-result">Результат появится после первого заезда</strong></div>
+        <p id="hr-last-note">В одном заезде — одна ставка на игрока.</p>
+      </section>
+    </main>
+    <script nonce="{{ request.state.csp_nonce }}">
+      {% include "_horse_racing.js.html" %}
+    </script>
+  </body>
+</html>
+

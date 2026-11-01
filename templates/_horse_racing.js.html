@@ -1,0 +1,348 @@
+(() => {
+  "use strict";
+
+  const horses = [
+    { id: 1, name: "Гром", color: "#e1ad54" },
+    { id: 2, name: "Искра", color: "#ed776a" },
+    { id: 3, name: "Шторм", color: "#79bda9" },
+    { id: 4, name: "Феникс", color: "#ac91dc" },
+    { id: 5, name: "Комета", color: "#67acd0" },
+    { id: 6, name: "Туман", color: "#d976a8" },
+  ];
+  const byId = new Map(horses.map((horse) => [horse.id, horse]));
+  const $ = (id) => document.getElementById(id);
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const track = $("hr-track");
+  const horseList = $("hr-horses");
+  let selectedHorse = 2;
+  let currentState = null;
+  let serverOffset = 0;
+  let animationFrame = 0;
+  let pollBusy = false;
+
+  const money = (amount) =>
+    (amount / 100).toLocaleString("ru-RU", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+  const horseSvg = (color) => `
+    <svg viewBox="0 0 100 80" aria-hidden="true" style="--hr-silk:${color}">
+      <ellipse class="hr-horse-body" cx="50" cy="47" rx="27" ry="15" />
+      <path class="hr-horse-dark" d="M67 43Q72 26 80 18L91 20 88 30 80 34 77 47Z" />
+      <path class="hr-horse-dark" d="M82 19 83 10 87 18M89 20 95 14 93 23" />
+      <circle cx="88" cy="24" r="1.5" fill="#fff" />
+      <path class="hr-horse-mane" d="M70 39Q68 24 78 18L82 20Q75 29 77 39M26 43Q12 37 16 28Q18 39 33 38" />
+      <path class="hr-horse-dark hr-legs" d="M34 55 31 70 35 71 42 55M47 56 47 71 51 71 54 55M60 55 66 68 70 67 67 51M70 48 79 58 82 56 76 43" />
+      <path class="hr-silk" d="M43 28Q54 20 66 29L69 46 47 46Z" />
+      <circle class="hr-silk" cx="56" cy="23" r="7" />
+    </svg>`;
+
+  for (const horse of horses) {
+    const lane = document.createElement("div");
+    lane.className = "hr-lane";
+    lane.dataset.horseId = horse.id;
+    const label = document.createElement("span");
+    label.className = "hr-lane-label";
+    label.textContent = `${horse.id} · ${horse.name}`;
+    const runner = document.createElement("span");
+    runner.className = "hr-runner";
+    runner.innerHTML = horseSvg(horse.color);
+    const distance = document.createElement("span");
+    distance.className = "hr-distance";
+    distance.textContent = "0 м";
+    lane.append(label, runner, distance);
+    track.append(lane);
+
+    const option = document.createElement("button");
+    option.className = "hr-horse-option";
+    option.type = "button";
+    option.dataset.horseId = horse.id;
+    option.setAttribute("aria-pressed", String(horse.id === selectedHorse));
+    const number = document.createElement("span");
+    number.className = "hr-number";
+    number.style.backgroundColor = horse.color;
+    number.textContent = String(horse.id);
+    const info = document.createElement("span");
+    info.className = "hr-horse-info";
+    const name = document.createElement("strong");
+    name.textContent = horse.name;
+    const pool = document.createElement("small");
+    pool.dataset.poolFor = horse.id;
+    pool.textContent = "В пуле 0,00 БК";
+    info.append(name, pool);
+    const select = document.createElement("span");
+    select.className = "hr-select-label";
+    select.dataset.selectFor = horse.id;
+    select.textContent = horse.id === selectedHorse ? "Выбрана" : "Выбрать";
+    option.append(number, info, select);
+    option.addEventListener("click", () => {
+      if (currentState?.my_bet || currentState?.phase !== "betting") return;
+      selectedHorse = horse.id;
+      renderSelection();
+    });
+    horseList.append(option);
+  }
+
+  const finish = document.createElement("span");
+  finish.className = "hr-finish";
+  finish.setAttribute("aria-hidden", "true");
+  track.append(finish);
+
+  function renderSelection() {
+    for (const button of horseList.querySelectorAll(".hr-horse-option")) {
+      const id = Number(button.dataset.horseId);
+      const chosen = id === selectedHorse;
+      button.setAttribute("aria-pressed", String(chosen));
+      button.disabled = Boolean(currentState?.my_bet) || currentState?.phase !== "betting";
+      button.querySelector(`[data-select-for="${id}"]`).textContent = chosen
+        ? "Выбрана"
+        : "Выбрать";
+    }
+  }
+
+  function setMessage(text, isError = false) {
+    const message = $("hr-message");
+    message.textContent = text;
+    message.classList.toggle("error", isError);
+  }
+
+  function myResultMessage(state) {
+    if (!state.my_result) return "";
+    const horse = byId.get(state.my_result.winner_id);
+    const payout = state.my_result.payout_cents;
+    if (state.my_result.refunded) {
+      return `На победителя никто не поставил. Твоя ставка возвращена: ${money(payout)} БК.`;
+    }
+    if (state.my_result.won) {
+      return `Ты угадал победителя ${horse?.name || "лошадь"}. Выплата ${money(payout)} БК, итог ${money(Math.abs(state.my_result.net_cents))} БК ${state.my_result.net_cents >= 0 ? "в плюс" : "в минус"}.`;
+    }
+    return `Первой пришла ${horse?.name || "лошадь"}. Ставка ${money(state.my_result.amount_cents)} БК проиграла.`;
+  }
+
+  function renderMessage(state) {
+    const resultMessage = myResultMessage(state);
+    if (resultMessage) {
+      setMessage(resultMessage);
+      return;
+    }
+    if (state.my_bet) {
+      const horse = byId.get(state.my_bet.horse_id);
+      setMessage(
+        `Ставка ${money(state.my_bet.amount_cents)} БК принята на ${horse?.name || "лошадь"}. Отменить её нельзя.`,
+      );
+      return;
+    }
+    if (state.phase !== "betting") {
+      const resultMessage = myResultMessage(state);
+      if (resultMessage) {
+        setMessage(resultMessage);
+        return;
+      }
+      setMessage("Приём ставок закрыт. Следующий заезд начнётся автоматически.");
+      return;
+    }
+    setMessage(`Выбрана ${byId.get(selectedHorse)?.name}. Ставка ещё не принята.`);
+  }
+
+  function renderState(state) {
+    const newRace = currentState && currentState.race_number !== state.race_number;
+    const measuredOffset = state.server_now * 1000 - Date.now();
+    serverOffset = currentState && !newRace
+      ? serverOffset + (measuredOffset - serverOffset) * 0.2
+      : measuredOffset;
+    currentState = state;
+    $("hr-balance").textContent = `${money(state.balance_cents)} БК`;
+    $("siteBalance")?.replaceChildren(document.createTextNode(money(state.balance_cents)));
+    $("hr-pool").textContent = `${money(state.pool_cents)} БК`;
+
+    for (const horse of horses) {
+      const amount = state.horse_pools[String(horse.id)] || 0;
+      horseList.querySelector(`[data-pool-for="${horse.id}"]`).textContent =
+        `В пуле ${money(amount)} БК`;
+    }
+
+    if (newRace) selectedHorse = 2;
+    if (state.my_bet) selectedHorse = state.my_bet.horse_id;
+    renderSelection();
+    renderMessage(state);
+
+    const ownBet = state.my_bet;
+    const canBet = state.phase === "betting" && !ownBet;
+    $("hr-amount").disabled = !canBet;
+    for (const preset of document.querySelectorAll(".hr-presets button")) {
+      preset.disabled = !canBet;
+    }
+    updateBetButton();
+
+    if (state.phase === "betting") {
+      $("hr-race-title").textContent = `Заезд №${state.race_number}`;
+      $("hr-race-subtitle").textContent = `${state.bet_count} ${state.bet_count === 1 ? "ставка" : "ставок"} · ставки закрываются по таймеру`;
+      $("hr-countdown-label").textContent = "До старта";
+      $("hr-track-status").textContent = "Лошади занимают дорожки";
+    } else if (state.phase === "running") {
+      $("hr-race-title").textContent = `Заезд №${state.race_number} · старт`;
+      $("hr-race-subtitle").textContent = "Заезд идёт — новые ставки не принимаются";
+      $("hr-countdown-label").textContent = "До финиша";
+      $("hr-track-status").textContent = "Лошади рванули к финишу";
+    } else {
+      const winner = byId.get(state.winner_id);
+      $("hr-race-title").textContent = `Заезд №${state.race_number} завершён`;
+      $("hr-race-subtitle").textContent = `Первой пришла ${winner?.name || "лошадь"}`;
+      $("hr-countdown-label").textContent = "Следующий заезд";
+      $("hr-track-status").textContent = `Финишировала первой: ${winner?.name || "лошадь"}!`;
+    }
+
+    const finish = state.result || state.last_finish;
+    if (finish) {
+      const winner = byId.get(finish.winner_id);
+      $("hr-last-result").textContent = `Заезд №${finish.number} · ${winner?.name || "финиш"}`;
+      $("hr-last-note").textContent = finish.refunded
+        ? "На победителя ставок не было: участникам вернули взносы."
+        : `Общий пул ${money(finish.pool_cents)} БК · участников: ${finish.bet_count}.`;
+    }
+
+    if (newRace) {
+      for (const lane of track.querySelectorAll(".hr-lane")) {
+        lane.querySelector(".hr-runner").style.transform = "translate3d(0,-50%,0)";
+        lane.querySelector(".hr-distance").textContent = "0 м";
+      }
+    }
+    if (state.phase === "running" || state.phase === "finished") animateRace();
+    else if (animationFrame) cancelAnimationFrame(animationFrame);
+    updateCountdown();
+  }
+
+  function updateBetButton() {
+    const input = $("hr-amount");
+    const raw = input.value.trim().replace(",", ".");
+    const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(raw);
+    const amount = match ? Number(match[1]) * 100 + Number((match[2] || "").padEnd(2, "0")) : 0;
+    const balance = currentState?.balance_cents || 0;
+    const maximum = Math.min(balance, 100_000_000);
+    input.max = String(maximum / 100);
+    $("hr-place").disabled =
+      !currentState ||
+      currentState.phase !== "betting" ||
+      Boolean(currentState.my_bet) ||
+      !Number.isInteger(amount) ||
+      amount < 100 ||
+      amount > maximum;
+  }
+
+  function updateCountdown() {
+    if (!currentState) return;
+    const now = Date.now() + serverOffset;
+    let seconds = 0;
+    let label = "";
+    if (currentState.phase === "betting") {
+      seconds = Math.max(0, currentState.betting_ends_at * 1000 - now);
+      label = "до закрытия ставок";
+    } else if (currentState.phase === "finished") {
+      seconds = Math.max(0, currentState.result_until * 1000 - now);
+      label = "до нового заезда";
+    }
+    const whole = Math.ceil(seconds / 1000);
+    $("hr-countdown").textContent =
+      currentState.phase === "running"
+        ? "СТАРТ"
+        : `${String(Math.floor(whole / 60)).padStart(2, "0")}:${String(whole % 60).padStart(2, "0")}`;
+    $("hr-countdown-label").textContent = label || (currentState.phase === "running" ? "Заезд идёт" : "До старта");
+    updateBetButton();
+  }
+
+  function animateRace() {
+    if (!currentState || !currentState.started_at || !currentState.durations_ms) return;
+    if (animationFrame) cancelAnimationFrame(animationFrame);
+    const startedAt = currentState.started_at * 1000;
+    const elapsed = Math.max(0, Date.now() + serverOffset - startedAt);
+    const visibleElapsed = currentState.phase === "finished"
+      ? Math.min(elapsed, (currentState.finished_at - currentState.started_at) * 1000)
+      : elapsed;
+    const trackWidth = track.clientWidth;
+    const startX = Math.max(76, trackWidth * 0.17);
+    const finishX = Math.max(startX + 40, trackWidth - 26);
+    for (const horse of horses) {
+      const duration = currentState.durations_ms[String(horse.id)] || 10_000;
+      const linear = Math.min(1, visibleElapsed / duration);
+      const rhythm = Math.sin(linear * Math.PI * 5 + horse.id) * Math.sin(Math.PI * linear) * 0.018;
+      const progress = Math.max(0, Math.min(1, linear + rhythm));
+      const lane = track.querySelector(`[data-horse-id="${horse.id}"]`);
+      lane.querySelector(".hr-runner").style.transform =
+        `translate3d(${startX + progress * (finishX - startX)}px,-50%,0)`;
+      lane.querySelector(".hr-distance").textContent = `${Math.round(progress * 1200)} м`;
+    }
+    updateCountdown();
+    if (currentState.phase === "running" && !reduceMotion.matches) {
+      animationFrame = requestAnimationFrame(animateRace);
+    }
+  }
+
+  async function loadState() {
+    if (pollBusy) return;
+    pollBusy = true;
+    try {
+      const response = await fetch("/api/horse-racing/state", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Не удалось загрузить заезд");
+      $("hr-error").hidden = true;
+      renderState(data);
+    } catch (error) {
+      $("hr-error").textContent = error.message || "Связь с ипподромом потеряна";
+      $("hr-error").hidden = false;
+      setMessage("Обнови страницу или попробуй ещё раз.", true);
+    } finally {
+      pollBusy = false;
+    }
+  }
+
+  async function placeBet() {
+    updateBetButton();
+    if ($("hr-place").disabled || !currentState) return;
+    const raw = $("hr-amount").value.trim().replace(",", ".");
+    const [whole, fraction = ""] = raw.split(".");
+    const amount = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+    const button = $("hr-place");
+    button.disabled = true;
+    button.textContent = "Принимаем…";
+    try {
+      const response = await fetch("/api/horse-racing/bet", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          race_number: currentState.race_number,
+          horse_id: selectedHorse,
+          amount_cents: amount,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || "Ставка не принята");
+      renderState(data.state);
+      setMessage(data.duplicate ? "Эта ставка уже была принята." : "Ставка принята. Удачи!");
+    } catch (error) {
+      setMessage(error.message || "Не удалось принять ставку", true);
+      await loadState();
+    } finally {
+      button.textContent = "Поставить";
+      updateBetButton();
+    }
+  }
+
+  $("hr-amount").addEventListener("input", updateBetButton);
+  $("hr-place").addEventListener("click", placeBet);
+  for (const button of document.querySelectorAll(".hr-presets button")) {
+    button.addEventListener("click", () => {
+      $("hr-amount").value = button.dataset.amount;
+      updateBetButton();
+    });
+  }
+  window.addEventListener("resize", () => {
+    if (currentState?.phase === "running" || currentState?.phase === "finished") animateRace();
+  }, { passive: true });
+  window.addEventListener("pagehide", () => cancelAnimationFrame(animationFrame));
+
+  loadState();
+  window.setInterval(loadState, 1000);
+  window.setInterval(updateCountdown, 200);
+})();
+
