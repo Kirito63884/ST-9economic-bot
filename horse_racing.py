@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 5399)
-Total output lines: 510
-
 """Shared server-owned horse races with atomic pari-mutuel settlement."""
 
 from __future__ import annotations
@@ -209,7 +206,117 @@ class HorseRacingService:
             self.last_finish = {
                 "number": race["number"],
                 "winner_id": race["winner_id"],
-                "pool_cents": race["pool_cents"],…1399 tokens truncated…    }
+                "pool_cents": race["pool_cents"],
+                "bet_count": len(race["bets"]),
+                "winner_bet_count": race["result"]["winner_bet_count"],
+                "refunded": race["result"]["refunded"],
+                "payouts": dict(race["result"]["payouts"]),
+                "ticket_results": dict(race["result"]["ticket_results"]),
+            }
+        if race["phase"] == "finished" and now >= race["result_until"]:
+            self.current = self._new_race(now)
+            race = self.current
+        return race
+
+    def place_bet(self, user, horse_id, amount_cents, db, race_number, now=None):
+        now = self.clock() if now is None else now
+        race = self.advance(db, now)
+        if type(race_number) is not int or race_number != race["number"]:
+            raise HorseRacingError("Заезд обновился. Проверьте текущую ставку", 409)
+        if type(horse_id) is not int or horse_id not in HORSE_BY_ID:
+            raise HorseRacingError("Выберите лошадь из списка")
+        if (
+            type(amount_cents) is not int
+            or not MIN_BET_CENTS <= amount_cents <= MAX_BET_CENTS
+        ):
+            raise HorseRacingError("Ставка должна быть от 10 до 1 000 000 БК")
+        if not user or user.deleted_at:
+            raise HorseRacingError("Профиль участника недоступен", 409)
+
+        existing = next((b for b in race["bets"] if b["user_id"] == user.id), None)
+        if existing:
+            if (
+                existing["horse_id"] == horse_id
+                and existing["amount_cents"] == amount_cents
+            ):
+                return {"accepted": True, "duplicate": True, "race": race}
+            raise HorseRacingError("В этом заезде уже принята одна ставка", 409)
+        if race["phase"] != "betting" or now >= race["betting_ends_at"]:
+            raise HorseRacingError("Приём ставок на этот заезд закрыт", 409)
+
+        balance = cents(user.balance)
+        if balance < 0:
+            raise HorseRacingError("Для участия нужен неотрицательный баланс", 409)
+        if amount_cents > balance:
+            raise HorseRacingError("На балансе недостаточно БК", 409)
+        next_pool = race["pool_cents"] + amount_cents
+        if next_pool > MAX_CENTS:
+            raise HorseRacingError("Общий пул достиг допустимого предела", 409)
+
+        # Every bettor could be the only ticket on the winning horse. Keep the
+        # possible gross payout within the wallet's existing limit.
+        existing_ids = {bet["user_id"] for bet in race["bets"]}
+        existing_users = {
+            existing_user.id: existing_user
+            for existing_user in db.query(User).filter(User.id.in_(existing_ids)).all()
+        }
+        for bet in race["bets"]:
+            existing_user = existing_users.get(bet["user_id"])
+            if not existing_user or existing_user.deleted_at:
+                raise HorseRacingError("Профиль участника недоступен", 409)
+            existing_balance = cents(existing_user.balance)
+            if existing_balance < 0 or existing_balance + next_pool > MAX_CENTS:
+                raise HorseRacingError("Возможная выплата превысит лимит баланса", 409)
+        if balance - amount_cents + next_pool > MAX_CENTS:
+            raise HorseRacingError("Возможная выплата превысит лимит баланса", 409)
+
+        user.balance = (balance - amount_cents) / 100
+        race["bets"].append(
+            {"user_id": user.id, "horse_id": horse_id, "amount_cents": amount_cents}
+        )
+        race["pool_cents"] = next_pool
+        return {"accepted": True, "duplicate": False, "race": race}
+
+    def state(self, user, db, now=None):
+        race = self.advance(db, now)
+        horse_pools = {str(horse["id"]): 0 for horse in HORSES}
+        for bet in race["bets"]:
+            horse_pools[str(bet["horse_id"])] += bet["amount_cents"]
+        own_bet = next((b for b in race["bets"] if b["user_id"] == user.id), None)
+        result = race["result"] if race["phase"] == "finished" else None
+        last = self.last_finish
+        return {
+            "race_number": race["number"],
+            "phase": race["phase"],
+            "server_now": self.clock() if now is None else now,
+            "betting_ends_at": race["betting_ends_at"],
+            "started_at": race["started_at"],
+            "finished_at": race["finished_at"],
+            "result_until": race["result_until"],
+            "durations_ms": race["durations_ms"]
+            if race["phase"] in ("running", "finished")
+            else None,
+            "winner_id": race["winner_id"] if race["phase"] == "finished" else None,
+            "pool_cents": race["pool_cents"],
+            "bet_count": len(race["bets"]),
+            "horse_pools": horse_pools,
+            "my_bet": (
+                {
+                    "horse_id": own_bet["horse_id"],
+                    "amount_cents": own_bet["amount_cents"],
+                }
+                if own_bet
+                else None
+            ),
+            "my_result": self._my_result(
+                user.id, result if result else (None if own_bet else last)
+            ),
+            "result": (
+                {
+                    key: value
+                    for key, value in result.items()
+                    if key not in {"payouts", "ticket_results"}
+                }
                 if result
                 else None
             ),
