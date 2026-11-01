@@ -18,6 +18,7 @@ from protocol_login import login_with_code, refresh_after_login
 def login_slot():
     """One exchange per shared cookie file, including multiple web workers."""
     path = cookie_path().with_suffix(".login.lock")
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
     try:
         try:
@@ -117,3 +118,4 @@ def make_router(may_login):
             ) from None
 
     return router
+
