@@ -61,9 +61,9 @@ def test_settlement_defers_overflow_then_pays_when_headroom_returns(make_user):
         assert deferred.amount == 10
 
 
-def test_horse_racing_errors_return_their_detail(client, login_as, make_user):
+def test_horse_racing_errors_return_their_detail(login_as, make_user):
     make_user(101)
-    login_as(client, 101)
+    client = login_as(101)
     state = client.get("/api/horse-racing/state").json()
 
     response = client.post(
@@ -76,4 +76,4 @@ def test_horse_racing_errors_return_their_detail(client, login_as, make_user):
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "Выберите лошадь из списка"
+    assert response.json()["detail"] == "�������� ������ �� ������"
