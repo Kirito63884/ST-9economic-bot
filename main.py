@@ -256,7 +256,7 @@ async def go_error_handler(request, exc):
 
 @app.exception_handler(HorseRacingError)
 async def horse_racing_error_handler(request, exc):
-    return JSONResponse({"detail": str(exc)}, status_code=exc.status_code)
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
 
 @app.exception_handler(ChessError)
@@ -5135,7 +5135,7 @@ def restore_runtime(payload):
     backgammon_service.restore(data.get("backgammon", {}))
     monopoly_service.restore(data.get("monopoly", {}))
     go_service.restore(data.get("go", {}))
-    horse_racing_service.restore(data.get("horse_racing", {}))
+    horse_racing_service.restore(data.get("horse_racing", {}), gap if gap > 5 else 0)
     battleship_service.restore(data.get("battleship", {}), gap if gap > 5 else 0)
 
 
@@ -5298,6 +5298,7 @@ async def horse_racing_timeout_checker():
         try:
             async with transaction(serialize_runtime, restore_runtime) as db:
                 horse_racing_service.advance(db)
+                horse_racing_service.pay_pending(db)
         except Exception:
             logger.exception("Failed to settle horse racing")
 

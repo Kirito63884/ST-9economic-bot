@@ -50,6 +50,7 @@ class HorseRacingService:
         self.random = random_source or secrets.SystemRandom()
         self.current = None
         self.last_finish = None
+        self.pending_payouts = []
         self.next_number = 1
 
     def _new_race(self, now):
@@ -120,26 +121,36 @@ class HorseRacingService:
         for bet in bets:
             uid = bet["user_id"]
             user = users.get(uid)
-            if not user or user.deleted_at:
-                raise HorseRacingError(
-                    "Не удалось найти профиль участника; выплата сохранена для повтора",
-                    409,
-                )
             payout = payouts[uid]
-            balance = cents(user.balance)
-            if payout < 0 or balance < 0 or balance + payout > MAX_CENTS:
+            if payout < 0:
                 raise HorseRacingError(
-                    "Баланс участника достиг лимита; выплата сохранена для повтора",
+                    "Сумма выплаты требует проверки",
                     409,
                 )
-            balances[uid] = (balance, payout)
+            if not user:
+                balances[uid] = (None, 0)
+                continue
+            balance = cents(user.balance)
+            credit = payout if balance + payout <= MAX_CENTS else 0
+            balances[uid] = (balance, credit)
 
         for bet in bets:
             uid = bet["user_id"]
-            user = users[uid]
-            balance, payout = balances[uid]
+            user = users.get(uid)
+            balance, credit = balances[uid]
+            payout = payouts[uid]
             amount = bet["amount_cents"]
-            user.balance = (balance + payout) / 100
+            if user and credit:
+                user.balance = (balance + credit) / 100
+            deferred = payout - credit
+            if deferred:
+                self.pending_payouts.append(
+                    {
+                        "user_id": uid,
+                        "race_number": race["number"],
+                        "amount_cents": deferred,
+                    }
+                )
             result = (
                 "push"
                 if not winning_bets
@@ -147,19 +158,27 @@ class HorseRacingService:
                 if bet["horse_id"] == race["winner_id"]
                 else "lost"
             )
-            db.add(
-                GameHistory(
-                    user_id=uid,
-                    game_type="horse_racing",
-                    result=result,
-                    amount=(payout - amount) / 100,
-                    details=(
-                        f"Скачки, заезд №{race['number']}; {HORSE_BY_ID[bet['horse_id']]['name']}; "
-                        f"ставка {amount / 100:.2f} БК, выплата {payout / 100:.2f} БК; "
-                        f"первой пришла лошадь {HORSE_BY_ID[race['winner_id']]['name']}"
-                    ),
+            if user:
+                db.add(
+                    GameHistory(
+                        user_id=uid,
+                        game_type="horse_racing",
+                        result=result,
+                        amount=(credit - amount) / 100,
+                        details=(
+                            f"Скачки, заезд №{race['number']}; {HORSE_BY_ID[bet['horse_id']]['name']}; "
+                            f"ставка {amount / 100:.2f} БК, выплата {payout / 100:.2f} БК, "
+                            f"начислено {credit / 100:.2f} БК"
+                            + (
+                                f", отложено {deferred / 100:.2f} БК до появления места в балансе"
+                                if deferred
+                                else ""
+                            )
+                            + "; "
+                            f"первой пришла лошадь {HORSE_BY_ID[race['winner_id']]['name']}"
+                        ),
+                    )
                 )
-            )
         ticket_results = {
             str(bet["user_id"]): {
                 "horse_id": bet["horse_id"],
@@ -169,6 +188,7 @@ class HorseRacingService:
             for bet in bets
         }
         race["result"] = {
+            "number": race["number"],
             "winner_id": race["winner_id"],
             "pool_cents": pool,
             "bet_count": len(bets),
@@ -285,6 +305,24 @@ class HorseRacingService:
         own_bet = next((b for b in race["bets"] if b["user_id"] == user.id), None)
         result = race["result"] if race["phase"] == "finished" else None
         last = self.last_finish
+        my_result = self._my_result(
+            user.id, result if result else (None if own_bet else last)
+        )
+        my_pending_payout = sum(
+            payment["amount_cents"]
+            for payment in self.pending_payouts
+            if payment["user_id"] == user.id
+        )
+        if my_result:
+            my_result["pending_payout_cents"] = sum(
+                payment["amount_cents"]
+                for payment in self.pending_payouts
+                if payment["user_id"] == user.id
+                and payment["race_number"] == my_result["number"]
+            )
+            my_result["paid_payout_cents"] = (
+                my_result["payout_cents"] - my_result["pending_payout_cents"]
+            )
         return {
             "race_number": race["number"],
             "phase": race["phase"],
@@ -308,9 +346,8 @@ class HorseRacingService:
                 if own_bet
                 else None
             ),
-            "my_result": self._my_result(
-                user.id, result if result else (None if own_bet else last)
-            ),
+            "my_result": my_result,
+            "my_pending_payout_cents": my_pending_payout,
             "result": (
                 {
                     key: value
@@ -344,7 +381,39 @@ class HorseRacingService:
             "winner_id": result["winner_id"],
             "won": ticket["horse_id"] == result["winner_id"] and not result["refunded"],
             "net_cents": ticket["payout_cents"] - ticket["amount_cents"],
+            "number": result.get("number", 0),
         }
+
+    def pay_pending(self, db):
+        remaining = []
+        for payment in self.pending_payouts:
+            user = db.get(User, payment["user_id"])
+            if not user:
+                remaining.append(payment)
+                continue
+            try:
+                balance = cents(user.balance)
+            except HorseRacingError:
+                remaining.append(payment)
+                continue
+            amount = payment["amount_cents"]
+            if balance + amount > MAX_CENTS:
+                remaining.append(payment)
+                continue
+            user.balance = (balance + amount) / 100
+            db.add(
+                GameHistory(
+                    user_id=user.id,
+                    game_type="horse_racing",
+                    result="deferred_payout",
+                    amount=amount / 100,
+                    details=(
+                        f"Скачки, заезд №{payment['race_number']}; "
+                        f"зачислена отложенная выплата {amount / 100:.2f} БК"
+                    ),
+                )
+            )
+        self.pending_payouts = remaining
 
     def detach(self, uid, db):
         race = self.current
@@ -387,12 +456,14 @@ class HorseRacingService:
             "next_number": self.next_number,
             "current": self.current,
             "last_finish": self.last_finish,
+            "pending_payouts": [dict(payment) for payment in self.pending_payouts],
         }
 
     def restore(self, data, pause=0):
         if not data:
             self.current = None
             self.last_finish = None
+            self.pending_payouts = []
             self.next_number = 1
             self.ensure(self.clock())
             return
@@ -492,6 +563,20 @@ class HorseRacingService:
             or current["result"].get("bet_count") != len(current["bets"])
         ):
             raise RuntimeError("Invalid saved horse racing settlement")
+        pending_payouts = data.get("pending_payouts", [])
+        if not isinstance(pending_payouts, list):
+            raise RuntimeError("Invalid saved horse racing pending payouts")
+        for payment in pending_payouts:
+            if (
+                not isinstance(payment, dict)
+                or type(payment.get("user_id")) is not int
+                or payment["user_id"] < 1
+                or type(payment.get("race_number")) is not int
+                or payment["race_number"] < 1
+                or type(payment.get("amount_cents")) is not int
+                or payment["amount_cents"] <= 0
+            ):
+                raise RuntimeError("Invalid saved horse racing pending payout")
         if pause:
             for key in (
                 "created_at",
@@ -503,8 +588,8 @@ class HorseRacingService:
                 if current.get(key) is not None:
                     current[key] += pause
         self.current = current
+        self.pending_payouts = [dict(payment) for payment in pending_payouts]
         self.last_finish = (
             dict(data["last_finish"]) if data.get("last_finish") else None
         )
         self.next_number = max(int(data.get("next_number", 1)), current["number"] + 1)
-

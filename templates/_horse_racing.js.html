@@ -112,10 +112,18 @@
     const horse = byId.get(state.my_result.winner_id);
     const payout = state.my_result.payout_cents;
     if (state.my_result.refunded) {
+      const pending = state.my_result.pending_payout_cents || 0;
+      if (pending) {
+        return `На победителя никто не поставил. Возврат ${money(payout)} БК: начислено ${money(state.my_result.paid_payout_cents)} БК, ${money(pending)} БК ожидают появления места в балансе.`;
+      }
       return `На победителя никто не поставил. Твоя ставка возвращена: ${money(payout)} БК.`;
     }
     if (state.my_result.won) {
-      return `Ты угадал победителя ${horse?.name || "лошадь"}. Выплата ${money(payout)} БК, итог ${money(Math.abs(state.my_result.net_cents))} БК ${state.my_result.net_cents >= 0 ? "в плюс" : "в минус"}.`;
+      const pending = state.my_result.pending_payout_cents || 0;
+      const payoutText = pending
+        ? `Начислено ${money(state.my_result.paid_payout_cents)} БК; ${money(pending)} БК ожидают появления места в балансе. `
+        : `Выплата ${money(payout)} БК. `;
+      return `Ты угадал победителя ${horse?.name || "лошадь"}. ${payoutText}Итог ${money(Math.abs(state.my_result.net_cents))} БК ${state.my_result.net_cents >= 0 ? "в плюс" : "в минус"}.`;
     }
     return `Первой пришла ${horse?.name || "лошадь"}. Ставка ${money(state.my_result.amount_cents)} БК проиграла.`;
   }
@@ -129,7 +137,13 @@
     if (state.my_bet) {
       const horse = byId.get(state.my_bet.horse_id);
       setMessage(
-        `Ставка ${money(state.my_bet.amount_cents)} БК принята на ${horse?.name || "лошадь"}. Отменить её нельзя.`,
+        `Ставка ${money(state.my_bet.amount_cents)} БК принята на ${horse?.name || "лошадь"}. Отменить её нельзя.${state.my_pending_payout_cents ? ` Отложенная выплата: ${money(state.my_pending_payout_cents)} БК.` : ""}`,
+      );
+      return;
+    }
+    if (state.my_pending_payout_cents) {
+      setMessage(
+        `Отложенная выплата ${money(state.my_pending_payout_cents)} БК будет начислена, когда появится место в балансе.`,
       );
       return;
     }
@@ -345,4 +359,3 @@
   window.setInterval(loadState, 1000);
   window.setInterval(updateCountdown, 200);
 })();
-
