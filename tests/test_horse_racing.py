@@ -76,4 +76,4 @@ def test_horse_racing_errors_return_their_detail(login_as, make_user):
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "�������� ������ �� ������"
+    assert response.json()["detail"] == "Выберите лошадь из списка"
