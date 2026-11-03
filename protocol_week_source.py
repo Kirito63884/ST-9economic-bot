@@ -10,6 +10,7 @@ from database import Base, SessionLocal
 
 BASE = "https://protocol-squad.ru"
 URL = BASE + "/week?w=prev"
+CMD_URL = BASE + "/week?tab=cmd&w=prev"
 MOSCOW = timezone(timedelta(hours=3))
 LABELS = {
     "cmd": "Победы CMD",
@@ -154,7 +155,7 @@ class Tree(HTMLParser):
         self.stack[-1].children.append(data)
 
 
-def parse_previous(body, now=None):
+def parse_previous(body, now=None, required_codes=None):
     if len(body) > 3_000_000:
         raise PublicWeekUnavailable("Response too large")
     tree = Tree()
@@ -288,7 +289,8 @@ def parse_previous(body, now=None):
         }
         if code in EXTRA_LABELS:
             categories[code]["criterion"] = code
-    if not set(LABELS).issubset(categories):
+    required_codes = set(required_codes or LABELS)
+    if not required_codes.issubset(categories):
         raise PublicWeekUnavailable("Categories missing")
     empty = [code for code, value in categories.items() if not value["rows"]]
     return {
@@ -328,20 +330,52 @@ class SameOrigin(HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
+def _fetch_page(opener, url):
+    with opener.open(
+        Request(url, headers={"User-Agent": "StrikeTeam9-Weekly/1.0"}),
+        timeout=20,
+    ) as response:
+        if not response.geturl().startswith(BASE + "/"):
+            raise PublicWeekUnavailable("Unexpected origin")
+        raw = response.read(3_000_001)
+    if len(raw) > 3_000_000:
+        raise PublicWeekUnavailable("Response too large")
+    return raw.decode("utf-8")
+
+
 def fetch_previous(opener=None, now=None):
+    """Fetch both Protocol rating tabs: commanders contain CMD/Squad weeks.
+
+    The public page renders only the selected tab. Reading only /week?w=prev
+    therefore misses "ЦМД недели" and "Сквадные недели"; the collector now
+    requests the commander tab separately and merges both verified documents.
+    """
     opener = opener or build_opener(SameOrigin())
     for attempt in range(2):
         try:
-            with opener.open(
-                Request(URL, headers={"User-Agent": "StrikeTeam9-Weekly/1.0"}),
-                timeout=20,
-            ) as response:
-                if not response.geturl().startswith(BASE + "/"):
-                    raise PublicWeekUnavailable("Unexpected origin")
-                raw = response.read(3_000_001)
-            if len(raw) > 3_000_000:
-                raise PublicWeekUnavailable("Response too large")
-            return parse_previous(raw.decode("utf-8"), now)
+            general = parse_previous(
+                _fetch_page(opener, URL),
+                now,
+                required_codes=set(LABELS) - {"cmd", "sl"},
+            )
+            commanders = parse_previous(
+                _fetch_page(opener, CMD_URL),
+                now,
+                required_codes={"cmd", "sl"},
+            )
+            if general["week"] != commanders["week"] or general["period"] != commanders["period"]:
+                raise PublicWeekUnavailable("Protocol tabs disagree on week")
+            categories = {**general["categories"], **commanders["categories"]}
+            document = {
+                **general,
+                "categories": categories,
+                "source": URL,
+                "tab_sources": {"general": URL, "commanders": CMD_URL},
+            }
+            empty = [code for code, value in categories.items() if not value["rows"]]
+            document["empty_categories"] = empty
+            document["empty_rechecks"] = {code: 0 for code in empty}
+            return document
         except (OSError, UnicodeError, PublicWeekUnavailable) as exc:
             if attempt:
                 raise PublicWeekUnavailable(
