@@ -10,7 +10,7 @@ from database import Base, SessionLocal
 
 BASE = "https://protocol-squad.ru"
 URL = BASE + "/week?w=prev"
-CMD_URL = BASE + "/week?tab=cmd&w=prev"
+CMD_URL = BASE + "/week?tab=commanders&w=prev"
 MOSCOW = timezone(timedelta(hours=3))
 LABELS = {
     "cmd": "Победы CMD",
@@ -358,8 +358,9 @@ def fetch_previous(opener=None, now=None):
                 now,
                 required_codes=set(LABELS) - {"cmd", "sl"},
             )
+            commanders_body = _fetch_page(opener, CMD_URL)
             commanders = parse_previous(
-                _fetch_page(opener, CMD_URL),
+                commanders_body,
                 now,
                 required_codes={"cmd", "sl"},
             )
