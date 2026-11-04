@@ -10,7 +10,6 @@ from database import Base, SessionLocal
 
 BASE = "https://protocol-squad.ru"
 URL = BASE + "/week?w=prev"
-CMD_URL = BASE + "/week?tab=commanders&w=prev"
 MOSCOW = timezone(timedelta(hours=3))
 LABELS = {
     "cmd": "Победы CMD",
@@ -343,6 +342,31 @@ def _fetch_page(opener, url):
     return raw.decode("utf-8")
 
 
+def discover_commanders_url(body):
+    """Discover the published commander tab URL instead of assuming its query parameter."""
+    tree = Tree()
+    tree.feed(body)
+    tree.close()
+    slots = {
+        n.attrs["id"]: n
+        for n in tree.root.walk()
+        if n.attrs.get("id", "").startswith("S:")
+    }
+    for anchor in tree.root.walk(slots):
+        if anchor.tag != "a":
+            continue
+        label = anchor.text(slots)
+        if "ЦМД недели" not in label and "Сквадные недели" not in label:
+            continue
+        href = anchor.attrs.get("href", "")
+        if href.startswith("/"):
+            return BASE + href
+        if href.startswith(BASE + "/"):
+            return href
+    raise PublicWeekUnavailable("Protocol commander tab link missing")
+
+
+
 def fetch_previous(opener=None, now=None):
     """Fetch both Protocol rating tabs: commanders contain CMD/Squad weeks.
 
@@ -353,12 +377,14 @@ def fetch_previous(opener=None, now=None):
     opener = opener or build_opener(SameOrigin())
     for attempt in range(2):
         try:
+            general_body = _fetch_page(opener, URL)
             general = parse_previous(
-                _fetch_page(opener, URL),
+                general_body,
                 now,
                 required_codes=set(LABELS) - {"cmd", "sl"},
             )
-            commanders_body = _fetch_page(opener, CMD_URL)
+            commanders_url = discover_commanders_url(general_body)
+            commanders_body = _fetch_page(opener, commanders_url)
             commanders = parse_previous(
                 commanders_body,
                 now,
@@ -371,7 +397,7 @@ def fetch_previous(opener=None, now=None):
                 **general,
                 "categories": categories,
                 "source": URL,
-                "tab_sources": {"general": URL, "commanders": CMD_URL},
+                "tab_sources": {"general": URL, "commanders": commanders_url},
             }
             empty = [code for code, value in categories.items() if not value["rows"]]
             document["empty_categories"] = empty
