@@ -58,6 +58,13 @@ def serve_fixture(database_path, port):
         yield
 
     main.app.router.lifespan_context = quiet
+
+    class FirstHorseWins:
+        @staticmethod
+        def sample(population, count):
+            return list(population)[:count]
+
+    main.horse_racing_service.random = FirstHorseWins()
     with SessionLocal.begin() as db:
         for uid, name, balance in (
             (201, "Адмирал Восток", 100),
@@ -169,10 +176,14 @@ print(json.dumps({str(uid):TimestampSigner('synthetic-roster-browser-only').sign
         card.locator("summary").click()
         card.locator('[data-field="role_id"]').fill("1555555555555555555")
         card.locator('[data-field="description"]').fill("Описание руководителя")
+        card.locator('[data-field="title"]').fill("Куратор")
+        a.locator('[data-title-key="training_header"]').fill("ПОДГОТОВКА")
         a.locator("#rosterPreviewButton").click()
         a.wait_for_function("!document.querySelector('#rosterSaveButton').disabled")
         assert a.locator("#rosterPreview pre").count() == 2
         assert "Описание руководителя" in a.locator("#rosterPreview").inner_text()
+        assert "__Куратор:__" in a.locator("#rosterPreview").inner_text()
+        assert "**ПОДГОТОВКА**" in a.locator("#rosterPreview").inner_text()
         assert "ВЫСШИЙ КОМАНДНЫЙ СОСТАВ" in a.locator("#rosterPreview").inner_text()
         card.locator('[data-field="description"]').fill("Изменённое описание")
         assert a.locator("#rosterSaveButton").is_disabled()
@@ -198,14 +209,25 @@ print(json.dumps({str(uid):TimestampSigner('synthetic-roster-browser-only').sign
         a.reload()
         a.locator("#rosterEditor").wait_for(state="visible")
         assert a.locator("#rosterExtraRoles > details").count() == 1
+        assert card.locator('[data-field="title"]').input_value() == "Куратор"
+        assert (
+            a.locator('[data-title-key="training_header"]').input_value()
+            == "ПОДГОТОВКА"
+        )
         if screenshot_dir:
             a.screenshot(
                 path=str(screenshot_dir / "roster-editor-desktop.png"), full_page=True
             )
         b = page_for(203, 390, True)
         b.locator("#rosterEditor").wait_for(state="visible")
+        b.locator('[data-title-key="training_header"]').fill("ОБУЧЕНИЕ")
         b.locator("#rosterPreviewButton").tap()
         b.wait_for_function("!document.querySelector('#rosterSaveButton').disabled")
+        assert "**ОБУЧЕНИЕ**" in b.locator("#rosterPreview").inner_text()
+        b.locator("#rosterSaveButton").tap()
+        b.wait_for_function(
+            "document.querySelector('#rosterStatus').textContent.includes('Настройки сохранены')"
+        )
         assert b.evaluate("document.documentElement.scrollWidth<=innerWidth+1")
         if screenshot_dir:
             b.screenshot(
@@ -219,10 +241,70 @@ print(json.dumps({str(uid):TimestampSigner('synthetic-roster-browser-only').sign
             )
             == 403
         )
+        # The same synthetic users also exercise the reviewed horse-racing UI.
+        a.goto(base + "/games/horse-racing")
+        a.wait_for_function(
+            "document.querySelector('#hr-race-subtitle').textContent.includes('ставок')"
+        )
+        a.locator("#hr-amount").fill("10")
+        a.locator('.hr-horse-option[data-horse-id="1"]').click()
+        held = {}
+
+        def hold_poll(route):
+            if "poll" not in held:
+                held["poll"] = route
+                held["response"] = route.fetch()
+            else:
+                route.continue_()
+
+        def hold_bet(route):
+            held["bet"] = route
+
+        a.route("**/api/horse-racing/state", hold_poll)
+        a.route("**/api/horse-racing/bet", hold_bet)
+        for _ in range(30):
+            a.wait_for_timeout(100)
+            if "poll" in held:
+                break
+        assert "poll" in held
+        a.locator("#hr-place").click()
+        a.wait_for_timeout(500)  # The countdown must not enable a pending POST.
+        assert a.locator("#hr-place").is_disabled()
+        assert "bet" in held
+        held["bet"].continue_()
+        a.wait_for_function("document.querySelector('#hr-amount').disabled")
+        held["poll"].fulfill(response=held["response"])
+        a.wait_for_timeout(200)
+        assert a.locator("#hr-amount").is_disabled()  # Old poll cannot erase bet.
+        assert a.locator("#hr-place").is_disabled()
+        a.unroute("**/api/horse-racing/state", hold_poll)
+        a.unroute("**/api/horse-racing/bet", hold_bet)
+        junior.goto(base + "/games/horse-racing")
+        junior.locator("#hr-amount").fill("10")
+        junior.locator("#hr-place").click()
+        junior.wait_for_function("document.querySelector('#hr-amount').disabled")
+        a.wait_for_function(
+            "document.querySelector('#hr-race-title').textContent.includes('завершён')",
+            timeout=40000,
+        )
+        a.wait_for_function(
+            "document.querySelector('#hr-balance').textContent.includes('110,00')"
+        )
+        junior.wait_for_function(
+            "document.querySelector('#hr-balance').textContent.includes('40,00')"
+        )
+        a.reload()
+        a.wait_for_function(
+            "document.querySelector('#hr-balance').textContent.includes('110,00')"
+        )
+        print(
+            "PASS horse race: two users, pending POST, stale poll ignored, winner/loser paid, reload",
+            flush=True,
+        )
         assert not errors, errors
         browser.close()
         print(
-            "PASS senior/chief editor, exact two-message preview, invalidation, role ID/description, new group, saved reload, mobile touch, junior denied; zero browser errors",
+            "PASS senior/chief editor, exact two-message preview, invalidation, existing titles/headings, role ID/description, new group, saved reload, mobile touch, junior denied; zero browser errors",
             flush=True,
         )
 

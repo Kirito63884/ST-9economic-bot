@@ -7,6 +7,7 @@ from admin_hub import log_action
 from roster_settings import (
     CONFIG_KEY,
     LABELS,
+    HEADING_LABELS,
     digest,
     load,
     preview,
@@ -67,6 +68,7 @@ def make_router(get_user, get_db, may_manage, secret):
             "config": config,
             "revision": version(db),
             "labels": LABELS,
+            "heading_labels": HEADING_LABELS,
             "channel_id": "1555118430858780712",
             "roles": saved.get("roles", []) if saved else [],
             "snapshot_at": saved.get("checked_at") if saved else None,
@@ -128,12 +130,19 @@ def make_router(get_user, get_db, may_manage, secret):
             for key in LABELS
             if old["role_ids"][key] != config["role_ids"][key]
         ]
+        renamed = [
+            key
+            for key in config["titles"]
+            if old["titles"][key] != config["titles"][key]
+        ]
         log_action(
             db,
             user,
             "roster_publication_settings",
             "Изменены настройки канала состава. ID: "
             + (", ".join(changed) or "без изменений")
+            + "; переименованы пункты: "
+            + (", ".join(renamed) or "без изменений")
             + f"; дополнительных ролей: {len(config['extra_roles'])}. Оформление сохранено.",
         )
         return {

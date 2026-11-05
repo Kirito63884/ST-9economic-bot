@@ -1,13 +1,15 @@
 <section id="panel-roster-settings" role="tabpanel" aria-labelledby="tab-roster-settings" hidden>
   <div class="section-card">
     <div class="section-heading">
-      <div><h2>Канал «Состав»</h2><p>Меняются ID ролей и описания. Заголовки, оформление, порядок существующих блоков и два сообщения сохраняются.</p></div>
+      <div><h2>Канал «Состав»</h2><p>Можно менять названия пунктов, ID ролей и описания. Оформление, порядок блоков и два сообщения сохраняются.</p></div>
       <button id="rosterReload" type="button" class="btn btn-sm">Загрузить настройки</button>
     </div>
     <p class="hint">Настройки относятся только к публикации в канале <code>1555118430858780712</code>. Роли участникам, права сайта и группы для сборов здесь не изменяются.</p>
     <p id="rosterStatus" class="editor-info" role="status">Откройте раздел, чтобы загрузить настройки.</p>
     <datalist id="rosterRoleCatalog"></datalist>
     <div id="rosterEditor" hidden>
+      <h3>Заголовки разделов</h3>
+      <div id="rosterHeadings" class="roster-config-row"></div>
       <h3>Существующие роли</h3>
       <div id="rosterBaseRoles" class="stack"></div>
       <label class="roster-config-label">Задачи учебной группы: одна задача на строку

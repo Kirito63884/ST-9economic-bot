@@ -299,3 +299,70 @@ def test_preview_expires_and_existing_settings_remain(make_user, login_as, monke
     )
     with SessionLocal() as db:
         assert db.get(AutomationSetting, CONFIG_KEY) is None
+
+
+def test_legacy_config_keeps_titles_and_message_bytes():
+    from roster_settings import load
+
+    old = defaults()
+    old.pop("titles")
+    with SessionLocal.begin() as db:
+        write(db, CONFIG_KEY, old)
+    with SessionLocal() as db:
+        loaded = load(db)
+    assert loaded["titles"] == defaults()["titles"]
+    assert render_roster(sample_members(), loaded) == render_roster(
+        sample_members(), defaults()
+    )
+
+
+def test_existing_titles_are_previewed_signed_saved_and_escaped(make_user, login_as):
+    from roster_settings import load
+
+    c = chief(make_user, login_as)
+    seed_cache()
+    initial = c.get(PATH).json()
+    config = initial["config"]
+    config["titles"].update(
+        founder="Куратор",
+        recon="РАЗВЕДКА",
+        training_header="ПОДГОТОВКА",
+        leader="Старший группы",
+    )
+    body = {"revision": initial["revision"], "config": config}
+    preview = c.post(PATH + "/preview", json=body)
+    assert preview.status_code == 200, preview.text
+    texts = "\n".join(preview.json()["texts"])
+    assert (
+        "__Куратор:__" in texts
+        and "**РАЗВЕДКА**" in texts
+        and "**ПОДГОТОВКА**" in texts
+    )
+    assert "__Старший группы:__" in texts
+    body["confirmation"] = preview.json()["confirmation"]
+    altered = copy.deepcopy(body)
+    altered["config"]["titles"]["founder"] = "Другое название"
+    assert c.post(PATH + "/settings", json=altered).status_code == 409
+    assert c.post(PATH + "/settings", json=body).status_code == 200
+    with SessionLocal() as db:
+        saved = load(db)
+    assert saved == config
+    assert saved["role_ids"] == defaults()["role_ids"]
+    assert saved["descriptions"] == defaults()["descriptions"]
+    assert c.get(PATH).json()["config"]["titles"] == config["titles"]
+    saved["titles"]["founder"] = "@everyone **тест**"
+    assert "@everyone" not in "\n".join(render_roster(sample_members(), saved))
+
+
+@pytest.mark.parametrize("title", ["", " ", "a\nb", "a\tb", "a\u2028b", "a" * 81])
+def test_invalid_existing_title_is_rejected(make_user, login_as, title):
+    c = chief(make_user, login_as)
+    initial = c.get(PATH).json()
+    initial["config"]["titles"]["founder"] = title
+    assert (
+        c.post(
+            PATH + "/preview",
+            json={"revision": initial["revision"], "config": initial["config"]},
+        ).status_code
+        == 400
+    )
