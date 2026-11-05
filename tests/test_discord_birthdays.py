@@ -235,6 +235,9 @@ def test_commands_register_without_connecting(monkeypatch):
         "remove_bd",
         "my_bd",
         "bd_help",
+        "next_bd",
+        "list_bd",
+        "preview_bd",
     }
     assert "on_member_remove" not in bot.extra_events
 
@@ -328,3 +331,119 @@ def test_installer_patch_preserves_other_features_and_is_idempotent(tmp_path):
     )
     assert result.returncode != 0
     assert source.read_text() == "UNKNOWN_STRUCTURE = True\n"
+
+
+def test_upcoming_dates_rollover_and_leap_day():
+    from discord_birthdays import upcoming_date, next_birthdays_embed
+
+    assert upcoming_date(date(2000, 1, 1), date(2026, 12, 31)) == date(2027, 1, 1)
+    assert upcoming_date(date(2000, 2, 29), date(2027, 2, 28)) == date(2027, 3, 1)
+    assert upcoming_date(date(2000, 2, 29), date(2028, 2, 28)) == date(2028, 2, 29)
+    assert upcoming_date(date(2000, 11, 5), MOMENT.date()) == MOMENT.date()
+    records = {
+        UID: RECORD,
+        "123456789012345679": {"name": "@everyone **unsafe**", "date": "06.11.2000"},
+    }
+    embed = next_birthdays_embed(records, MOMENT.date())
+    assert "сегодня" in embed.description and "через 1 дн." in embed.description
+    assert "@everyone" not in embed.description
+    assert "2000" not in embed.description
+    assert "Пока нет" in next_birthdays_embed({}, MOMENT.date()).description
+
+
+def test_calendar_buttons_pagination_refresh_and_owner():
+    from discord_birthdays import BirthdayCalendar
+
+    records = {
+        str(int(UID) + i): {"name": "Fixture " + str(i), "date": "05.11.2000"}
+        for i in range(23)
+    }
+    with SessionLocal.begin() as db:
+        write(db, REGISTRY_KEY, records)
+
+    async def run():
+        view = BirthdayCalendar(int(UID), GUILD, 11)
+        interaction = SimpleNamespace(
+            user=SimpleNamespace(id=int(UID)),
+            guild_id=GUILD,
+            response=SimpleNamespace(
+                edit_message=AsyncMock(), send_message=AsyncMock()
+            ),
+        )
+        assert view.render().description.count("**05.11**") == 10
+        assert view.previous_page.disabled and not view.next_page.disabled
+        await view.next_page.callback(interaction)
+        assert view.page == 1
+        await view.next_page.callback(interaction)
+        assert view.render().description.count("**05.11**") == 3
+        assert view.next_page.disabled
+        # Reread current registry on each click instead of exposing removed records.
+        with SessionLocal.begin() as db:
+            write(db, REGISTRY_KEY, {UID: RECORD})
+        await view.previous_page.callback(interaction)
+        assert view.page == 0
+        assert view.render().description.count("**05.11**") == 1
+        await view.next_month.callback(interaction)
+        assert view.month == 12 and "нет сохранённых" in view.render().description
+        await view.next_month.callback(interaction)
+        assert view.month == 1
+        await view.previous_month.callback(interaction)
+        assert view.month == 12
+        interaction.user.id = 42
+        await view.next_month.callback(interaction)
+        assert view.month == 12
+        interaction.response.send_message.assert_awaited_once()
+        interaction.user.id = int(UID)
+        interaction.guild_id = 42
+        await view.next_month.callback(interaction)
+        assert view.month == 12
+        view.stop()
+
+    asyncio.run(run())
+
+
+def test_calendar_commands_and_preview_are_private_read_only(monkeypatch):
+    from discord.ext import commands
+    import discord_birthdays
+
+    monkeypatch.setenv("REQUIRED_GUILD_ID", str(GUILD))
+    monkeypatch.setattr(discord_birthdays, "now_moscow", lambda: MOMENT)
+    bot = commands.Bot(command_prefix="!", intents=discord.Intents.none())
+    register_birthdays(bot)
+    actor = SimpleNamespace(
+        id=int(UID),
+        mention=f"<@{UID}>",
+        display_avatar=SimpleNamespace(url="https://example.test/avatar.png"),
+        guild_permissions=SimpleNamespace(manage_guild=False),
+    )
+    interaction = SimpleNamespace(
+        user=actor,
+        guild_id=GUILD,
+        response=SimpleNamespace(is_done=lambda: False, send_message=AsyncMock()),
+    )
+    with SessionLocal.begin() as db:
+        write(db, REGISTRY_KEY, {UID: RECORD})
+
+    async def run():
+        for command in ("next_bd", "list_bd"):
+            await bot.tree.get_command(command).callback(interaction)
+            kwargs = interaction.response.send_message.call_args.kwargs
+            assert kwargs["ephemeral"] is True
+            assert kwargs["allowed_mentions"].to_dict()["parse"] == []
+            if "view" in kwargs:
+                kwargs["view"].stop()
+        await bot.tree.get_command("preview_bd").callback(interaction)
+        assert "embed" not in interaction.response.send_message.call_args.kwargs
+        actor.guild_permissions.manage_guild = True
+        await bot.tree.get_command("preview_bd").callback(interaction)
+        kwargs = interaction.response.send_message.call_args.kwargs
+        assert "26 лет" in kwargs["embed"].description
+        assert kwargs["ephemeral"] is True
+        assert kwargs["allowed_mentions"].to_dict()["parse"] == []
+        assert saved() == {UID: RECORD}
+        assert saved(f"discord_birthdays:sent:2026:{UID}") == {}
+        interaction.guild_id = 1
+        await bot.tree.get_command("preview_bd").callback(interaction)
+        assert "embed" not in interaction.response.send_message.call_args.kwargs
+
+    asyncio.run(run())
