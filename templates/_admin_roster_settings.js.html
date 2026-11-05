@@ -50,11 +50,11 @@
     });
     $("rosterSaveButton").disabled = value || !confirmation;
   }
-  function baseCard(key, label, id, description) {
+  function baseCard(key, label, id, description, title) {
     const node = document.createElement("details");
     node.className = "roster-config-card";
     node.dataset.roleKey = key;
-    node.innerHTML = `<summary>${escape(label)}</summary><label class="roster-config-label">ID роли Discord <input class="form-control" data-field="role_id" type="text" inputmode="numeric" maxlength="20" list="rosterRoleCatalog" value="${escape(id)}"></label><label class="roster-config-label">Описание / задачи: одна строка на пункт <textarea class="form-control" data-field="description" rows="3" maxlength="1200">${escape(description)}</textarea></label>`;
+    node.innerHTML = `<summary>${escape(label)}</summary><label class="roster-config-label">Название пункта <input class="form-control" data-field="title" maxlength="80" value="${escape(title)}"></label><label class="roster-config-label">ID роли Discord <input class="form-control" data-field="role_id" type="text" inputmode="numeric" maxlength="20" list="rosterRoleCatalog" value="${escape(id)}"></label><label class="roster-config-label">Описание / задачи: одна строка на пункт <textarea class="form-control" data-field="description" rows="3" maxlength="1200">${escape(description)}</textarea></label>`;
     return node;
   }
   function extraCard(row = {}) {
@@ -70,18 +70,23 @@
   function collect() {
     const config = {
       role_ids: {},
+      titles: {},
       descriptions: {},
       training_description: $("rosterTraining").value,
       extra_roles: [],
     };
     for (const node of $("rosterBaseRoles").children) {
       const key = node.dataset.roleKey;
+      config.titles[key] = node.querySelector('[data-field="title"]').value;
       config.role_ids[key] = node
         .querySelector('[data-field="role_id"]')
         .value.trim();
       config.descriptions[key] = node.querySelector(
         '[data-field="description"]',
       ).value;
+    }
+    for (const input of $("rosterHeadings").querySelectorAll("input")) {
+      config.titles[input.dataset.titleKey] = input.value;
     }
     for (const node of $("rosterExtraRoles").children) {
       const role = {};
@@ -119,8 +124,23 @@
             label,
             saved.config.role_ids[key],
             saved.config.descriptions[key],
+            saved.config.titles[key],
           ),
         ),
+      );
+      $("rosterHeadings").replaceChildren(
+        ...Object.entries(saved.heading_labels).map(([key, text]) => {
+          const label = document.createElement("label");
+          label.className = "roster-config-label";
+          label.textContent = text;
+          const input = document.createElement("input");
+          input.className = "form-control";
+          input.maxLength = 80;
+          input.dataset.titleKey = key;
+          input.value = saved.config.titles[key];
+          label.append(input);
+          return label;
+        }),
       );
       $("rosterTraining").value = saved.config.training_description;
       $("rosterExtraRoles").replaceChildren(

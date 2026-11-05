@@ -5,6 +5,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from html.parser import HTMLParser
 from urllib.request import build_opener, HTTPRedirectHandler, Request
+from urllib.parse import urljoin, urlsplit, urlunsplit, parse_qsl, urlencode
 from sqlalchemy import Column, Integer, String, Text, DateTime
 from database import Base, SessionLocal
 
@@ -359,12 +360,26 @@ def discover_commanders_url(body):
         if "ЦМД недели" not in label and "Сквадные недели" not in label:
             continue
         href = anchor.attrs.get("href", "")
-        if href.startswith("/"):
-            return BASE + href
-        if href.startswith(BASE + "/"):
-            return href
+        if not href or href.startswith("#"):
+            continue
+        candidate = urlsplit(urljoin(URL, href))
+        origin = urlsplit(BASE)
+        if (candidate.scheme, candidate.netloc, candidate.path) != (
+            origin.scheme,
+            origin.netloc,
+            origin.path + "/week",
+        ):
+            continue
+        # A tab link may omit the selected week or point to the current week.
+        # Keep its published tab parameter, explicitly request the closed week.
+        query = [
+            (key, value) for key, value in parse_qsl(candidate.query) if key != "w"
+        ]
+        query.append(("w", "prev"))
+        return urlunsplit(
+            (candidate.scheme, candidate.netloc, candidate.path, urlencode(query), "")
+        )
     raise PublicWeekUnavailable("Protocol commander tab link missing")
-
 
 
 def fetch_previous(opener=None, now=None):
@@ -383,6 +398,8 @@ def fetch_previous(opener=None, now=None):
                 now,
                 required_codes=set(LABELS) - {"cmd", "sl"},
             )
+            if {"cmd", "sl"}.issubset(general["categories"]):
+                return general
             commanders_url = discover_commanders_url(general_body)
             commanders_body = _fetch_page(opener, commanders_url)
             commanders = parse_previous(
@@ -390,8 +407,14 @@ def fetch_previous(opener=None, now=None):
                 now,
                 required_codes={"cmd", "sl"},
             )
-            if general["week"] != commanders["week"] or general["period"] != commanders["period"]:
+            if (
+                general["week"] != commanders["week"]
+                or general["period"] != commanders["period"]
+            ):
                 raise PublicWeekUnavailable("Protocol tabs disagree on week")
+            for code in general["categories"].keys() & commanders["categories"].keys():
+                if general["categories"][code] != commanders["categories"][code]:
+                    raise PublicWeekUnavailable("Protocol tabs disagree on category")
             categories = {**general["categories"], **commanders["categories"]}
             document = {
                 **general,

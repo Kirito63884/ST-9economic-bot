@@ -22,6 +22,18 @@ LABELS = {
     "chief_instructor": "Главный инструктор",
     "instructor": "Инструкторы",
 }
+HEADING_LABELS = {
+    "command_header": "Заголовок командного состава",
+    "security_header": "Заголовок службы безопасности",
+    "training_header": "Название учебной группы",
+}
+TITLE_DEFAULTS = {
+    **LABELS,
+    **{key: LABELS[key].upper() for key in ("recon", "assault", "armor", "support")},
+    "command_header": "ВЫСШИЙ КОМАНДНЫЙ СОСТАВ",
+    "security_header": "СЛУЖБА БЕЗОПАСНОСТИ",
+    "training_header": "УЧЕБНАЯ ГРУППА",
+}
 TRAINING_DESCRIPTION = (
     "проведение тренировок;\nподготовка игроков к распределению в основные группы;"
 )
@@ -34,6 +46,7 @@ def defaults():
     descriptions.update({key: "\n".join(tasks) for key, _, _, tasks in UNITS})
     return {
         "role_ids": dict(ROLES),
+        "titles": dict(TITLE_DEFAULTS),
         "descriptions": descriptions,
         "training_description": TRAINING_DESCRIPTION,
         "extra_roles": [],
@@ -47,7 +60,9 @@ def plain(value, maximum, *, required=False):
         (ord(c) < 32 and c not in "\n\t") or 0xD800 <= ord(c) <= 0xDFFF for c in value
     ) or any(c in value for c in "\u202a\u202b\u202d\u202e\u2066\u2067\u2068\u2069"):
         raise ValueError("В тексте есть недопустимые управляющие символы.")
-    if required and (not value.strip() or "\n" in value):
+    if required and (
+        not value.strip() or any(c in value for c in "\n\r\t\u2028\u2029")
+    ):
         raise ValueError("Укажите название роли одной строкой.")
     return value
 
@@ -66,8 +81,18 @@ def snowflake(value):
 
 def validate(config):
     base = defaults()
+    # Existing stored configurations predate editable titles; hydrate only
+    # this known legacy shape, without accepting arbitrary missing fields.
+    if isinstance(config, dict) and set(config) == set(base) - {"titles"}:
+        config = {**config, "titles": dict(TITLE_DEFAULTS)}
     if not isinstance(config, dict) or set(config) != set(base):
         raise ValueError("Некорректные поля настроек состава.")
+    titles = config["titles"]
+    if not isinstance(titles, dict) or set(titles) != set(TITLE_DEFAULTS):
+        raise ValueError("Нужно сохранить названия всех пунктов состава.")
+    titles = {
+        key: plain(value, 80, required=True).strip() for key, value in titles.items()
+    }
     ids, descriptions = config["role_ids"], config["descriptions"]
     if not isinstance(ids, dict) or set(ids) != set(base["role_ids"]):
         raise ValueError("Нужно сохранить все существующие роли состава.")
@@ -110,6 +135,7 @@ def validate(config):
         raise ValueError("Одна роль Discord указана несколько раз.")
     return {
         "role_ids": ids,
+        "titles": titles,
         "descriptions": descriptions,
         "training_description": training,
         "extra_roles": normalized,

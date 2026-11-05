@@ -38,7 +38,8 @@ files=(
     templates/draughts_lobby.html templates/draughts_table.html templates/_draughts_ui.html
     templates/_draughts_rules.html templates/_draughts_lobby.js.html templates/_draughts_table.js.html
     assembly_attendance.py assembly_waivers.py groups_admin.py assembly_reports.py
-    medals_routes.py protocol_rankings.py
+    medals_routes.py protocol_rankings.py protocol_week_source.py
+    protocol_login.py protocol_login_admin.py templates/_protocol_login.html
     templates/admin.html templates/admin_logs.html templates/_assembly_waiver.html templates/_admin_group_reports.html
     templates/_admin_audit.html templates/_admin_hub.html templates/_statistics_freshness.html
     templates/medals.html templates/_admin_medals.html templates/_award_design.html
@@ -150,6 +151,10 @@ for path in database.py roster_membership.py assembly_attendance.py assembly_rep
         break
     fi
 done
+# The medals worker imports the weekly Protocol collector at startup.
+if ! cmp -s "$stage/code/protocol_week_source.py" "$app_dir/protocol_week_source.py"; then
+    services+=(balance-app-medals.service)
+fi
 backup="/root/games-access-before-$(date +%Y%m%d-%H%M%S)-${stage##*.}"
 mkdir -m 700 "$backup"
 tar -czf "$backup/files.tar.gz" -C "$app_dir" "${original[@]}"
@@ -276,7 +281,7 @@ for name in (
 ):
     main.templates.env.get_template(name)
 from jinja2 import meta
-pending = ["go_lobby.html", "go_table.html", "admin.html"]
+pending = ["go_lobby.html", "go_table.html", "admin.html", "horse_racing.html"]
 seen = set()
 while pending:
     name = pending.pop()
@@ -301,7 +306,7 @@ curl -fsS --max-time 10 --retry 6 --retry-delay 1 --retry-connrefused \
     http://127.0.0.1:8000/ -o /dev/null
 systemctl is-active "${services[@]}"
 changing=0
-echo "Готово. Ctrl+F5 → Игры: Нарды / Монополия / Го / Русские шашки / Шахматы / Морской бой."
+echo "Готово. Ctrl+F5 → Игры: Скачки / Нарды / Монополия / Го / Русские шашки / Шахматы / Морской бой."
 echo "Техадмин: Админка → Игроки → Открыть → Права доступа. Назначение/снятие — только владельцу."
 echo "После назначения техадмин входит заново. Балансы и существующие роли не изменены."
-echo "Перезапущены: ${services[*]}. Сборщики SQSTAT и игрового онлайна не перезапускались."
+echo "Перезапущены: ${services[*]}. При изменении Protocol перезапускается сборщик наград/SQSTAT; игровой онлайн не перезапускается."

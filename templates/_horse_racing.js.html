@@ -19,6 +19,8 @@
   let serverOffset = 0;
   let animationFrame = 0;
   let pollBusy = false;
+  let betBusy = false;
+  let stateGeneration = 0;
 
   const money = (amount) =>
     (amount / 100).toLocaleString("ru-RU", {
@@ -236,6 +238,7 @@
     const maximum = Math.min(balance, 100_000_000);
     input.max = String(maximum / 100);
     $("hr-place").disabled =
+      betBusy ||
       !currentState ||
       currentState.phase !== "betting" ||
       Boolean(currentState.my_bet) ||
@@ -293,15 +296,18 @@
   }
 
   async function loadState() {
-    if (pollBusy) return;
+    if (pollBusy || betBusy) return;
     pollBusy = true;
+    const generation = stateGeneration;
     try {
       const response = await fetch("/api/horse-racing/state", { cache: "no-store" });
       const data = await response.json();
+      if (generation !== stateGeneration) return;
       if (!response.ok) throw new Error(data.detail || "Не удалось загрузить заезд");
       $("hr-error").hidden = true;
       renderState(data);
     } catch (error) {
+      if (generation !== stateGeneration) return;
       $("hr-error").textContent = error.message || "Связь с ипподромом потеряна";
       $("hr-error").hidden = false;
       setMessage("Обнови страницу или попробуй ещё раз.", true);
@@ -317,6 +323,8 @@
     const [whole, fraction = ""] = raw.split(".");
     const amount = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
     const button = $("hr-place");
+    betBusy = true;
+    stateGeneration += 1;
     button.disabled = true;
     button.textContent = "Принимаем…";
     try {
@@ -335,8 +343,9 @@
       setMessage(data.duplicate ? "Эта ставка уже была принята." : "Ставка принята. Удачи!");
     } catch (error) {
       setMessage(error.message || "Не удалось принять ставку", true);
-      await loadState();
     } finally {
+      betBusy = false;
+      await loadState();
       button.textContent = "Поставить";
       updateBetButton();
     }

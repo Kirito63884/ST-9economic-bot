@@ -113,6 +113,8 @@ class HorseRacingService:
             if winning_bets
             else {b["user_id"]: b["amount_cents"] for b in bets}
         )
+        # Losing tickets still participate in history and result projection.
+        payouts = {bet["user_id"]: payouts.get(bet["user_id"], 0) for bet in bets}
         user_ids = {bet["user_id"] for bet in bets}
         users = {
             user.id: user for user in db.query(User).filter(User.id.in_(user_ids)).all()

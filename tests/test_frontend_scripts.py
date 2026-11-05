@@ -72,6 +72,7 @@ def test_rendered_scripts_parse(make_user, login_as):
         "/games/poker/history",
         "/games/blackjack",
         "/games/roulette",
+        "/games/horse-racing",
         "/games/crash",
         "/games/durak/lobby",
         "/games/billiards/lobby",

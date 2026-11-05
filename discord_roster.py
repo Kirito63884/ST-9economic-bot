@@ -148,7 +148,11 @@ def render_roster(raw, config=None):
             ("• " if bullets else "") + safe(line) for line in value.splitlines()
         )
 
+    def heading(key, original):
+        return original.split("**", 1)[0] + "**" + safe(config["titles"][key]) + "**"
+
     def lines(title, selected, role, prefix="✪"):
+        title = safe(config["titles"][role])
         desc = description(config["descriptions"][role])
         return (
             "__"
@@ -163,10 +167,10 @@ def render_roster(raw, config=None):
 
     command = "\n\n".join(
         (
-            FIRST_HEADER,
+            heading("command_header", FIRST_HEADER),
             position("Основатель и куратор ST-9", "founder"),
             position("Полевой командир ST-9", "field"),
-            "<:__:1555218232049410089> **СЛУЖБА БЕЗОПАСНОСТИ**",
+            heading("security_header", "<:__:1555218232049410089> **СЛУЖБА БЕЗОПАСНОСТИ**"),
             position("Руководитель СБ", "security_head"),
             lines(
                 "Помощники СБ",
@@ -201,15 +205,15 @@ def render_roster(raw, config=None):
         group(
             [m for m in members if has(m, role)],
             prefix,
-            heading,
+            heading(role, original_heading),
             config["descriptions"][role],
             role == "armor",
         )
-        for role, prefix, heading, _ in UNITS
+        for role, prefix, original_heading, _ in UNITS
     ]
     training = "\n\n".join(
         (
-            "<:img_1:1555118789920559175> **УЧЕБНАЯ ГРУППА**",
+            heading("training_header", "<:img_1:1555118789920559175> **УЧЕБНАЯ ГРУППА**"),
             position("Главный инструктор", "chief_instructor", "➒"),
             "__Основные задачи:__\n"
             + (description(config["training_description"], True) or "—"),
