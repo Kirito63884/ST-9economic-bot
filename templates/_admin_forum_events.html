@@ -1,0 +1,45 @@
+<section id="panel-forum-events" role="tabpanel" aria-labelledby="tab-forum-events" hidden>
+  <style>
+    .event-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
+    .event-grid label { display:flex; flex-direction:column; gap:6px; min-width:0; }
+    .event-wide { grid-column:1/-1; }
+    .event-preview { white-space:pre-wrap; overflow-wrap:anywhere; border-left:4px solid #3ba55c; padding:16px; background:#202631; border-radius:8px; }
+    #eventParticipants label { display:flex; gap:10px; padding:9px 0; overflow-wrap:anywhere; }
+    #eventParticipants input { flex-shrink:0; }
+    #eventState { white-space:pre-wrap; overflow-wrap:anywhere; }
+    @media(max-width:650px) { .event-grid { grid-template-columns:1fr; } .event-tools { display:flex; flex-wrap:wrap; gap:8px; } }
+  </style>
+  <div class="section-card">
+    <h2>События в Discord</h2>
+    <p>Создайте тему матча в форуме. Участники отвечают кнопками в Discord; игровой состав выбирает организатор.</p>
+    <div class="event-tools">
+      <button class="btn" id="eventNew" type="button">Новое событие</button>
+      <button class="btn" id="eventRefresh" type="button">Обновить список</button>
+    </div>
+    <label for="eventPicker">Сохранённые события</label>
+    <select class="form-select" id="eventPicker"><option value="">Новое событие</option></select>
+    <p id="eventNotice" role="status" aria-live="polite"></p>
+    <p id="eventState"></p>
+    <a id="eventLink" target="_blank" rel="noopener noreferrer" hidden>Открыть тему Discord</a>
+    <form id="eventForm">
+      <div class="event-grid">
+        <label class="event-wide">Название<input id="eventTitle" class="form-control" maxlength="70" required></label>
+        <label>Начало по Москве<input id="eventStarts" class="form-control" type="datetime-local" required></label>
+        <label>Мест в игровом составе<input id="eventCapacity" class="form-control" type="number" min="1" max="100" value="20" required></label>
+        <label>Команды<input id="eventTeams" class="form-control" maxlength="100" placeholder="ST-9 vs …"></label>
+        <label>Карта<input id="eventMap" class="form-control" maxlength="100"></label>
+        <label>Сервер<input id="eventServer" class="form-control" maxlength="150"></label>
+        <label>Статус<select id="eventStatus" class="form-select"><option value="open">Регистрация открыта</option><option value="closed">Регистрация закрыта</option><option value="cancelled">Отменено</option></select></label>
+        <label class="event-wide">Правила<textarea id="eventRules" class="form-control" maxlength="500" rows="3"></textarea></label>
+        <label class="event-wide">Ссылка HTTPS на изображение карты<input id="eventImage" class="form-control" type="url" maxlength="500" placeholder="https://…"></label>
+      </div>
+      <h3>Участники и игровой состав</h3>
+      <p>Отметьте тех, кто войдёт в игровой состав. Можно выбирать только ответивших «Буду», не больше указанного числа мест.</p>
+      <div id="eventParticipants"></div>
+      <h3>Проверьте перед публикацией</h3>
+      <div id="eventPreview" class="event-preview"></div>
+      <button id="eventSave" class="btn btn-primary mt-3" type="submit">Сохранить и опубликовать</button>
+    </form>
+  </div>
+</section>
+<script>{% include "_admin_forum_events.js.html" %}</script>

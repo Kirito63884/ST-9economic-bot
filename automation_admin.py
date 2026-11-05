@@ -103,6 +103,10 @@ def make_router(get_user, get_db, is_super_admin):
 
     router.include_router(make_roster_router(get_user, get_db, is_senior_or_super, SECRET_KEY))
 
+    from forum_events_admin import make_router as make_forum_events_router
+
+    router.include_router(make_forum_events_router(get_user, get_db, is_senior_or_super))
+
     def chief(user):
         if not user or not user.is_admin or not is_super_admin(user):
             raise HTTPException(403, "Доступ только для главных администраторов.")

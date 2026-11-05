@@ -1,0 +1,97 @@
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const root = $("panel-forum-events");
+  if (!root) return;
+  const fields = {title:"eventTitle", starts_at:"eventStarts", capacity:"eventCapacity", teams:"eventTeams", map:"eventMap", server:"eventServer", rules:"eventRules", image_url:"eventImage", status:"eventStatus"};
+  const responseLabels = {yes:"Буду", maybe:"Возможно", no:"Не буду"};
+  const endpoint = "/api/admin/forum-events";
+  let rows = [], selected = null, draftId = "", busy = false, dirty = false, loaded = false, guild = "";
+  const notice = text => { $("eventNotice").textContent = text; };
+  function payload() {
+    const config = Object.fromEntries(Object.entries(fields).map(([key,id]) => [key,$(id).value.trim()]));
+    config.capacity = Number(config.capacity);
+    const lineup = [...$("eventParticipants").querySelectorAll("input:checked")].map(input => input.value);
+    return {id:selected?.id || draftId, revision:selected?.revision ?? null, config, lineup};
+  }
+  function preview() {
+    const {config, lineup} = payload();
+    $("eventPreview").textContent = `${config.title || "Название события"}\nНачало: ${config.starts_at.replace("T", " ") || "не указано"} МСК\nКоманды: ${config.teams || "—"}\nКарта: ${config.map || "—"}\nСервер: ${config.server || "—"}\nПравила: ${config.rules || "—"}\nИгровой состав: ${lineup.length}/${config.capacity}\nСтатус: ${$("eventStatus").selectedOptions[0].textContent}`;
+  }
+  function setBusy(value) {
+    busy = value;
+    root.querySelectorAll("button, select, input, textarea").forEach(node => {node.disabled = value || node.dataset.readonly === "true";});
+  }
+  function fill(event) {
+    selected = event;
+    draftId = crypto.randomUUID().replaceAll("-", "");
+    const config = event?.config || {capacity:20, status:"open"};
+    for (const [key,id] of Object.entries(fields)) $(id).value = config[key] ?? "";
+    if (event) {
+      // Stored UTC -> Moscow wall time, independent of the browser timezone.
+      $("eventStarts").value = new Date(new Date(config.starts_at).getTime() + 3*3600*1000).toISOString().slice(0,16);
+    }
+    $("eventPicker").value = event?.id || "";
+    $("eventParticipants").replaceChildren();
+    const responses = Object.entries(event?.responses || {});
+    if (!responses.length) $("eventParticipants").textContent = "Пока никто не записался.";
+    for (const [uid,row] of responses) {
+      const label = document.createElement("label");
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.value = uid;
+      input.checked = (event.lineup || []).includes(uid);
+      input.disabled = row.choice !== "yes";
+      input.dataset.readonly = String(row.choice !== "yes");
+      label.append(input, document.createTextNode(`${row.name} · ${responseLabels[row.choice]}`));
+      $("eventParticipants").append(label);
+    }
+    $("eventState").textContent = event ? (event.error || (event.published_revision === event.revision ? "Опубликовано в Discord." : "Сохранено. Ожидается обновление темы ботом.")) : "После сохранения бот создаст тему в форуме.";
+    $("eventLink").hidden = !event?.thread_id || !guild;
+    if (event?.thread_id && guild) $("eventLink").href = `https://discord.com/channels/${guild}/${event.thread_id}`;
+    dirty = false;
+    preview();
+  }
+  async function api(body) {
+    const response = await fetch(endpoint, {cache:"no-store", credentials:"same-origin", headers:{"Content-Type":"application/json", ...window.ST9_REQUEST_HEADERS}, ...(body ? {method:"POST",body:JSON.stringify(body)} : {})});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.detail || "Не удалось сохранить событие.");
+    return data;
+  }
+  function updatePicker() {
+    $("eventPicker").replaceChildren(new Option("Новое событие", ""), ...rows.map(event => new Option(`#${event.number} · ${event.config.title}`, event.id)));
+  }
+  async function load(force=false) {
+    if (busy || (loaded && !force)) return;
+    if (dirty && !confirm("Загрузить сохранённые данные и отменить правки формы?")) return;
+    setBusy(true);
+    try {
+      const data = await api();
+      rows = data.events; guild = data.guild_id;
+      updatePicker();
+      fill(rows.find(event => event.id === selected?.id) || null);
+      loaded = true; notice("");
+    } catch (error) { notice(error.message); }
+    finally { setBusy(false); }
+  }
+  $("eventForm").addEventListener("input", () => {dirty = true; preview();});
+  $("eventForm").addEventListener("change", () => {dirty = true; preview();});
+  $("eventNew").addEventListener("click", () => {if (!dirty || confirm("Отменить правки формы?")) {fill(null);notice("");}});
+  $("eventRefresh").addEventListener("click", () => load(true));
+  $("eventPicker").addEventListener("change", () => {
+    const id = $("eventPicker").value;
+    if (dirty && !confirm("Отменить правки формы?")) {$("eventPicker").value = selected?.id || ""; return;}
+    fill(rows.find(event => event.id === id) || null); notice("");
+  });
+  $("eventForm").addEventListener("submit", async event => {
+    event.preventDefault(); if (busy) return;
+    const body = payload(); setBusy(true);
+    try {
+      const data = await api(body);
+      rows = [data.event, ...rows.filter(row => row.id !== data.event.id)];
+      updatePicker(); fill(data.event); notice("Сохранено. Бот обновит тему форума в течение 30 секунд при доступном Discord.");
+    } catch (error) {notice(error.message);}
+    finally {setBusy(false);}
+  });
+  window.loadForumEvents = load;
+})();
