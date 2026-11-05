@@ -979,6 +979,9 @@ register_specialties(bot)
 from assembly_reports import register_assembly_reports
 
 register_assembly_reports(bot)
+from discord_birthdays import register_birthdays
+
+register_birthdays(bot)
 # ST9_SQUAD_BOT_END
 
 # === Запуск ===
