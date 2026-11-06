@@ -51,6 +51,19 @@ def patch(app, stage):
         '    if (name === "roster-settings")',
     )
     outputs["templates/admin.html"] = source
+    source = (app / "templates/_site_nav.html").read_text()
+    source = add(
+        source,
+        '            {% if user %}<a href="/calendar" {% if page_path == \'/calendar\' %}aria-current="page"{% endif %}>Календарь</a>{% endif %}\n',
+        '            <a href="/games"',
+    )
+    source = add(
+        source,
+        '<a href="/calendar">Мой календарь</a>',
+        '<a href="/profile">Мой профиль</a>',
+        before=False,
+    )
+    outputs["templates/_site_nav.html"] = source
     # Validate all anchors before writing any staged files.
     for name, contents in outputs.items():
         target = stage / name

@@ -323,7 +323,12 @@ def test_installer_preserves_birthday_and_other_hooks(tmp_path):
     root = Path(__file__).resolve().parents[1]
     app, stage = tmp_path / "app", tmp_path / "stage"
     (app / "templates").mkdir(parents=True)
-    for name in ("discord_bot.py", "automation_admin.py", "templates/admin.html"):
+    for name in (
+        "discord_bot.py",
+        "automation_admin.py",
+        "templates/admin.html",
+        "templates/_site_nav.html",
+    ):
         (app / name).write_text((root / name).read_text())
     bot = app / "discord_bot.py"
     bot.write_text(

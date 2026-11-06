@@ -17,9 +17,10 @@ test -f "$app_dir/main.py"
 test -f "$app_dir/automation_admin.py"
 test -f "$app_dir/discord_roster.py"
 files=(
-    discord_bot.py automation_admin.py templates/admin.html
+    discord_bot.py automation_admin.py templates/admin.html templates/_site_nav.html
     forum_events.py forum_events_admin.py discord_forum_events.py
-    forum_event_extras.py forum_event_delivery.py
+    forum_event_extras.py forum_event_delivery.py forum_calendar.py
+    templates/calendar.html templates/_calendar.js.html
     templates/_admin_forum_events.html templates/_admin_forum_events.js.html
 )
 services=(balance-app.service discord-bot.service)
@@ -101,7 +102,8 @@ assert discord_bot.bot.tree.get_command("event_edit")
 assert discord_bot.bot.tree.get_command("event_result")
 assert discord_bot.bot.tree.get_command("event_from_template")
 assert any(route.path == "/api/admin/forum-events" for route in main.app.routes)
-pending = ["admin.html", "_admin_forum_events.html", "_admin_forum_events.js.html"]
+assert any(route.path == "/calendar" for route in main.app.routes)
+pending = ["admin.html", "calendar.html", "_admin_forum_events.html", "_admin_forum_events.js.html"]
 seen = set()
 while pending:
     name = pending.pop()

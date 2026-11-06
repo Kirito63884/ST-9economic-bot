@@ -9,6 +9,9 @@ from forum_event_extras import templates, save_template, delete_template, save_r
 
 def make_router(get_user, get_db, may_manage):
     router = APIRouter()
+    from forum_calendar import make_router as make_calendar_router
+
+    router.include_router(make_calendar_router(get_user, get_db))
 
     def check(user):
         if not user or not user.is_admin or not may_manage(user):

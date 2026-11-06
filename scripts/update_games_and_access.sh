@@ -19,7 +19,8 @@ files=(
     main.py database.py backup_routes.py roster_membership.py requirements.txt
     automation_admin.py discord_roster.py roster_admin.py roster_settings.py
     forum_events.py forum_events_admin.py discord_forum_events.py
-    forum_event_extras.py forum_event_delivery.py
+    forum_event_extras.py forum_event_delivery.py forum_calendar.py
+    templates/calendar.html templates/_calendar.js.html
     templates/_admin_forum_events.html templates/_admin_forum_events.js.html
     templates/_admin_roster_settings.html templates/_admin_roster_settings.js.html
     monopoly_board.py monopoly_game.py monopoly_routes.py
