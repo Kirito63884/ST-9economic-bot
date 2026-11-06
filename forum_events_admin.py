@@ -4,6 +4,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from admin_hub import log_action
 from forum_events import EventError, all_events, create, update
+from forum_event_extras import templates, save_template, delete_template, save_result
 
 
 def make_router(get_user, get_db, may_manage):
@@ -21,6 +22,7 @@ def make_router(get_user, get_db, may_manage):
         response.headers["Cache-Control"] = "private, no-store"
         return {
             "events": all_events(db),
+            "templates": list(templates(db).values()),
             "guild_id": os.getenv("REQUIRED_GUILD_ID", ""),
         }
 
@@ -47,6 +49,60 @@ def make_router(get_user, get_db, may_manage):
         except (ValueError, TypeError) as exc:
             raise HTTPException(400, str(exc)) from None
         log_action(db, user, "forum_event_save", "Сохранено событие " + event["id"])
+        return {"event": event}
+
+    @router.post("/api/admin/forum-events/templates")
+    async def template_save(
+        request: Request, user=Depends(get_user), db=Depends(get_db)
+    ):
+        check(user)
+        try:
+            body = await request.json()
+            if not isinstance(body, dict) or set(body) != {
+                "id",
+                "revision",
+                "name",
+                "config",
+            }:
+                raise EventError("Некорректные поля шаблона.")
+            row = save_template(
+                db, body["id"], body["revision"], body["name"], body["config"]
+            )
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(400, str(exc)) from None
+        log_action(db, user, "forum_event_template", "Сохранён шаблон " + row["id"])
+        return {"template": row}
+
+    @router.post("/api/admin/forum-events/templates/delete")
+    async def template_delete(
+        request: Request, user=Depends(get_user), db=Depends(get_db)
+    ):
+        check(user)
+        try:
+            body = await request.json()
+            if not isinstance(body, dict) or set(body) != {"id", "revision"}:
+                raise EventError("Некорректные поля удаления.")
+            delete_template(db, body["id"], body["revision"])
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(400, str(exc)) from None
+        log_action(
+            db, user, "forum_event_template_delete", "Удалён шаблон " + body["id"]
+        )
+        return {"ok": True}
+
+    @router.post("/api/admin/forum-events/{eid}/result")
+    async def result_save(
+        eid: str, request: Request, user=Depends(get_user), db=Depends(get_db)
+    ):
+        check(user)
+        try:
+            body = await request.json()
+            if not isinstance(body, dict) or set(body) != {"revision", "result"}:
+                raise EventError("Некорректные поля итогов.")
+            event = save_result(db, eid, body["revision"], body["result"])
+        except (ValueError, TypeError) as exc:
+            raise HTTPException(400, str(exc)) from None
+        log_action(db, user, "forum_event_result", "Опубликованы итоги " + eid)
         return {"event": event}
 
     router.forum_events_registered = True

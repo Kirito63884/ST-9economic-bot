@@ -7,6 +7,8 @@
   const responseLabels = {yes:"Буду", maybe:"Возможно", no:"Не буду"};
   const endpoint = "/api/admin/forum-events";
   let rows = [], selected = null, draftId = "", busy = false, dirty = false, loaded = false, guild = "";
+  let configDirty = false, resultDirty = false;
+  let templates = [], templateDraftId = crypto.randomUUID().replaceAll("-", "");
   const notice = text => { $("eventNotice").textContent = text; };
   function payload() {
     const config = Object.fromEntries(Object.entries(fields).map(([key,id]) => [key,$(id).value.trim()]));
@@ -49,11 +51,18 @@
     $("eventState").textContent = event ? (event.error || (event.published_revision === event.revision ? "Опубликовано в Discord." : "Сохранено. Ожидается обновление темы ботом.")) : "После сохранения бот создаст тему в форуме.";
     $("eventLink").hidden = !event?.thread_id || !guild;
     if (event?.thread_id && guild) $("eventLink").href = `https://discord.com/channels/${guild}/${event.thread_id}`;
-    dirty = false;
+    $("eventResultForm").hidden = !event;
+    $("eventResultScore").value = event?.result?.score || "";
+    $("eventResultSummary").value = event?.result?.summary || "";
+    $("eventResultImages").value = (event?.result?.images || []).join("\n");
+    $("eventResultState").textContent = event?.result ? (event.result_delivery?.error || (event.result_delivery?.published_revision === event.result.revision ? "Итоги опубликованы." : "Итоги сохранены, ожидается публикация.")) : "Итоги пока не опубликованы.";
+    const reminderError = !event?.result && event?.config.status !== "cancelled" && Object.values(event?.reminder_plans || {}).filter(plan => plan.starts_at === event.config.starts_at).flatMap(plan => plan.parts).find(part => part.status === "pending" && part.error);
+    if (reminderError) $("eventState").textContent += "\n" + reminderError.error;
+    dirty = false; configDirty = false; resultDirty = false;
     preview();
   }
-  async function api(body) {
-    const response = await fetch(endpoint, {cache:"no-store", credentials:"same-origin", headers:{"Content-Type":"application/json", ...window.ST9_REQUEST_HEADERS}, ...(body ? {method:"POST",body:JSON.stringify(body)} : {})});
+  async function api(body, path="") {
+    const response = await fetch(endpoint + path, {cache:"no-store", credentials:"same-origin", headers:{"Content-Type":"application/json", ...window.ST9_REQUEST_HEADERS}, ...(body ? {method:"POST",body:JSON.stringify(body)} : {})});
     const data = await response.json();
     if (!response.ok) throw new Error(data.detail || "Не удалось сохранить событие.");
     return data;
@@ -67,15 +76,16 @@
     setBusy(true);
     try {
       const data = await api();
-      rows = data.events; guild = data.guild_id;
+      rows = data.events; guild = data.guild_id; templates = data.templates || [];
+      updateTemplates();
       updatePicker();
       fill(rows.find(event => event.id === selected?.id) || null);
       loaded = true; notice("");
     } catch (error) { notice(error.message); }
     finally { setBusy(false); }
   }
-  $("eventForm").addEventListener("input", () => {dirty = true; preview();});
-  $("eventForm").addEventListener("change", () => {dirty = true; preview();});
+  $("eventForm").addEventListener("input", () => {dirty = true; configDirty = true; preview();});
+  $("eventForm").addEventListener("change", () => {dirty = true; configDirty = true; preview();});
   $("eventNew").addEventListener("click", () => {if (!dirty || confirm("Отменить правки формы?")) {fill(null);notice("");}});
   $("eventRefresh").addEventListener("click", () => load(true));
   $("eventPicker").addEventListener("change", () => {
@@ -85,12 +95,75 @@
   });
   $("eventForm").addEventListener("submit", async event => {
     event.preventDefault(); if (busy) return;
-    const body = payload(); setBusy(true);
+    const body = payload();
+    const resultDraft = resultDirty ? [$("eventResultScore").value, $("eventResultSummary").value, $("eventResultImages").value] : null;
+    setBusy(true);
     try {
       const data = await api(body);
       rows = [data.event, ...rows.filter(row => row.id !== data.event.id)];
-      updatePicker(); fill(data.event); notice("Сохранено. Бот обновит тему форума в течение 30 секунд при доступном Discord.");
+      updatePicker(); fill(data.event);
+      if (resultDraft) {
+        [$("eventResultScore").value, $("eventResultSummary").value, $("eventResultImages").value] = resultDraft;
+        resultDirty = true; dirty = true;
+      }
+      notice("Сохранено. Бот обновит тему форума в течение 30 секунд при доступном Discord.");
     } catch (error) {notice(error.message);}
+    finally {setBusy(false);}
+  });
+
+  function updateTemplates(id="") {
+    $("eventTemplatePicker").replaceChildren(new Option("Новый шаблон", ""), ...templates.map(row => new Option(row.name, row.id)));
+    $("eventTemplatePicker").value = id;
+    $("eventTemplateName").value = templates.find(row => row.id === id)?.name || "";
+  }
+  $("eventTemplatePicker").addEventListener("change", () => {
+    $("eventTemplateName").value = templates.find(row => row.id === $("eventTemplatePicker").value)?.name || "";
+    templateDraftId = crypto.randomUUID().replaceAll("-", "");
+  });
+  $("eventTemplateApply").addEventListener("click", () => {
+    const template = templates.find(row => row.id === $("eventTemplatePicker").value);
+    if (!template) {notice("Сначала выберите шаблон."); return;}
+    if (dirty && !confirm("Создать новую форму по шаблону и отменить текущие правки?")) return;
+    fill(null);
+    for (const [key,value] of Object.entries(template.config)) $(fields[key]).value = value;
+    dirty = true; configDirty = true; preview(); notice("Шаблон применён. Укажите новую дату и сохраните событие.");
+  });
+  $("eventTemplateSave").addEventListener("click", async () => {
+    if (busy) return;
+    const template = templates.find(row => row.id === $("eventTemplatePicker").value);
+    const config = payload().config;
+    delete config.starts_at; delete config.status;
+    const body = {id:template?.id || templateDraftId, revision:template?.revision ?? null, name:$("eventTemplateName").value.trim(), config};
+    setBusy(true);
+    try {
+      const data = await api(body, "/templates");
+      templates = [...templates.filter(row => row.id !== data.template.id), data.template];
+      updateTemplates(data.template.id); notice("Шаблон сохранён.");
+    } catch(error) {notice(error.message);}
+    finally {setBusy(false);}
+  });
+  $("eventTemplateDelete").addEventListener("click", async () => {
+    const template = templates.find(row => row.id === $("eventTemplatePicker").value);
+    if (busy || !template || !confirm("Удалить шаблон? Созданные события сохранятся.")) return;
+    setBusy(true);
+    try {
+      await api({id:template.id, revision:template.revision}, "/templates/delete");
+      templates = templates.filter(row => row.id !== template.id);
+      updateTemplates(); templateDraftId = crypto.randomUUID().replaceAll("-", ""); notice("Шаблон удалён.");
+    } catch(error) {notice(error.message);}
+    finally {setBusy(false);}
+  });
+  $("eventResultForm").addEventListener("input", () => {dirty = true; resultDirty = true;});
+  $("eventResultForm").addEventListener("submit", async event => {
+    event.preventDefault(); if (busy || !selected) return;
+    if (configDirty) {notice("Сначала сохраните параметры события. Черновик итогов сохранится в форме."); return;}
+    const body = {revision:selected.revision, result:{score:$("eventResultScore").value.trim(), summary:$("eventResultSummary").value.trim(), images:$("eventResultImages").value.split("\n").map(value => value.trim()).filter(Boolean)}};
+    setBusy(true);
+    try {
+      const data = await api(body, `/${selected.id}/result`);
+      rows = [data.event, ...rows.filter(row => row.id !== data.event.id)];
+      updatePicker(); fill(data.event); notice("Итоги сохранены. Бот обновит сообщение в теме события.");
+    } catch(error) {notice(error.message);}
     finally {setBusy(false);}
   });
   window.loadForumEvents = load;

@@ -12,6 +12,20 @@
   <div class="section-card">
     <h2>События в Discord</h2>
     <p>Создайте тему матча в форуме. Участники отвечают кнопками в Discord; игровой состав выбирает организатор.</p>
+    <details class="section-card" id="eventTemplatesPanel">
+      <summary>Шаблоны событий</summary>
+      <p>Шаблон хранит описание и количество мест. Дата, участники и итоги в новое событие не переносятся.</p>
+      <label for="eventTemplatePicker">Шаблон</label>
+      <select class="form-select" id="eventTemplatePicker"><option value="">Новый шаблон</option></select>
+      <label for="eventTemplateName">Название шаблона</label>
+      <input class="form-control" id="eventTemplateName" maxlength="60" placeholder="Например, тренировка SEC">
+      <div class="event-tools">
+        <button class="btn" type="button" id="eventTemplateApply">Новое событие по шаблону</button>
+        <button class="btn" type="button" id="eventTemplateSave">Сохранить поля формы в шаблон</button>
+        <button class="btn" type="button" id="eventTemplateDelete">Удалить шаблон</button>
+      </div>
+    </details>
+    <p>Напоминания записавшимся: за 3 дня, сутки, 12 часов, 3 часа, час, 30 минут, 10 минут и в момент начала — в теме события.</p>
     <div class="event-tools">
       <button class="btn" id="eventNew" type="button">Новое событие</button>
       <button class="btn" id="eventRefresh" type="button">Обновить список</button>
@@ -39,6 +53,17 @@
       <h3>Проверьте перед публикацией</h3>
       <div id="eventPreview" class="event-preview"></div>
       <button id="eventSave" class="btn btn-primary mt-3" type="submit">Сохранить и опубликовать</button>
+    </form>
+    <form id="eventResultForm" hidden>
+      <h3>Итоги события</h3>
+      <p>После начала события можно опубликовать результат в этой же теме. Исправления обновят прежнее сообщение итогов.</p>
+      <p id="eventResultState" role="status"></p>
+      <div class="event-grid">
+        <label>Счёт / результат<input id="eventResultScore" class="form-control" maxlength="80" placeholder="Например, победа 2:1"></label>
+        <label class="event-wide">Комментарий организатора<textarea id="eventResultSummary" class="form-control" rows="4" maxlength="1000" required></textarea></label>
+        <label class="event-wide">Скриншоты: до 3 ссылок HTTPS, по одной на строку<textarea id="eventResultImages" class="form-control" rows="3" maxlength="1502"></textarea></label>
+      </div>
+      <button class="btn btn-primary mt-3" type="submit" id="eventResultSave">Опубликовать итоги</button>
     </form>
   </div>
 </section>

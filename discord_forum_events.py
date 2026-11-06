@@ -14,6 +14,8 @@ from database import SessionLocal, User
 from runtime import metadata_transaction
 from admin_hub import log_action
 import forum_events as events
+from forum_event_delivery import Announcements, has_work
+from forum_event_extras import save_result, templates
 
 logger = logging.getLogger(__name__)
 CHOICES = {"yes": "Буду", "maybe": "Возможно", "no": "Не буду"}
@@ -66,6 +68,12 @@ def render(event):
     )
     if cfg["image_url"]:
         embed.set_image(url=cfg["image_url"])
+    if event.get("result"):
+        embed.add_field(
+            name="🏁 Итоги",
+            value=safe(event["result"]["score"] or event["result"]["summary"][:150]),
+            inline=False,
+        )
     embed.set_footer(text=f"Событие #{event['number']} • Europe/Moscow")
     return embed
 
@@ -238,6 +246,7 @@ class ForumWorker:
         self.guild_id = int(os.getenv("REQUIRED_GUILD_ID") or 0)
         self.task = None
         self.wake = asyncio.Event()
+        self.announcements = Announcements(self)
 
     def restore_views(self):
         with SessionLocal() as db:
@@ -376,7 +385,8 @@ class ForumWorker:
                         ids = [
                             e["id"]
                             for e in events.all_events(db)
-                            if e["published_revision"] != e["revision"]
+                            if has_work(e)
+                            or e["published_revision"] != e["revision"]
                             or (
                                 e["config"]["status"] == "open"
                                 and not events.is_open(e)
@@ -384,6 +394,7 @@ class ForumWorker:
                         ]
                     for eid in ids:
                         await self.publish(eid)
+                        await self.announcements.tick(eid)
             except Exception:
                 logger.exception("Forum events loop failed")
             try:
@@ -548,6 +559,110 @@ def register_forum_events(bot):
                 str(exc)
                 if isinstance(exc, events.EventError)
                 else "Проверьте доступ и формат даты ДД.ММ.ГГГГ ЧЧ:ММ.",
+            )
+
+    @bot.tree.command(
+        name="event_result", description="Опубликовать или исправить итоги события"
+    )
+    @app_commands.guild_only()
+    async def event_result(
+        interaction: discord.Interaction,
+        number: int,
+        summary: str,
+        score: str = "",
+        image: str = "",
+    ):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            await authorize(interaction)
+            async with metadata_transaction() as db:
+                actor = staff(db, interaction.user.id)
+                event = next(
+                    (
+                        item
+                        for item in events.all_events(db)
+                        if item["number"] == number
+                    ),
+                    None,
+                )
+                if event is None:
+                    raise events.EventError("Событие не найдено.")
+                save_result(
+                    db,
+                    event["id"],
+                    event["revision"],
+                    {
+                        "summary": summary,
+                        "score": score,
+                        "images": [image] if image else [],
+                    },
+                )
+                log_action(
+                    db, actor, "forum_event_result", "Итоги события " + event["id"]
+                )
+            worker.wake.set()
+            await reply(
+                interaction,
+                "Итоги сохранены. Бот опубликует или обновит сообщение в теме события.",
+            )
+        except (ValueError, discord.HTTPException) as exc:
+            await reply(
+                interaction,
+                str(exc)
+                if isinstance(exc, events.EventError)
+                else "Не удалось сохранить итоги. Проверьте доступ и поля.",
+            )
+
+    @bot.tree.command(
+        name="event_from_template",
+        description="Создать событие по сохранённому на сайте шаблону",
+    )
+    @app_commands.guild_only()
+    @app_commands.describe(name="Название шаблона", starts="ДД.ММ.ГГГГ ЧЧ:ММ, Москва")
+    async def event_from_template(
+        interaction: discord.Interaction, name: str, starts: str
+    ):
+        await interaction.response.defer(ephemeral=True)
+        try:
+            await authorize(interaction)
+            start = (
+                datetime.strptime(starts, "%d.%m.%Y %H:%M")
+                .replace(tzinfo=events.ZONE)
+                .isoformat()
+            )
+            async with metadata_transaction() as db:
+                actor = staff(db, interaction.user.id)
+                template = next(
+                    (
+                        item
+                        for item in templates(db).values()
+                        if item["name"].casefold() == name.strip().casefold()
+                    ),
+                    None,
+                )
+                if template is None:
+                    raise events.EventError(
+                        "Шаблон не найден. Создайте его в разделе событий сайта."
+                    )
+                eid = hashlib.sha256(str(interaction.id).encode()).hexdigest()[:32]
+                event = events.create(
+                    db,
+                    eid,
+                    actor.discord_id,
+                    {**template["config"], "starts_at": start, "status": "open"},
+                )
+                log_action(db, actor, "forum_event_create", "Создано из шаблона " + eid)
+            worker.wake.set()
+            await reply(
+                interaction,
+                f"Событие #{event['number']} сохранено и ожидает публикации.",
+            )
+        except (ValueError, discord.HTTPException) as exc:
+            await reply(
+                interaction,
+                str(exc)
+                if isinstance(exc, events.EventError)
+                else "Проверьте доступ и дату ДД.ММ.ГГГГ ЧЧ:ММ.",
             )
 
     return worker

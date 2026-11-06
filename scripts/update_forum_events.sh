@@ -19,6 +19,7 @@ test -f "$app_dir/discord_roster.py"
 files=(
     discord_bot.py automation_admin.py templates/admin.html
     forum_events.py forum_events_admin.py discord_forum_events.py
+    forum_event_extras.py forum_event_delivery.py
     templates/_admin_forum_events.html templates/_admin_forum_events.js.html
 )
 services=(balance-app.service discord-bot.service)
@@ -97,6 +98,8 @@ from discord_forum_events import register_forum_events
 assert FORUM_ID == 1568007339343093951
 assert discord_bot.bot.tree.get_command("event_create")
 assert discord_bot.bot.tree.get_command("event_edit")
+assert discord_bot.bot.tree.get_command("event_result")
+assert discord_bot.bot.tree.get_command("event_from_template")
 assert any(route.path == "/api/admin/forum-events" for route in main.app.routes)
 pending = ["admin.html", "_admin_forum_events.html", "_admin_forum_events.js.html"]
 seen = set()

@@ -153,6 +153,10 @@ def update(db, eid, revision, data, lineup):
     if type(revision) is not int or event["revision"] != revision:
         raise EventError("Событие изменилось. Загрузите свежую версию.")
     normalized = config(data)
+    if event.get("result") and normalized["status"] == "open":
+        raise EventError(
+            "У события уже есть итоги; создайте новое событие для следующего матча."
+        )
     if (
         not isinstance(lineup, list)
         or any(not isinstance(uid, str) for uid in lineup)

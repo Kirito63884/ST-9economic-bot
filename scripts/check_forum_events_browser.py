@@ -70,6 +70,18 @@ print(json.dumps({str(uid):TimestampSigner('synthetic-roster-browser-only').sign
         eid = page.locator("#eventPicker option").nth(1).get_attribute("value")
         page.locator("#eventPicker").select_option(eid)
         assert page.locator("#eventStarts").input_value() == "2030-11-14T19:30"
+        page.locator("#eventTemplatesPanel summary").click()
+        page.locator("#eventTemplateName").fill("Тренировка SEC")
+        page.locator("#eventTemplateSave").click()
+        page.wait_for_function(
+            "document.querySelector('#eventNotice').textContent.includes('Шаблон сохранён')"
+        )
+        page.locator("#eventTemplateApply").click()
+        assert page.locator("#eventStarts").input_value() == ""
+        assert page.locator("#eventTeams").input_value() == "ST-9 / Fixture"
+        assert page.locator("#eventResultForm").is_hidden()
+        page.on("dialog", lambda dialog: dialog.accept())
+        page.locator("#eventPicker").select_option(eid)
         mobile = page_for(203, True)
         mobile.wait_for_function(
             "document.querySelector('#eventPicker').options.length === 2"
@@ -77,9 +89,26 @@ print(json.dumps({str(uid):TimestampSigner('synthetic-roster-browser-only').sign
         mobile.locator("#eventPicker").select_option(eid)
         mobile.locator("#eventTitle").fill("Изменённый матч")
         mobile.locator("#eventStatus").select_option("closed")
+        mobile.locator("#eventStarts").fill("2020-11-14T19:30")
         mobile.locator("#eventSave").tap()
         mobile.wait_for_function(
             "document.querySelector('#eventNotice').textContent.includes('Сохранено.')"
+        )
+        mobile.locator("#eventResultScore").fill("2:1")
+        mobile.locator("#eventResultSummary").fill("Матч завершён, спасибо участникам!")
+        mobile.locator("#eventResultSave").tap()
+        mobile.wait_for_function(
+            "document.querySelector('#eventNotice').textContent.includes('Итоги сохранены')"
+        )
+        mobile.reload()
+        mobile.wait_for_function(
+            "document.querySelector('#eventPicker').options.length === 2"
+        )
+        mobile.locator("#eventPicker").select_option(eid)
+        assert mobile.locator("#eventResultScore").input_value() == "2:1"
+        assert (
+            mobile.locator("#eventResultSummary").input_value()
+            == "Матч завершён, спасибо участникам!"
         )
         assert mobile.evaluate("document.documentElement.scrollWidth <= innerWidth + 1")
         if screenshot_dir:
@@ -98,7 +127,7 @@ print(json.dumps({str(uid):TimestampSigner('synthetic-roster-browser-only').sign
         assert not errors, errors
         browser.close()
         print(
-            "PASS event create/edit/reload, Moscow time, hostile title as text, mobile touch, junior denied; no browser errors"
+            "PASS event create/edit/reload, Moscow time, hostile title as text, templates without date/roster, result save/reload, mobile touch, junior denied; no browser errors"
         )
 
 

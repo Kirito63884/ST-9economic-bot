@@ -247,6 +247,8 @@ def test_commands_registered_and_staff_from_site(make_user):
     assert {command.name for command in bot.tree.get_commands()} == {
         "event_create",
         "event_edit",
+        "event_result",
+        "event_from_template",
     }
 
     async def run():
