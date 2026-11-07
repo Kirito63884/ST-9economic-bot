@@ -1,0 +1,66 @@
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  let event = null, state = null, plan = null, busy = false, page = 0;
+  const amounts = new Map();
+  const money = cents => (cents / 100).toLocaleString("ru-RU", {minimumFractionDigits:2,maximumFractionDigits:2}) + " БК";
+  function el(tag, text) {const node = document.createElement(tag); node.textContent = text; return node;}
+  function invalidate() {plan = null; $("rewardApply").disabled = true; $("rewardPlan").hidden = true;}
+  window.selectRewardEvent = value => {
+    event = value; state = null; amounts.clear(); invalidate(); page = 0;
+    $("eventRewards").hidden = !event; $("rewardEditor").hidden = true; $("rewardNotice").textContent = "";
+  };
+  function render() {
+    if (!state) return;
+    const query = $("rewardSearch").value.trim().toLocaleLowerCase("ru");
+    const rows = state.players.filter(row => `${row.name} ${row.discord_id}`.toLocaleLowerCase("ru").includes(query));
+    const pages = Math.max(1,Math.ceil(rows.length / 25)); page = Math.min(page,pages-1);
+    $("rewardPage").textContent = `${page+1} / ${pages}`;
+    $("rewardPrev").disabled = page === 0; $("rewardNext").disabled = page === pages-1;
+    $("rewardSelected").textContent = `Выбрано: ${amounts.size}.`;
+    $("rewardPlayers").replaceChildren();
+    for (const row of rows.slice(page*25,(page+1)*25)) {
+      const card = el("div", ""); card.className = "reward-row";
+      const label = el("label", ""), check = document.createElement("input"), amount = document.createElement("input");
+      check.type = "checkbox"; check.checked = amounts.has(row.id); check.setAttribute("aria-label", `Наградить: ${row.name}`);
+      const paid = state.paid[String(row.id)]; check.disabled = Boolean(paid); check.dataset.readonly = String(Boolean(paid));
+      label.append(check, document.createTextNode(` ${row.name} · ${row.discord_id}${row.in_lineup ? " · игровой состав" : ""}`));
+      if (paid) card.append(label,el("span", `Начислено: ${money(paid.cents)}`));
+      else {
+        amount.type = "text"; amount.inputMode = "decimal"; amount.className = "form-control"; amount.placeholder = "Сумма БК";
+        amount.setAttribute("aria-label", `Сумма: ${row.name}`); amount.value = amounts.get(row.id) || "";
+        check.addEventListener("change", () => {if(check.checked) amounts.set(row.id,amount.value); else amounts.delete(row.id); invalidate(); $("rewardSelected").textContent = `Выбрано: ${amounts.size}.`;});
+        amount.addEventListener("input", () => {if(check.checked) amounts.set(row.id,amount.value); invalidate();});
+        card.append(label,amount);
+      }
+      $("rewardPlayers").append(card);
+    }
+    if(!rows.length) $("rewardPlayers").append(el("p","Игроки не найдены."));
+  }
+  async function api(path, data) {
+    const response = await fetch(`/api/admin/forum-events/${event.id}/rewards${path}`, {cache:"no-store",credentials:"same-origin",headers:{"Content-Type":"application/json",...window.ST9_REQUEST_HEADERS},...(data ? {method:"POST",body:JSON.stringify(data)} : {})});
+    const result = await response.json(); if(!response.ok) throw new Error(typeof result.detail === "string" ? result.detail : "Не удалось выполнить начисление."); return result;
+  }
+  async function run(action) {
+    if (busy || !event) return; busy = true;
+    const controls = [...$("panel-forum-events").querySelectorAll("button,input,select,textarea")].map(node=>[node,node.disabled]);
+    controls.forEach(([node])=>{node.disabled=true;});
+    try {await action();} catch(error) {invalidate(); $("rewardNotice").textContent = error.message;}
+    finally {busy=false; controls.forEach(([node,disabled])=>{node.disabled=disabled;}); $("rewardApply").disabled=!plan; render();}
+  }
+  $("rewardLoad").addEventListener("click",()=>run(async()=>{invalidate(); state=await api(""); amounts.clear(); page=0; $("rewardEditor").hidden=false; $("rewardNotice").textContent="Получатели и прошлые выплаты загружены.";}));
+  $("rewardSearch").addEventListener("input",()=>{page=0;render();});
+  $("rewardPrev").addEventListener("click",()=>{page--;render();});
+  $("rewardNext").addEventListener("click",()=>{page++;render();});
+  $("rewardPreview").addEventListener("click",()=>run(async()=>{
+    invalidate(); if(!state || !amounts.size) throw new Error("Выберите хотя бы одного получателя.");
+    const data={event_revision:state.event_revision,recipients:[...amounts].map(([user_id,amount])=>({user_id,amount:amount.trim()}))};
+    const result=await api("/preview",data); plan={...data,confirmation:result.confirmation};
+    $("rewardPlan").textContent=result.recipients.map(row=>`${row.name}: ${money(row.cents)}`).join("\n")+`\n\nИтого: ${money(result.total_cents)}. Получателей: ${result.recipients.length}.`;
+    $("rewardPlan").hidden=false; $("rewardNotice").textContent="Проверьте людей и суммы. Подтверждение действует 5 минут.";
+  }));
+  $("rewardApply").addEventListener("click",()=>{if(plan)run(async()=>{
+    const result=await api("/apply",plan); invalidate(); state.paid=result.paid; amounts.clear();
+    $("rewardNotice").textContent=`Начислено ${money(result.total_cents)}. Повторная выплата этим людям за это событие заблокирована.`;
+  });});
+})();

@@ -1,0 +1,83 @@
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id), root = $("panel-birthdays");
+  const endpoint = "/api/admin/birthdays";
+  let state = null, plan = null, page = 0, busy = false;
+  function text(tag, value) {const el = document.createElement(tag); el.textContent = value; return el;}
+  function notice(value) {$("bdNotice").textContent = value;}
+  function invalidate() {plan = null; $("bdApply").disabled = true; $("bdPlan").hidden = true;}
+  function edit(uid = "", record = {}) {
+    $("bdId").value = uid; $("bdId").readOnly = Boolean(uid);
+    $("bdName").value = record.name || ""; $("bdDate").value = record.date || "";
+  }
+  function render() {
+    const query = $("bdSearch").value.trim().toLocaleLowerCase("ru");
+    const rows = Object.entries(state?.records || {}).filter(([id,row]) => `${id} ${row.name} ${row.date}`.toLocaleLowerCase("ru").includes(query));
+    rows.sort((a,b) => a[1].name.localeCompare(b[1].name,"ru"));
+    const pages = Math.max(1, Math.ceil(rows.length / 30)); page = Math.min(page, pages - 1);
+    $("bdCount").textContent = `Всего: ${Object.keys(state?.records || {}).length}. Найдено: ${rows.length}.`;
+    $("bdPage").textContent = `${page + 1} / ${pages}`;
+    $("bdPrev").disabled = busy || page === 0; $("bdNext").disabled = busy || page === pages - 1;
+    $("bdList").replaceChildren();
+    for (const [id, row] of rows.slice(page * 30, (page + 1) * 30)) {
+      const card = text("div", ""); card.className = "bd-row";
+      const info = text("div", ""); info.append(text("strong", row.name), text("p", `Дата рождения: ${row.date}`), text("small", `Discord ID: ${id}`));
+      const button = text("button", "Редактировать"); button.type = "button"; button.className = "btn"; button.disabled = busy;
+      button.addEventListener("click", () => {edit(id,row); $("bdForm").scrollIntoView({block:"center",behavior:"smooth"}); $("bdName").focus();});
+      card.append(info,button); $("bdList").append(card);
+    }
+    if (!rows.length) $("bdList").append(text("p", "Записи не найдены."));
+  }
+  async function api(path = "", body) {
+    const response = await fetch(endpoint + path, {cache:"no-store",credentials:"same-origin",headers:{"Content-Type":"application/json",...window.ST9_REQUEST_HEADERS},...(body ? {method:"POST",body:JSON.stringify(body)} : {})});
+    const result = await response.json();
+    if (!response.ok) throw new Error(typeof result.detail === "string" ? result.detail : "Не удалось выполнить запрос.");
+    return result;
+  }
+  async function run(action) {
+    if (busy) return;
+    busy = true; root.querySelectorAll("button,input").forEach(el => {el.disabled = true;});
+    try {await action();} catch(error) {invalidate(); notice(error.message);}
+    finally {
+      busy = false; root.querySelectorAll("button,input").forEach(el => {el.disabled = false;});
+      $("bdApply").disabled = !plan; $("bdSave").disabled = !state; render();
+    }
+  }
+  window.loadBirthdays = () => run(async () => {invalidate(); state = await api(); edit(); notice("Список загружен.");});
+  $("bdRefresh").addEventListener("click", window.loadBirthdays);
+  $("bdNew").addEventListener("click", () => edit());
+  $("bdSearch").addEventListener("input", () => {page = 0; render();});
+  $("bdPrev").addEventListener("click", () => {page--; render();});
+  $("bdNext").addEventListener("click", () => {page++; render();});
+  $("bdForm").addEventListener("submit", event => {
+    event.preventDefault(); if (!state) return;
+    run(async () => {
+      state = await api("/save", {id:$("bdId").value.trim(),name:$("bdName").value.trim(),date:$("bdDate").value.trim(),revision:state.revision});
+      invalidate(); edit(); notice("Дата сохранена. Бот использует её при очередной проверке.");
+    });
+  });
+  $("bdFile").addEventListener("change", invalidate);
+  $("bdPreview").addEventListener("click", () => run(async () => {
+    invalidate(); const file = $("bdFile").files[0];
+    if (!file) throw new Error("Выберите JSON-файл.");
+    if (file.size > 128 * 1024) throw new Error("Размер файла — не более 128 КБ.");
+    if (!state) throw new Error("Сначала обновите список.");
+    const source = await file.text(), revision = state.revision;
+    const result = await api("/import/preview", {source,revision});
+    plan = {source,revision,confirmation:result.confirmation};
+    $("bdPlan").replaceChildren(text("p", `Добавится: ${result.added}. Изменится: ${result.changed}. Без изменений: ${result.unchanged}.`));
+    if (result.paused.length) $("bdPlan").append(text("p", `Внимание: ${result.paused.length} дат находятся в будущем. Записи сохранятся, поздравления пока приостановлены.`));
+    for (const change of result.changes) {
+      $("bdPlan").append(text("p", `${change.id}: ${change.before ? change.before.name + " · " + change.before.date : "Новая запись"} → ${change.after.name} · ${change.after.date}`));
+    }
+    $("bdPlan").hidden = false; notice("Проверьте изменения. Подтверждение действует 5 минут.");
+  }));
+  $("bdApply").addEventListener("click", () => {if (plan) run(async () => {state = await api("/import/apply", plan); invalidate(); edit(); notice("Импорт завершён. Прежние записи вне файла сохранены.");});});
+  $("bdExport").addEventListener("click", () => run(async () => {
+    const response = await fetch(endpoint + "/export", {cache:"no-store",credentials:"same-origin"});
+    if (!response.ok) throw new Error("Не удалось скачать файл. Проверьте вход и права.");
+    const url = URL.createObjectURL(await response.blob()), link = document.createElement("a");
+    link.href = url; link.download = "birthdays.json"; document.body.append(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000); notice("Файл birthdays.json скачан.");
+  }));
+})();

@@ -320,6 +320,17 @@ def sync_snapshot(db, roles, members, required_role_id=None, now=None):
             )
             _queue_membership_check(db, sid, now)
 
+    from discord_admin_roles import sync_admin_roles
+
+    verified_roles = {
+        sid: member_roles
+        if participant in member_roles and cargo not in member_roles
+        else []
+        for sid, _, _, member_roles in normalized
+    }
+    for sid, user in users.items():
+        sync_admin_roles(db, user, verified_roles.get(sid, []))
+
     health = db.get(RosterSyncHealth, 1)
     if health is None:
         health = RosterSyncHealth(id=1)
