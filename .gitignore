@@ -29,3 +29,7 @@ squad-data/
 
 # Cross-process Protocol login attempt lock (no codes stored)
 *.login.lock
+
+# Private birthday imports (Discord IDs and dates of birth)
+birthdays*.json
+private-birthdays/
