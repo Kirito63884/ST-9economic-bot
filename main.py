@@ -106,6 +106,7 @@ from runtime import (
 from discord_sync import sync_profile_name
 from audit_logs import is_money_log, log_details, page_context as audit_page_context
 from squad_names import admin_game_names
+from discord_admin_roles import sync_admin_roles, manual_role_change
 from medals import visible_awards, sync_manual
 from medals_routes import (
     catalog_context,
@@ -1028,6 +1029,8 @@ async def callback(request: Request, code: str = "", state: str = ""):
         purge_expired_users(db)
         guild_nickname = membership.get("guild_nickname") or global_name
         user = ensure_discord_profile(db, discord_id, username, guild_nickname)
+        if REQUIRED_GUILD_ID:
+            sync_admin_roles(db, user, membership.get("roles"))
         sync_manual(db, user, membership.get("roles"))
         request.session.clear()
         db.flush()
@@ -1098,6 +1101,8 @@ async def link_login_post(
                 membership.get("guild_nickname"),
             )
             link.used_at = link_utcnow()
+            if REQUIRED_GUILD_ID:
+                sync_admin_roles(db, user, membership.get("roles"))
             sync_manual(db, user, membership.get("roles"))
             # Bind links issued before the first website login to the created account.
             link.user_id = user.id
@@ -2507,6 +2512,7 @@ async def toggle_admin(
         target.is_tech_admin = False
         if was_tech:
             details += "; снята роль технического администратора"
+    manual_role_change(db, target)
     log_game(db, uid, "admin", "role_change", 0, details)
     db.flush()
     return {
@@ -3157,6 +3163,10 @@ def purge_expired_users(db):
 
 
 def apply_discord_membership(db, user, membership):
+    if REQUIRED_GUILD_ID:
+        sync_admin_roles(
+            db, user, membership.get("roles") if membership.get("allowed") else []
+        )
     sync_profile_name(
         user, membership.get("username"), membership.get("guild_nickname")
     )

@@ -1,0 +1,41 @@
+<section id="panel-birthdays" role="tabpanel" aria-labelledby="tab-birthdays" hidden>
+  <style>
+    .bd-tools {display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:14px 0;}
+    .bd-grid {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;}
+    .bd-grid label {display:flex;flex-direction:column;gap:6px;min-width:0;}
+    .bd-list {display:grid;gap:10px;}
+    .bd-row {border:1px solid #354159;border-radius:10px;padding:14px;display:flex;align-items:center;justify-content:space-between;gap:12px;overflow-wrap:anywhere;}
+    .bd-row p {margin:4px 0;}
+    .bd-row button {flex-shrink:0;}
+    #bdNotice,#bdPlan {white-space:pre-wrap;overflow-wrap:anywhere;}
+    #bdPlan {max-height:420px;overflow:auto;border:1px solid #354159;padding:12px;border-radius:8px;}
+    #panel-birthdays input[type=file] {width:100%;max-width:100%;}
+    @media(max-width:650px) {.bd-grid {grid-template-columns:1fr;} .bd-row {align-items:flex-start;flex-direction:column;}}
+  </style>
+  <div class="section-card">
+    <h2>Дни рождения</h2>
+    <p>Общий список сайта и бота. Поздравления — в 07:00 МСК. Даты вышедших участников сохраняются.</p>
+    <p id="bdNotice" role="status" aria-live="polite"></p>
+    <div class="bd-tools"><button class="btn" id="bdRefresh" type="button">Обновить список</button><button class="btn" id="bdNew" type="button">Добавить человека</button><button class="btn" id="bdExport" type="button">Скачать birthdays.json</button></div>
+    <form id="bdForm">
+      <div class="bd-grid">
+        <label>Discord ID<input class="form-control" id="bdId" inputmode="numeric" pattern="[1-9][0-9]{14,19}" required></label>
+        <label>Имя / ник<input class="form-control" id="bdName" maxlength="200" required></label>
+        <label>Дата рождения<input class="form-control" id="bdDate" placeholder="ДД.ММ.ГГГГ" pattern="[0-9]{2}\.[0-9]{2}\.[0-9]{4}" required></label>
+      </div>
+      <p>Discord ID: включите режим разработчика в Discord → меню человека → «Копировать ID пользователя».</p>
+      <button class="btn btn-primary" id="bdSave" type="submit">Сохранить дату</button>
+    </form>
+    <hr>
+    <label for="bdSearch">Поиск по имени, Discord ID или дате</label><input class="form-control" id="bdSearch" type="search">
+    <p id="bdCount"></p><div class="bd-list" id="bdList"></div>
+    <div class="bd-tools"><button class="btn" id="bdPrev" type="button">Назад</button><span id="bdPage"></span><button class="btn" id="bdNext" type="button">Далее</button></div>
+    <hr>
+    <h3>Загрузить дни рождения из JSON</h3>
+    <p>Подходит прежний файл birthdays (1).json. До 128 КБ. Сначала увидите новые и изменяемые записи. Отсутствующие в файле люди останутся в списке.</p>
+    <input id="bdFile" type="file" accept=".json,application/json" aria-label="JSON-файл с днями рождения">
+    <div class="bd-tools"><button class="btn" id="bdPreview" type="button">Проверить файл</button><button class="btn btn-primary" id="bdApply" type="button" disabled>Подтвердить импорт</button></div>
+    <div id="bdPlan" hidden></div>
+  </div>
+</section>
+<script>{% include "_admin_birthdays.js.html" %}</script>

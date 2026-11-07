@@ -22,9 +22,10 @@
   }
   function setBusy(value) {
     busy = value;
-    root.querySelectorAll("button, select, input, textarea").forEach(node => {node.disabled = value || node.dataset.readonly === "true";});
+    root.querySelectorAll("button, select, input, textarea").forEach(node => {if (!node.closest("#eventRewards")) node.disabled = value || node.dataset.readonly === "true";});
   }
   function fill(event) {
+    window.selectRewardEvent?.(event);
     selected = event;
     draftId = crypto.randomUUID().replaceAll("-", "");
     const config = event?.config || {capacity:20, status:"open"};

@@ -17,6 +17,9 @@ test -f "$app_dir/main.py"
 test -f "$app_dir/wallet_history.py"
 files=(
     main.py database.py backup_routes.py roster_membership.py requirements.txt
+    birthday_admin.py discord_birthdays.py discord_admin_roles.py forum_event_rewards.py
+    templates/_admin_birthdays.html templates/_admin_birthdays.js.html
+    templates/_admin_event_rewards.html templates/_admin_event_rewards.js.html
     automation_admin.py discord_roster.py roster_admin.py roster_settings.py
     forum_events.py forum_events_admin.py discord_forum_events.py
     forum_event_extras.py forum_event_delivery.py forum_calendar.py

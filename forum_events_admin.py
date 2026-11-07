@@ -13,6 +13,11 @@ def make_router(get_user, get_db, may_manage):
 
     router.include_router(make_calendar_router(get_user, get_db))
 
+    from forum_event_rewards import make_router as make_reward_router
+    from main import SECRET_KEY
+
+    router.include_router(make_reward_router(get_user, get_db, may_manage, SECRET_KEY))
+
     def check(user):
         if not user or not user.is_admin or not may_manage(user):
             raise HTTPException(

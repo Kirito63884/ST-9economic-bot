@@ -1,0 +1,23 @@
+<div class="section-card" id="eventRewards" hidden>
+  <style>
+    .reward-row {display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #354159;}
+    .reward-row label {flex:1;min-width:180px;overflow-wrap:anywhere;}
+    .reward-row input[type=text] {width:130px;}
+    #rewardPlan {white-space:pre-wrap;overflow-wrap:anywhere;max-height:350px;overflow:auto;padding:12px;border:1px solid #354159;}
+    #rewardNotice {white-space:pre-wrap;}
+  </style>
+  <h3>Награды за событие</h3>
+  <p>Выберите людей вручную и задайте сумму каждому. Одному человеку можно выдать одну награду за событие; остальных можно наградить позже. Начисления появятся в истории бишопкоинов.</p>
+  <button class="btn" type="button" id="rewardLoad">Загрузить получателей и выплаты</button>
+  <p id="rewardNotice" role="status" aria-live="polite"></p>
+  <div id="rewardEditor" hidden>
+    <label for="rewardSearch">Поиск игрока по имени или Discord ID</label><input class="form-control" id="rewardSearch" type="search">
+    <div id="rewardPlayers"></div>
+    <div class="bd-tools"><button class="btn" type="button" id="rewardPrev">Назад</button><span id="rewardPage"></span><button class="btn" type="button" id="rewardNext">Далее</button></div>
+    <p id="rewardSelected"></p>
+    <button class="btn" type="button" id="rewardPreview">Проверить начисление</button>
+    <div id="rewardPlan" hidden></div>
+    <button class="btn btn-primary" type="button" id="rewardApply" disabled>Подтвердить начисление</button>
+  </div>
+</div>
+<script>{% include "_admin_event_rewards.js.html" %}</script>
