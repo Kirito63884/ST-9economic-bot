@@ -110,6 +110,40 @@ def serve_fixture(database_path, port):
                 "checked_at": "2026-10-30T12:00:00Z",
             },
         )
+        if os.getenv("ST9_BROWSER_CALENDAR_FIXTURE") == "1":
+            from datetime import timedelta
+            import forum_events as events
+
+            today = events.now().astimezone(events.ZONE)
+            for index, title, responses in (
+                (1, "Мой матч <img src=x onerror=alert(1)>", {"201": "yes"}),
+                (2, "Возможно тренировка", {"201": "maybe"}),
+                (3, "Событие другого игрока", {"202": "yes"}),
+                (4, "Будущий матч", {"201": "yes"}),
+            ):
+                cfg = dict(
+                    title=title,
+                    starts_at=(today + timedelta(days=2)).isoformat(),
+                    capacity=20,
+                    teams="ST-9 / Fixture",
+                    map="Карта",
+                    server="Test",
+                    rules="Правила",
+                    image_url="",
+                    status="open",
+                )
+                event = events.create(db, f"{index:032x}", "203", cfg)
+                if index != 4:
+                    event["config"]["starts_at"] = today.replace(
+                        hour=19, minute=30, second=0, microsecond=0
+                    ).isoformat()
+                event["responses"] = {
+                    uid: {"name": "Fixture", "choice": choice}
+                    for uid, choice in responses.items()
+                }
+                event["lineup"] = ["201"] if index == 1 else []
+                event["thread_id"] = str(777777777777777770 + index)
+                events.save(db, event)
         db.get(AppRuntime, 1).payload = main.serialize_runtime()
     import uvicorn
 

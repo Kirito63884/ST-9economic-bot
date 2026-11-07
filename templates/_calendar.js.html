@@ -1,0 +1,104 @@
+(() => {
+  "use strict";
+  const $ = id => document.getElementById(id);
+  const labels = {open:"Регистрация открыта",closed:"Регистрация закрыта",cancelled:"Отменено",started:"Началось",finished:"Есть итоги"};
+  let data = null, day = null, serial = 0, active = null;
+  function node(tag, text, className="") {
+    const element = document.createElement(tag);
+    element.textContent = text;
+    if (className) element.className = className;
+    return element;
+  }
+  function visible() { return data.events.filter(event => $("calMaybe").checked || event.response === "yes"); }
+  function card(event) {
+    const element = node("article", "", "cal-card");
+    element.dataset.eventId = event.id;
+    element.append(node("h3", event.title), node("p", `${event.when} МСК`, "cal-muted"));
+    const tags = node("div", "", "cal-tags");
+    tags.append(node("span", event.response === "yes" ? "Буду" : "Возможно", "cal-tag"), node("span", labels[event.status] || "", "cal-tag " + event.status));
+    if (event.in_lineup) tags.append(node("span", "В игровом составе", "cal-tag lineup"));
+    else if (event.response === "yes") tags.append(node("span", event.lineup_selected ? "Вне утверждённого состава" : "Состав ещё не выбран", "cal-tag"));
+    element.append(tags);
+    if (event.teams) element.append(node("p", `Команды: ${event.teams}`));
+    if (event.map) element.append(node("p", `Карта: ${event.map}`));
+    if (event.server || event.rules) {
+      const details = node("details", "");
+      details.append(node("summary", "Подробности"));
+      if (event.server) details.append(node("p", `Сервер: ${event.server}`));
+      if (event.rules) details.append(node("p", `Правила: ${event.rules}`));
+      element.append(details);
+    }
+    if (event.result) {
+      const details = node("details", "");
+      details.append(node("summary", "Итоги события"));
+      if (event.result.score) details.append(node("p", event.result.score));
+      details.append(node("p", event.result.summary)); element.append(details);
+    }
+    if (event.discord_url) {
+      const link = node("a", "Открыть тему Discord", "cal-link");
+      link.href = event.discord_url; link.target = "_blank"; link.rel = "noopener noreferrer";
+      element.append(link);
+    } else element.append(node("p", "Тема Discord ещё не опубликована.", "cal-muted"));
+    return element;
+  }
+  function render() {
+    if (!data) return;
+    const rows = visible();
+    $("calMonthMode").setAttribute("aria-pressed", String(data.mode === "month"));
+    $("calUpcomingMode").setAttribute("aria-pressed", String(data.mode === "upcoming"));
+    $("calMonthSection").hidden = data.mode !== "month";
+    $("calClearDay").hidden = !day || data.mode !== "month";
+    $("calMonthTitle").textContent = data.month.label;
+    $("calPrev").disabled = !data.month.previous;
+    $("calNext").disabled = !data.month.next;
+    $("calGrid").replaceChildren();
+    if (data.mode === "month") {
+      for (let i=0; i<data.month.first_weekday; i++) $("calGrid").append(node("span", ""));
+      for (let i=1; i<=data.month.days; i++) {
+        const key = `${data.month.key}-${String(i).padStart(2,"0")}`;
+        const count = rows.filter(event => event.date === key).length;
+        const button = node("button", "", "cal-day"); button.type = "button";
+        button.dataset.date = key; button.dataset.today = String(key === data.today);
+        button.setAttribute("aria-pressed", String(day === key));
+        button.setAttribute("aria-label", `${i}, ${data.month.label}. Событий: ${count}`);
+        button.append(node("span", String(i)));
+        if (count) button.append(node("small", `${count} соб.`));
+        button.addEventListener("click", () => {day = key; render();});
+        $("calGrid").append(button);
+      }
+    }
+    const filtered = data.mode === "month" && day ? rows.filter(event => event.date === day) : rows;
+    $("calListTitle").textContent = data.mode === "upcoming" ? "Ближайшие события" : day ? `События ${day.split("-").reverse().join(".")}` : "События месяца";
+    $("calList").replaceChildren(...filtered.map(card));
+    if (!filtered.length) $("calList").append(node("p", day ? "На этот день нет твоих событий." : "Пока нет событий с твоим ответом «Буду» или «Возможно» для выбранного периода и фильтра.", "cal-empty"));
+    $("calNotice").textContent = data.total > data.events.length ? `Показаны ближайшие ${data.events.length} из ${data.total}. Остальные доступны по месяцам.` : `Событий в выбранном периоде: ${rows.length}. Время — Москва.`;
+  }
+  async function load(mode = data?.mode || "month", month = data?.month.key) {
+    const current = ++serial;
+    active?.abort(); active = new AbortController();
+    $("calError").hidden = true; $("calNotice").textContent = "Загрузка календаря…";
+    const query = new URLSearchParams({mode}); if (month) query.set("month",month);
+    try {
+      const response = await fetch("/api/calendar?" + query, {cache:"no-store",credentials:"same-origin",signal:active.signal});
+      const incoming = await response.json();
+      if (!response.ok) throw new Error(incoming.detail || "Не удалось загрузить календарь.");
+      if (current !== serial) return;
+      if (data?.month.key !== incoming.month.key || mode !== data?.mode) day = null;
+      data = incoming; render();
+    } catch(error) {
+      if (current !== serial || error.name === "AbortError") return;
+      data = null; day = null; $("calGrid").replaceChildren(); $("calList").replaceChildren();
+      $("calMonthSection").hidden = true; $("calClearDay").hidden = true;
+      $("calError").textContent = error.message; $("calError").hidden = false; $("calNotice").textContent = "";
+    }
+  }
+  $("calMaybe").addEventListener("change", render);
+  $("calPrev").addEventListener("click", () => {if (data?.month.previous) load("month",data.month.previous);});
+  $("calNext").addEventListener("click", () => {if (data?.month.next) load("month",data.month.next);});
+  $("calMonthMode").addEventListener("click", () => load("month"));
+  $("calUpcomingMode").addEventListener("click", () => load("upcoming"));
+  $("calToday").addEventListener("click", () => load("month", null));
+  $("calRefresh").addEventListener("click", () => load());
+  $("calClearDay").addEventListener("click", () => {day = null; render();});
+  load();
+})();

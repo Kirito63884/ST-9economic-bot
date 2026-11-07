@@ -32,6 +32,7 @@ class SyncedBot(commands.Bot):
         from discord_sync import member_events_available
 
         self.add_view(SpecialtyView(self.st9_specialties))
+        self.st9_forum_events.restore_views()
 
         # ConnectionState retains this Intents object; configure it before IDENTIFY.
         # Raw gateway notifications avoid relying on the member cache.
@@ -979,6 +980,9 @@ register_specialties(bot)
 from assembly_reports import register_assembly_reports
 
 register_assembly_reports(bot)
+from discord_forum_events import register_forum_events
+
+register_forum_events(bot)
 # ST9_SQUAD_BOT_END
 
 # === Запуск ===

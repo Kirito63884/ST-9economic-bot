@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark">
+  <title>Мой календарь — Strike Team 9</title>
+  {% include "_site_ui.html" %}
+  <style>
+    .cal-page {max-width:1060px;margin:30px auto;padding:0 18px 40px;color:#e8edf7;}
+    .cal-heading {display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px;}
+    .cal-heading h1 {margin:0 0 8px;font-size:clamp(26px,4vw,38px);}
+    .cal-muted {color:#a8b4ca;line-height:1.6;}
+    .cal-controls {display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:16px 0;}
+    .cal-page button,.cal-link {border:1px solid #36445a;background:#202a3b;color:#e8edf7;border-radius:10px;padding:10px 14px;min-height:44px;cursor:pointer;text-decoration:none;font:inherit;}
+    .cal-page button:hover,.cal-page button[aria-pressed=true] {background:#2c4771;border-color:#82a9ed;}
+    .cal-page button:focus-visible,.cal-link:focus-visible {outline:3px solid #82a9ed;outline-offset:3px;}
+    .cal-page button:disabled {opacity:.5;cursor:default;}
+    .cal-page label {display:flex;align-items:center;gap:8px;min-height:44px;}
+    .cal-month-head {display:flex;align-items:center;justify-content:space-between;gap:10px;margin:22px 0 14px;}
+    .cal-month-head h2 {font-size:22px;margin:0;text-align:center;}
+    .cal-grid {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:7px;}
+    .cal-weekday {text-align:center;color:#a8b4ca;padding:6px 0;}
+    .cal-page .cal-day {display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;min-height:74px;padding:9px;gap:5px;}
+    .cal-day small {font-size:11px;color:#b9d3ff;}
+    .cal-day[data-today=true] {box-shadow:inset 0 0 0 2px #67c7a0;}
+    .cal-list {display:grid;gap:14px;}
+    .cal-card {border:1px solid #334158;background:#18202e;border-radius:14px;padding:20px;overflow-wrap:anywhere;}
+    .cal-card h3 {font-size:20px;margin:0 0 12px;}
+    .cal-card p {margin:8px 0;line-height:1.55;white-space:pre-wrap;}
+    .cal-tags {display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;}
+    .cal-tag {background:#29384f;padding:5px 9px;border-radius:8px;font-size:13px;}
+    .cal-tag.cancelled {background:#592e39;} .cal-tag.lineup {background:#1b493d;}
+    .cal-card details {margin:12px 0;} .cal-card summary {cursor:pointer;min-height:32px;}
+    .cal-link {display:inline-block;margin-top:12px;}
+    #calError {color:#ffc0c7;border:1px solid #7d4450;padding:14px;border-radius:10px;}
+    .cal-empty {padding:24px;border:1px dashed #3a4961;border-radius:12px;color:#a8b4ca;line-height:1.6;}
+    @media(max-width:560px) { .cal-page {padding:0 12px 30px;margin:20px auto;} .cal-heading {align-items:flex-start;} .cal-grid {gap:4px;} .cal-page .cal-day {min-height:60px;padding:6px;font-size:14px;} .cal-day small {font-size:10px;} .cal-month-head h2 {font-size:19px;} .cal-card {padding:16px;} }
+  </style>
+</head>
+<body>
+{% include "_site_nav.html" %}
+<main class="cal-page" id="st-content">
+  <header class="cal-heading"><div><h1>Мой календарь</h1><p class="cal-muted">Твои события и игровой состав. Время — по Москве.</p></div></header>
+  <div class="cal-controls" aria-label="Вид календаря">
+    <button id="calMonthMode" type="button" aria-pressed="true">Месяц</button>
+    <button id="calUpcomingMode" type="button" aria-pressed="false">Ближайшие</button>
+    <button id="calToday" type="button">Текущий месяц</button>
+    <button id="calRefresh" type="button">Обновить</button>
+    <label><input id="calMaybe" type="checkbox" checked>Показывать «Возможно»</label>
+  </div>
+  <p id="calError" role="alert" hidden></p>
+  <p id="calNotice" class="cal-muted" role="status" aria-live="polite">Загрузка календаря…</p>
+  <section id="calMonthSection" aria-label="Календарь месяца" hidden>
+    <div class="cal-month-head"><button id="calPrev" type="button" aria-label="Предыдущий месяц">←</button><h2 id="calMonthTitle"></h2><button id="calNext" type="button" aria-label="Следующий месяц">→</button></div>
+    <div class="cal-grid" aria-hidden="true"><span class="cal-weekday">Пн</span><span class="cal-weekday">Вт</span><span class="cal-weekday">Ср</span><span class="cal-weekday">Чт</span><span class="cal-weekday">Пт</span><span class="cal-weekday">Сб</span><span class="cal-weekday">Вс</span></div>
+    <div id="calGrid" class="cal-grid"></div>
+  </section>
+  <div class="cal-controls"><h2 id="calListTitle">Мои события</h2><button id="calClearDay" type="button" hidden>Весь месяц</button></div>
+  <div id="calList" class="cal-list"></div>
+  <p class="cal-muted">Записывайся и меняй ответ кнопками в теме события Discord. После обновления страницы изменения появятся здесь.</p>
+</main>
+<script>{% include "_calendar.js.html" %}</script>
+</body>
+</html>
