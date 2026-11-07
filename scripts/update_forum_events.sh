@@ -101,8 +101,12 @@ assert discord_bot.bot.tree.get_command("event_create")
 assert discord_bot.bot.tree.get_command("event_edit")
 assert discord_bot.bot.tree.get_command("event_result")
 assert discord_bot.bot.tree.get_command("event_from_template")
-assert any(route.path == "/api/admin/forum-events" for route in main.app.routes)
-assert any(route.path == "/calendar" for route in main.app.routes)
+# Included routers need not expose .path; OpenAPI resolves nested routers.
+paths = main.app.openapi()["paths"]
+assert "get" in paths.get("/api/admin/forum-events", {})
+assert "post" in paths.get("/api/admin/forum-events", {})
+assert "get" in paths.get("/calendar", {})
+assert "get" in paths.get("/api/calendar", {})
 pending = ["admin.html", "calendar.html", "_admin_forum_events.html", "_admin_forum_events.js.html"]
 seen = set()
 while pending:
