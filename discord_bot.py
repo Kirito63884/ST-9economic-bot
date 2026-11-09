@@ -987,6 +987,9 @@ register_birthdays(bot)
 from discord_forum_events import register_forum_events
 
 register_forum_events(bot)
+from discord_raid_guard import register_raid_guard
+
+register_raid_guard(bot)
 # ST9_SQUAD_BOT_END
 
 # === Запуск ===

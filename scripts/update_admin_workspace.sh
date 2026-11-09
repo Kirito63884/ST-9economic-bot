@@ -16,7 +16,7 @@ test -x "$app_dir/venv/bin/python"
 test -f "$app_dir/main.py"
 test -f "$app_dir/discord_specialties.py"
 files=(
-    main.py admin_hub.py audit_logs.py discord_bot.py groups_admin.py
+    main.py admin_hub.py audit_logs.py discord_bot.py discord_raid_guard.py groups_admin.py
     group_analytics.py roster_membership.py wallet_history.py
     statistics_freshness.py assembly_reports.py
     templates/admin.html templates/profile.html templates/_admin_hub.html
