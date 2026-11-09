@@ -19,7 +19,8 @@ ALERT_CHANNEL = 1553858549879148635
 ALERT_ROLE = 1457398926406844417
 WINDOW = 600
 THRESHOLD = 10
-SLOWMODE = 300
+DEFAULT_SETTINGS = {"day_minutes": 15, "night_minutes": 60}
+ZONE = ZoneInfo("Europe/Moscow")
 QUIET = 7200
 LEASE = 120
 logger = logging.getLogger(__name__)
@@ -38,11 +39,34 @@ def load(db, key):
     )
 
 
+def settings(db, key):
+    row = db.get(AutomationSetting, key)
+    return {**DEFAULT_SETTINGS, **(json.loads(row.value) if row else {})}
+
+
+def scheduled_delay(config, moment=None):
+    hour = datetime.fromtimestamp(now() if moment is None else moment, ZONE).hour
+    return config["day_minutes" if 6 <= hour < 23 else "night_minutes"] * 60
+
+
+def delay_text(seconds):
+    return f"{seconds // 60} мин." if seconds % 60 == 0 else f"{seconds} сек."
+
+
+def settings_text(config):
+    return (
+        f"Задержка при рейде, МСК:\n06:00–23:00 — {config['day_minutes']} мин."
+        f"\n23:00–06:00 — {config['night_minutes']} мин."
+        "\nВне режима защиты расписание не применяется."
+    )
+
+
 class RaidGuard:
     def __init__(self, bot):
         self.bot = bot
         self.guild_id = int(os.getenv("REQUIRED_GUILD_ID") or 0)
         self.key = f"discord_raid_guard:{self.guild_id}"
+        self.settings_key = f"discord_raid_guard_config:{self.guild_id}"
         self.task = None
         self.wake = asyncio.Event()
 
@@ -81,11 +105,12 @@ class RaidGuard:
                     "last_join": max(joins.values()),
                     "count": len(joins),
                     "previous": None,
-                    "target": SLOWMODE,
+                    "target": scheduled_delay(settings(db, self.settings_key), moment),
+                    "pending_target": None,
                     "enabled": False,
                     "alert_attempted": False,
                     "message_id": None,
-                    "notified_enabled": None,
+                    "notified_state": None,
                     "release_requested": False,
                     "lease": {},
                     "retry_at": 0,
@@ -155,16 +180,34 @@ class RaidGuard:
             )
         return channel
 
+    async def configure(self, day_minutes=None, night_minutes=None, actor_id=None):
+        values = {"day_minutes": day_minutes, "night_minutes": night_minutes}
+        if any(
+            value is not None and (type(value) is not int or not 1 <= value <= 360)
+            for value in values.values()
+        ):
+            raise ValueError("Задержка должна быть целым числом от 1 до 360 минут.")
+        async with metadata_transaction() as db:
+            config = settings(db, self.settings_key)
+            if any(value is not None for value in values.values()):
+                config.update(
+                    {key: value for key, value in values.items() if value is not None}
+                )
+                write(db, self.settings_key, config, actor_id)
+        self.wake.set()
+        return config
+
     async def slowmode(self, iid, token):
         channel = await self.channel(GUEST_CHANNEL)
         incident = await self.owned(iid, token)
         if self.due(incident):
             previous = incident["previous"]
-            # Restore only the setting we changed. A moderator's newer value wins.
+            expected = {incident["target"], incident.get("pending_target")}
+            # Restore either a confirmed setting or an edit whose reply was lost.
             if (
                 previous is not None
-                and previous < SLOWMODE
-                and channel.slowmode_delay == incident["target"]
+                and channel.slowmode_delay in expected
+                and channel.slowmode_delay != previous
             ):
                 await channel.edit(
                     slowmode_delay=previous, reason="ST-9: снятие защиты от рейда"
@@ -172,40 +215,58 @@ class RaidGuard:
                 channel.slowmode_delay = previous
             if await self.close(iid, token):
                 return False
-            # A new arrival during restoration extends the active incident.
-            incident = await self.owned(iid, token, enabled=False)
-        if incident["enabled"]:
-            if channel.slowmode_delay != incident["target"]:
-                await self.close(iid, token, force=True)
-                return False
-            return True
+            incident = await self.owned(
+                iid,
+                token,
+                enabled=False,
+                target=channel.slowmode_delay,
+                pending_target=None,
+            )
         if incident["previous"] is None:
             incident = await self.owned(
                 iid,
                 token,
                 previous=channel.slowmode_delay,
-                target=max(SLOWMODE, channel.slowmode_delay),
+                target=channel.slowmode_delay,
             )
-        if channel.slowmode_delay != incident["target"]:
-            # A stricter manual setting must never be weakened.
-            if channel.slowmode_delay > incident["target"]:
-                await self.close(iid, token, force=True)
-                return False
+        pending = incident.get("pending_target")
+        expected = {incident["target"], pending}
+        if not incident["enabled"]:
+            expected.add(
+                incident["previous"]
+            )  # Also accepts an older 5-minute installation's unfinished edit.
+        if channel.slowmode_delay not in expected:
+            await self.close(iid, token, force=True)
+            return False
+        if pending is not None and channel.slowmode_delay == pending:
+            incident = await self.owned(
+                iid, token, target=pending, pending_target=None, enabled=True
+            )
+        async with metadata_transaction() as db:
+            wanted = scheduled_delay(settings(db, self.settings_key))
+        target = max(incident["previous"], wanted)
+        if channel.slowmode_delay != target:
+            # Save intent before I/O so a restart or lost response is recoverable.
+            await self.owned(iid, token, pending_target=target)
             await channel.edit(
-                slowmode_delay=incident["target"],
-                reason="ST-9: 10 входов за 10 минут, возможный рейд",
+                slowmode_delay=target,
+                reason="ST-9: задержка при рейде по расписанию МСК",
             )
-        await self.owned(iid, token, enabled=True)
+        await self.owned(iid, token, target=target, pending_target=None, enabled=True)
         return True
+
+    @staticmethod
+    def notification_state(incident):
+        return [incident["enabled"], incident["target"], incident.get("pending_target")]
 
     def embed(self, incident):
         status = (
-            "Защита включена: задержка между сообщениями — 5 минут."
-            if incident["enabled"] and incident["target"] == SLOWMODE
-            else "В канале уже действует более строгая задержка; она сохранена."
+            f"Защита включена: подтверждённая задержка между сообщениями — {delay_text(incident['target'])}"
             if incident["enabled"]
             else "Не удалось включить задержку. Проверьте права бота и включите защиту вручную."
         )
+        if incident.get("pending_target") is not None:
+            status += f"\nОжидается применение новой задержки: {delay_text(incident['pending_target'])}"
         result = discord.Embed(
             title="⚠️ Возможный рейд в гостевом канале",
             description=f"За последние 10 минут на сервер вошли {incident['count']} человек. Возможен потенциальный рейд в <#{GUEST_CHANNEL}>.\n\n{status}\nАвтоснятие — через 2 часа после последнего нового входа. Модератор может снять защиту командой /raid_off.",
@@ -217,10 +278,9 @@ class RaidGuard:
 
     async def notify(self, iid, token):
         incident = await self.owned(iid, token)
-        if (
-            incident["message_id"]
-            and incident["notified_enabled"] == incident["enabled"]
-        ):
+        if incident["message_id"] and incident.get(
+            "notified_state"
+        ) == self.notification_state(incident):
             return
         channel = await self.channel(ALERT_CHANNEL)
         message = None
@@ -255,7 +315,10 @@ class RaidGuard:
                 allowed_mentions=discord.AllowedMentions.none(),
             )
         await self.owned(
-            iid, token, message_id=str(message.id), notified_enabled=incident["enabled"]
+            iid,
+            token,
+            message_id=str(message.id),
+            notified_state=self.notification_state(incident),
         )
 
     async def tick(self):
@@ -372,6 +435,37 @@ def register_raid_guard(bot):
         )
 
     @bot.tree.command(
+        name="raid_delay", description="Настроить дневную и ночную задержку при рейде"
+    )
+    @app_commands.guild_only()
+    @app_commands.default_permissions(manage_channels=True)
+    @app_commands.describe(
+        day_minutes="Минуты с 06:00 до 23:00 МСК (1–360)",
+        night_minutes="Минуты с 23:00 до 06:00 МСК (1–360)",
+    )
+    async def raid_delay(
+        interaction: discord.Interaction,
+        day_minutes: app_commands.Range[int, 1, 360] | None = None,
+        night_minutes: app_commands.Range[int, 1, 360] | None = None,
+    ):
+        if not await allowed(interaction):
+            return
+        await interaction.response.defer(ephemeral=True)
+        try:
+            config = await worker.configure(
+                day_minutes, night_minutes, str(interaction.user.id)
+            )
+        except ValueError as exc:
+            await interaction.followup.send(str(exc), ephemeral=True)
+            return
+        text = settings_text(config)
+        if day_minutes is not None or night_minutes is not None:
+            text += "\nНастройки сохранены. Активная защита обновится при следующей проверке."
+        await interaction.followup.send(
+            text, ephemeral=True, allowed_mentions=discord.AllowedMentions.none()
+        )
+
+    @bot.tree.command(
         name="raid_status", description="Состояние защиты гостевого канала"
     )
     @app_commands.guild_only()
@@ -381,6 +475,7 @@ def register_raid_guard(bot):
             return
         async with metadata_transaction() as db:
             incident = load(db, worker.key)["incident"]
+            config = settings(db, worker.settings_key)
         if not incident:
             text = "Автоматическая защита не активна."
         else:
@@ -399,6 +494,9 @@ def register_raid_guard(bot):
             )
             if incident["error"]:
                 text += "\n" + incident["error"]
+        if incident and incident["enabled"]:
+            text += f"\nПодтверждённая задержка: {delay_text(incident['target'])}"
+        text += "\n\n" + settings_text(config)
         if not bot.intents.members:
             text += "\nПодсчёт входов недоступен: включите Server Members Intent."
         await interaction.response.send_message(

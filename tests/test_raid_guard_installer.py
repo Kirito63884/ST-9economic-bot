@@ -44,6 +44,6 @@ def test_real_bot_registers_raid_guard_and_previous_features_without_login():
     assert bot.st9_raid_guard.joined in bot.extra_events["on_member_join"]
     assert bot.st9_raid_guard.ready in bot.extra_events["on_ready"]
     assert bot.st9_raid_guard.ready in bot.extra_events["on_resumed"]
-    for name in ("raid_off", "raid_status", "event_create", "add_bd"):
+    for name in ("raid_off", "raid_status", "raid_delay", "event_create", "add_bd"):
         assert bot.tree.get_command(name)
     assert bot.st9_raid_guard.task is None

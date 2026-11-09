@@ -77,11 +77,11 @@ for path in "${files[@]}"; do install -o www-data -g www-data -m 644 "$stage/cod
     cd "$app_dir"
     chmod 711 "$stage"
     install -d -o www-data -g www-data -m 700 "$stage/probe"
-    DATABASE_URL="sqlite:///$stage/probe/database.sqlite3" PYTHON_DOTENV_DISABLED=1 runuser -u www-data -- ./venv/bin/python -c 'import discord_raid_guard; import discord_bot; assert discord_bot.bot.tree.get_command("raid_off"); assert discord_bot.bot.tree.get_command("raid_status"); assert discord_bot.bot.st9_raid_guard.joined in discord_bot.bot.extra_events["on_member_join"]'
+    DATABASE_URL="sqlite:///$stage/probe/database.sqlite3" PYTHON_DOTENV_DISABLED=1 runuser -u www-data -- ./venv/bin/python -c 'import discord_raid_guard; import discord_bot; assert discord_bot.bot.tree.get_command("raid_off"); assert discord_bot.bot.tree.get_command("raid_status"); assert discord_bot.bot.tree.get_command("raid_delay"); assert discord_bot.bot.st9_raid_guard.joined in discord_bot.bot.extra_events["on_member_join"]'
 
 )
 systemctl start discord-bot.service
 systemctl is-active discord-bot.service
 changing=0
-echo 'Готово. Защита: 10 человек за 10 минут → задержка 5 минут; снятие через 2 часа после последнего входа.'
-echo 'Команды: /raid_status и /raid_off. Нужны Server Members Intent и права бота в обоих каналах. Перезапущен только Discord-бот.'
+echo 'Готово. Защита: 10 человек за 10 минут → 15 минут днём / 60 минут ночью (МСК); снятие через 2 часа после последнего входа.'
+echo 'Команды: /raid_status, /raid_delay и /raid_off. Нужны Server Members Intent и права бота в обоих каналах. Перезапущен только Discord-бот.'
