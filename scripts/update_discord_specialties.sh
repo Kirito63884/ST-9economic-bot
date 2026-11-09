@@ -15,7 +15,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 test -x "$app_dir/venv/bin/python"
 test -f "$app_dir/discord_bot.py"
-files=(discord_bot.py discord_specialties.py)
+files=(discord_bot.py discord_specialties.py discord_raid_guard.py)
 original=()
 absent=()
 stage=$(mktemp -d /tmp/discord-specialties.XXXXXX)
